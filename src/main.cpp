@@ -1160,7 +1160,8 @@ int main(int argc, char **argv) {
 
                     args.pop();
                     Termination term;
-                    os_spawn_process(exec_path, args, &term);
+                    // use NULL for exe, it's already included in args
+                    os_spawn_process(NULL, args, &term);
                     return term.code;
                 } else if (cmd == CmdBuild) {
                     if (g->enable_cache) {

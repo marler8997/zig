@@ -106,12 +106,17 @@ static void populate_termination(Termination *term, int status) {
 }
 
 static void os_spawn_process_posix(const char *exe, ZigList<const char *> &args, Termination *term) {
-    const char **argv = allocate<const char *>(args.length + 2);
-    argv[0] = exe;
-    argv[args.length + 1] = nullptr;
-    for (size_t i = 0; i < args.length; i += 1) {
-        argv[i + 1] = args.at(i);
+    const char **argv = allocate<const char *>( (exe ? 1 : 0) + args.length + 1);
+    size_t offset = 0;
+    if (exe) {
+        argv[offset++] = exe;
+    } else {
+        exe = args.at(0);
     }
+    for (size_t i = 0; i < args.length; i += 1) {
+        argv[offset++] = args.at(i);
+    }
+    argv[offset++] = nullptr;
 
     pid_t pid;
     int rc = posix_spawnp(&pid, exe, nullptr, nullptr, const_cast<char *const*>(argv), environ);
@@ -126,30 +131,36 @@ static void os_spawn_process_posix(const char *exe, ZigList<const char *> &args,
 #endif
 
 #if defined(ZIG_OS_WINDOWS)
+static void os_windows_add_arg(Buf *command_line, char **prefix, const char *arg) {
+    buf_append_str(command_line, *prefix);
+    *prefix = " \"";
+    size_t arg_len = strlen(arg);
+    for (size_t c_i = 0; c_i < arg_len; c_i += 1) {
+        if (arg[c_i] == '\"') {
+            zig_panic("TODO");
+        }
+        buf_append_char(command_line, arg[c_i]);
+    }
+    buf_append_char(command_line, '\"');
+}
+
 static void os_windows_create_command_line(Buf *command_line, const char *exe, ZigList<const char *> &args) {
     buf_resize(command_line, 0);
-
-    buf_append_char(command_line, '\"');
-    buf_append_str(command_line, exe);
-    buf_append_char(command_line, '\"');
-
+    char *prefix = "\"";
+    if (exe) {
+        os_windows_add_arg(command_line, &prefix, exe);
+    }
     for (size_t arg_i = 0; arg_i < args.length; arg_i += 1) {
-        buf_append_str(command_line, " \"");
-        const char *arg = args.at(arg_i);
-        size_t arg_len = strlen(arg);
-        for (size_t c_i = 0; c_i < arg_len; c_i += 1) {
-            if (arg[c_i] == '\"') {
-                zig_panic("TODO");
-            }
-            buf_append_char(command_line, arg[c_i]);
-        }
-        buf_append_char(command_line, '\"');
+        os_windows_add_arg(command_line, &prefix, args.at(arg_i));
     }
 }
 
 static void os_spawn_process_windows(const char *exe, ZigList<const char *> &args, Termination *term) {
     Buf command_line = BUF_INIT;
     os_windows_create_command_line(&command_line, exe, args);
+    if (exe == NULL) {
+        exe = args.at(0);
+    }
 
     PROCESS_INFORMATION piProcInfo = {0};
     STARTUPINFO siStartInfo = {0};
