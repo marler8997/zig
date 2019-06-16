@@ -729,6 +729,7 @@ set(ZIG_STD_FILES
     "valgrind.zig"
     "valgrind/callgrind.zig"
     "valgrind/memcheck.zig"
+    "varargs.zig"
     "zig.zig"
     "zig/ast.zig"
     "zig/parse.zig"
