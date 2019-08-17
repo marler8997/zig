@@ -8443,7 +8443,7 @@ static void detect_dynamic_linker(CodeGen *g) {
     g->dynamic_linker_path = buf_create_from_str(standard_ld_path);
 }
 
-static void detect_libc(CodeGen *g) {
+void detect_libc(CodeGen *g) {
     Error err;
 
     if (g->libc != nullptr || g->libc_link_lib == nullptr)
@@ -8533,12 +8533,24 @@ static void detect_libc(CodeGen *g) {
     }
 }
 
+static void dump(const char *msg, ZigList<const char *> &args, size_t *last_dump)
+{
+    printf("  - %s\n", msg);
+    for (;*last_dump < args.length; *last_dump += 1) {
+        printf("    - %s\n", args.items[*last_dump]);
+    }
+}
+
 // does not add the "cc" arg
 void add_cc_args(CodeGen *g, ZigList<const char *> &args, const char *out_dep_path, bool translate_c) {
+    if (g->verbose_cc)
+        printf("[DEBUG] add_cc_args\n");
+    size_t dump_point = args.length;
     if (translate_c) {
         args.append("-x");
         args.append("c");
     }
+    if (g->verbose_cc) dump("location 1", args, &dump_point);
 
     if (out_dep_path != nullptr) {
         args.append("-MD");
@@ -8547,6 +8559,7 @@ void add_cc_args(CodeGen *g, ZigList<const char *> &args, const char *out_dep_pa
         args.append(out_dep_path);
     }
 
+    if (g->verbose_cc) dump("location 2", args, &dump_point);
     args.append("-nostdinc");
     args.append("-fno-spell-checking");
 
@@ -8554,6 +8567,7 @@ void add_cc_args(CodeGen *g, ZigList<const char *> &args, const char *out_dep_pa
         args.append("-ffunction-sections");
     }
 
+    if (g->verbose_cc) dump("before translate_c", args, &dump_point);
     if (translate_c) {
         // this gives us access to preprocessing entities, presumably at
         // the cost of performance
@@ -8573,6 +8587,7 @@ void add_cc_args(CodeGen *g, ZigList<const char *> &args, const char *out_dep_pa
                 break;
         }
     }
+    if (g->verbose_cc) dump("after translate_c", args, &dump_point);
 
     //note(dimenus): appending libc headers before c_headers breaks intrinsics 
     //and other compiler specific items
@@ -8580,11 +8595,13 @@ void add_cc_args(CodeGen *g, ZigList<const char *> &args, const char *out_dep_pa
     args.append("-isystem");
     args.append(buf_ptr(g->zig_c_headers_dir));
 
+    if (g->verbose_cc) dump("after zig_c_headers_dir", args, &dump_point);
     for (size_t i = 0; i < g->libc_include_dir_len; i += 1) {
         Buf *include_dir = g->libc_include_dir_list[i];
         args.append("-isystem");
         args.append(buf_ptr(include_dir));
     }
+    if (g->verbose_cc) dump("after libc_include_dirs", args, &dump_point);
 
 
     if (g->zig_target->is_native) {
@@ -8660,9 +8677,11 @@ void add_cc_args(CodeGen *g, ZigList<const char *> &args, const char *out_dep_pa
         args.append("-fPIC");
     }
 
+    if (g->verbose_cc) dump("before clang_argv", args, &dump_point);
     for (size_t arg_i = 0; arg_i < g->clang_argv_len; arg_i += 1) {
         args.append(g->clang_argv[arg_i]);
     }
+    if (g->verbose_cc) dump("done with add_cc_args", args, &dump_point);
 }
 
 void codegen_translate_c(CodeGen *g, Buf *full_path, FILE *out_file, bool use_userland_implementation) {
@@ -8995,6 +9014,8 @@ Error create_c_object_cache(CodeGen *g, CacheHash **out_cache_hash, bool verbose
 static void gen_c_object(CodeGen *g, Buf *self_exe_path, CFile *c_file) {
     Error err;
 
+    if (g->verbose_cc)
+        printf("[DEBUG] gen_c_object '%s'\n", c_file->source_path);
     Buf *artifact_dir;
     Buf *o_final_path;
 
@@ -9806,6 +9827,8 @@ static void resolve_out_paths(CodeGen *g) {
 }
 
 void codegen_build_and_link(CodeGen *g) {
+    if (g->verbose_cc)
+        printf("[DEBUG] codegen_build_and_link!\n");
     Error err;
     assert(g->out_type != OutTypeUnknown);
 

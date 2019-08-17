@@ -58,6 +58,9 @@ void codegen_translate_c(CodeGen *g, Buf *full_path, FILE *out_file, bool use_us
 
 Buf *codegen_generate_builtin_source(CodeGen *g);
 
+void detect_libc(CodeGen *g);
+void add_cc_args(CodeGen *g, ZigList<const char *> &args, const char *out_dep_path, bool translate_c);
+
 TargetSubsystem detect_subsystem(CodeGen *g);
 
 void codegen_release_caches(CodeGen *codegen);

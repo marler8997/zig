@@ -35,6 +35,7 @@ static int print_full_usage(const char *arg0, FILE *file, int return_code) {
         "  build-obj [source]           create object from source or assembly\n"
         "  builtin                      show the source code of that @import(\"builtin\")\n"
         "  cc                           C compiler\n"
+        "  clang                        Emulate the Clang compiler\n"
         "  fmt                          parse files and render in canonical zig format\n"
         "  id                           print the base64-encoded compiler id\n"
         "  init-exe                     initialize a `zig build` application in the cwd\n"
@@ -226,6 +227,7 @@ enum Cmd {
     CmdNone,
     CmdBuild,
     CmdBuiltin,
+    //CmdClang,
     CmdRun,
     CmdTargets,
     CmdTest,
@@ -318,6 +320,37 @@ int main(int argc, char **argv) {
     if (argc >= 2 && (strcmp(argv[1], "cc") == 0 ||
             strcmp(argv[1], "-cc1") == 0 || strcmp(argv[1], "-cc1as") == 0))
     {
+        printf("zig cc with %d args:\n", argc);
+        for (int i = 0; i < argc; i++) {
+            printf("  [%d] '%s'\n", i, argv[i]);
+        }
+        return ZigClang_main(argc, argv);
+    }
+    if (argc >= 2 && strcmp(argv[1], "clang") == 0) {
+        ZigList<const char *> new_argv = {0};
+        for (int i = 0; i < argc; i++) {
+            fprintf(stderr, "[DEBUG] arg[%d] '%s'\n", i, argv[i]);
+            new_argv.append(argv[i]);
+        }
+        ZigTarget target;
+        get_native_target(&target);
+        Buf full_cache_dir = BUF_INIT;
+        //os_path_join(&build_file_dirname, buf_create_from_str(default_zig_cache_name), &full_cache_dir);
+        CodeGen *g = codegen_create(nullptr, nullptr, &target, OutTypeExe,
+            BuildModeDebug, nullptr/*override_lib_dir*/, nullptr/*override_std_dir*/, nullptr, &full_cache_dir, false);
+        g->verbose_cc = true;
+        LinkLib *link_lib = codegen_add_link_lib(g, buf_create_from_str("c"));
+        link_lib->provided_explicitly = true;
+        detect_libc(g);
+        add_cc_args(g, new_argv, nullptr, false);
+        argc = new_argv.length;
+        new_argv.append(NULL);
+        argv = (char**)new_argv.items;
+        printf("zig clang with %d args:\n", argc);
+        for (int i = 0; i < argc; i++) {
+            printf("  [%d] '%s'\n", i, argv[i]);
+        }
+        assert(argv[argc] == NULL);
         return ZigClang_main(argc, argv);
     }
 
@@ -873,6 +906,8 @@ int main(int argc, char **argv) {
             } else if (strcmp(arg, "build-lib") == 0) {
                 cmd = CmdBuild;
                 out_type = OutTypeLib;
+            //} else if (strcmp(arg, "clang") == 0) {
+            //    cmd = CmdClang;
             } else if (strcmp(arg, "run") == 0) {
                 cmd = CmdRun;
                 out_type = OutTypeExe;
@@ -912,6 +947,8 @@ int main(int argc, char **argv) {
                         return print_error_usage(arg0);
                     }
                     break;
+                //case CmdClang:
+                //    break;
                 case CmdBuiltin:
                 case CmdVersion:
                 case CmdZen:
@@ -996,6 +1033,12 @@ int main(int argc, char **argv) {
     }
 
     switch (cmd) {
+    /*
+    case CmdClang: {
+        fprintf(stderr, "clang command not implemented\n");
+        return 1;
+    }
+    */
     case CmdLibC: {
         if (in_file) {
             ZigLibCInstallation libc;
@@ -1192,10 +1235,13 @@ int main(int argc, char **argv) {
 
             add_package(g, cur_pkg, g->root_package);
 
+            fprintf(stderr, "[DEBUG] A!\n");
             if (cmd == CmdBuild || cmd == CmdRun || cmd == CmdTest) {
                 g->c_source_files = c_source_files;
                 for (size_t i = 0; i < objects.length; i += 1) {
+                    fprintf(stderr, "[DEBUG] codegen_add_object '%s': CALL\n", objects.at(i));
                     codegen_add_object(g, buf_create_from_str(objects.at(i)));
+                    fprintf(stderr, "[DEBUG] codegen_add_object '%s': RETURN\n", objects.at(i));
                 }
             }
 
@@ -1204,7 +1250,9 @@ int main(int argc, char **argv) {
                 codegen_set_emit_file_type(g, emit_file_type);
 
                 g->enable_cache = get_cache_opt(enable_cache, cmd == CmdRun);
+                fprintf(stderr, "[DEBUG] codegen_build_and_link: CALL\n");
                 codegen_build_and_link(g);
+                fprintf(stderr, "[DEBUG] codegen_build_and_link: RETURN\n");
                 if (timing_info)
                     codegen_print_timing_report(g, stdout);
 
