@@ -726,15 +726,24 @@ test "math.negateCast" {
 
 /// Cast an integer to a different integer type. If the value doesn't fit,
 /// return an error.
-pub fn cast(comptime T: type, x: var) (error{Overflow}!T) {
-    comptime assert(@typeId(T) == builtin.TypeId.Int); // must pass an integer
-    comptime assert(@typeId(@typeOf(x)) == builtin.TypeId.Int); // must pass an integer
-    if (maxInt(@typeOf(x)) > maxInt(T) and x > maxInt(T)) {
-        return error.Overflow;
-    } else if (minInt(@typeOf(x)) < minInt(T) and x < minInt(T)) {
-        return error.Overflow;
+pub fn convertInt(comptime T: type, x: var) (error{Overflow}!T) {
+    if (T == comptime_int) {
+        return @intCast(comptime_int, x);
+    } else if (@typeOf(x) == comptime_int) {
+        const to = @truncate(T, x);
+        if (@intCast(@typeOf(x), to) != x)
+            return error.Overflow;
+        return to;
     } else {
-        return @intCast(T, x);
+        comptime assert(@typeId(T) == builtin.TypeId.Int); // must pass an integer
+        comptime assert(@typeId(@typeOf(x)) == builtin.TypeId.Int); // must pass an integer
+        if (maxInt(@typeOf(x)) > maxInt(T) and x > maxInt(T)) {
+            return error.Overflow;
+        } else if (minInt(@typeOf(x)) < minInt(T) and x < minInt(T)) {
+            return error.Overflow;
+        } else {
+            return @intCast(T, x);
+        }
     }
 }
 
@@ -746,6 +755,44 @@ test "math.cast" {
 
     testing.expect((try cast(u8, u32(255))) == u8(255));
     testing.expect(@typeOf(try cast(u8, u32(255))) == u8);
+
+    testing.expect( 1234567890 ==   try cast(comptime_int, 1234567890));
+    testing.expect(-1234567890 ==   try cast(comptime_int, -1234567890));
+    testing.expect( 123456789012345678901234567890 ==
+        try cast(comptime_int, 123456789012345678901234567890));
+    testing.expect( 1234567890 ==   try cast(comptime_int, @intCast(u32, 1234567890)));
+    testing.expect( 1234567890 ==   try cast(comptime_int, @intCast(i32, 1234567890)));
+    testing.expect(-1234567890 ==   try cast(comptime_int, @intCast(i32, -1234567890)));
+
+    testing.expect(1234567890 ==    try cast(u32, 1234567890));
+    testing.expectError(error.Overflow, cast(u32, -1234567890));
+    testing.expectError(error.Overflow, cast(u32, 123456789012345678901234567890));
+    testing.expect(1234567890 ==    try cast(u32, @intCast(u32, 1234567890)));
+    testing.expect(1234567890 ==    try cast(u32, @intCast(i32, 1234567890)));
+    testing.expectError(error.Overflow, cast(u32, @intCast(i32, -1234567890)));
+    testing.expect(6000 ==          try cast(u32, @intCast(u16, 6000)));
+    testing.expect(6000 ==          try cast(u32, @intCast(i16, 6000)));
+    testing.expectError(error.Overflow, cast(u32, @intCast(i16, -6000)));
+
+    testing.expect(1234567890 ==    try cast(i32, 1234567890));
+    testing.expect(-1234567890 ==   try cast(i32, -1234567890));
+    testing.expectError(error.Overflow, cast(i32, 123456789012345678901234567890));
+    testing.expect(1234567890 ==    try cast(i32, @intCast(u32, 1234567890)));
+    testing.expect(1234567890 ==    try cast(i32, @intCast(i32, 1234567890)));
+    testing.expect(-1234567890 ==   try cast(i32, @intCast(i32, -1234567890)));
+    testing.expect(6000 ==          try cast(i32, @intCast(u16, 6000)));
+    testing.expect(6000 ==          try cast(i32, @intCast(i16, 6000)));
+    testing.expect(-6000 ==         try cast(i32, @intCast(i16, -6000)));
+
+    testing.expectError(error.Overflow, cast(u16, 1234567890));
+    testing.expectError(error.Overflow, cast(u16, -1234567890));
+    testing.expectError(error.Overflow, cast(u16, 123456789012345678901234567890));
+    testing.expectError(error.Overflow, cast(u16, @intCast(u32, 1234567890)));
+    testing.expectError(error.Overflow, cast(u16, @intCast(i32, 1234567890)));
+    testing.expectError(error.Overflow, cast(u16, @intCast(i32, -1234567890)));
+    testing.expect(6000 ==          try cast(u16, @intCast(u32, 6000)));
+    testing.expect(6000 ==          try cast(u16, @intCast(i32, 6000)));
+    testing.expectError(error.Overflow, cast(u16, @intCast(i32, -6000)));
 }
 
 pub const AlignCastError = error{UnalignedMemory};
