@@ -1503,6 +1503,13 @@ pub fn accept4(fd: i32, addr: *sockaddr, addrSize: *usize, flags: u32) AcceptErr
     }
 }
 
+/// Accept a connection on a socket. `fd` must be opened in blocking mode.
+/// See also `accept4`.
+pub fn accept4_typed_addr(fd: i32, addr: var flags: u32) AcceptError!i32 {
+    return accept4(fd, addr, @sizeOf(addr.*), flags);
+}
+
+
 /// This is the same as `accept4` except `fd` is expected to be non-blocking.
 /// Returns -1 if would block.
 pub fn accept4_async(fd: i32, addr: *sockaddr, addrSize: *usize, flags: u32) AcceptError!i32 {
@@ -1529,6 +1536,13 @@ pub fn accept4_async(fd: i32, addr: *sockaddr, addrSize: *usize, flags: u32) Acc
         }
     }
 }
+
+/// This is the same as `accept4` except `fd` is expected to be non-blocking.
+/// Returns -1 if would block.
+pub fn accept4_async_typed_addr(fd: i32, addr: var, flags: u32) AcceptError!i32 {
+    return accept4_async(fd, addr, @sizeOf(addr.*), flags);
+}
+
 
 pub const EpollCreateError = error{
     /// The  per-user   limit   on   the   number   of   epoll   instances   imposed   by
