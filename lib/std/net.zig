@@ -21,12 +21,7 @@ pub const Address = struct {
     pub fn initIp4(ip4: u32, _port: u16) Address {
         return Address{
             .os_addr = os.sockaddr{
-                .in = os.sockaddr_in{
-                    .family = os.AF_INET,
-                    .port = mem.nativeToBig(u16, _port),
-                    .addr = ip4,
-                    .zero = [_]u8{0} ** 8,
-                },
+                .in = os.sockaddr_in.init(os.AF_INET, mem.nativeToBig(u16, _port), ip4),
             },
         };
     }
@@ -53,18 +48,33 @@ pub const Address = struct {
         return Address{ .os_addr = addr };
     }
 
-    pub fn format(self: *const Address, out_stream: var) !void {
+    pub fn format(
+        self: *const @This(),
+        comptime fmt: []const u8,
+        options: std.fmt.FormatOptions,
+        context: var,
+        comptime Errors: type,
+        output: fn (@typeOf(context), []const u8) Errors!void,
+    ) Errors!void {
         switch (self.os_addr.in.family) {
             os.AF_INET => {
+                var buffer : [21]u8 = undefined;
                 const native_endian_port = mem.bigToNative(u16, self.os_addr.in.port);
-                const bytes = ([]const u8)((*self.os_addr.in.addr)[0..1]);
-                try out_stream.print("{}.{}.{}.{}:{}", bytes[0], bytes[1], bytes[2], bytes[3], native_endian_port);
+                const addr = mem.bigToNative(u32, self.os_addr.in.addr);
+                try output(context, try std.fmt.bufPrint(buffer[0..],
+                    "{}.{}.{}.{}:{}",
+                    @intCast(u8, 0xFF & (addr >> 24)),
+                    @intCast(u8, 0xFF & (addr >> 16)),
+                    @intCast(u8, 0xFF & (addr >>  8)),
+                    @intCast(u8, 0xFF & (addr >>  0)),
+                    native_endian_port));
             },
             os.AF_INET6 => {
+                var buffer : [45]u8 = undefined;
                 const native_endian_port = mem.bigToNative(u16, self.os_addr.in6.port);
-                try out_stream.print("[TODO render ip6 address]:{}", native_endian_port);
+                try output(context, try std.fmt.bufPrint(buffer[0..], "[TODO render ip6 address]:{}", native_endian_port));
             },
-            else => try out_stream.write("(unrecognized address family)"),
+            else => try output(context, "(unrecognized address family)"),
         }
     }
 };
@@ -214,6 +224,24 @@ test "std.net.parseIp6" {
     assert(addr.addr[0] == 0xff);
     assert(addr.addr[1] == 0x01);
     assert(addr.addr[2] == 0x00);
+}
+
+fn testIp4s(ips: []const []const u8) void {
+    var buffer : [18]u8 = undefined;
+    for (ips) |ip| {
+        var addr = Address.initIp4(parseIp4(ip) catch unreachable, 0);
+        var newIp = std.fmt.bufPrint(buffer[0..], "{}", addr) catch unreachable;
+        std.testing.expect(std.mem.eql(u8, ip, newIp[0..newIp.len - 2]));
+    }
+}
+
+test "std.net.ip4s" {
+    testIp4s(([_][]const u8 {
+        "0.0.0.0" ,
+        "255.255.255.255" ,
+        "1.2.3.4",
+        "123.255.0.91",
+    })[0..]);
 }
 
 pub fn connectUnixSocket(path: []const u8) !std.fs.File {

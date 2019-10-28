@@ -144,6 +144,15 @@ pub const sockaddr_in = extern struct {
     port: in_port_t,
     addr: u32,
     zero: [8]u8,
+    pub fn init(family: sa_family_t, port: in_port_t, addr: u32) @This() {
+        return @This() {
+            .len = @sizeOf(@This()),
+            .family = family,
+            .port = port,
+            .addr = addr,
+            .zero = [_]u8{0} ** 8,
+        };
+    }
 };
 
 pub const sockaddr_in6 = extern struct {
