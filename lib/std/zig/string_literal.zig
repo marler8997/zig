@@ -114,14 +114,17 @@ test "parse" {
     const expect = std.testing.expect;
     const eql = std.mem.eql;
 
-    var fixed_buf_mem: [32]u8 = undefined;
+    var fixed_buf_mem: [32 + std.mem.Allocator.ExactAllocPadding]u8 = undefined;
     var fixed_buf_alloc = std.heap.FixedBufferAllocator.init(fixed_buf_mem[0..]);
     var alloc = &fixed_buf_alloc.allocator;
     var bad_index: usize = undefined;
 
     expect(eql(u8, "foo", try parse(alloc, "\"foo\"", &bad_index)));
+    fixed_buf_alloc.reset();
     expect(eql(u8, "foo", try parse(alloc, "\"f\x6f\x6f\"", &bad_index)));
+    fixed_buf_alloc.reset();
     expect(eql(u8, "f💯", try parse(alloc, "\"f\u{1f4af}\"", &bad_index)));
+    fixed_buf_alloc.reset();
 }
 
 /// Writes a Zig-syntax escaped string literal to the stream. Includes the double quotes.

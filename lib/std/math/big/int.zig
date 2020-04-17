@@ -619,6 +619,9 @@ pub const Mutable = struct {
         var r = try Managed.init(limbs_buffer.allocator);
         defer r.deinit();
 
+        var tmpx = try Managed.init(limbs_buffer.allocator);
+        defer tmpx.deinit();
+
         while (y.len() > 1) {
             assert(x.isPositive() and y.isPositive());
             assert(x.len() >= y.len());
@@ -670,7 +673,8 @@ pub const Mutable = struct {
                 try t_big.add(r.toConst(), t_big.toConst());
 
                 // u = Cx + Dy, r as u
-                try x.mul(x.toConst(), Cp);
+                try tmpx.copy(x.toConst());
+                try x.mul(tmpx.toConst(), Cp);
                 try r.mul(y.toConst(), Dp);
                 try r.add(x.toConst(), r.toConst());
 
