@@ -14,31 +14,36 @@ pub const LeakCountAllocator = struct {
         return .{
             .count = 0,
             .allocator = .{
-                .reallocFn = realloc,
+                .allocFn = alloc,
                 .shrinkFn = shrink,
+                //.resizeFn = allocator.resizeFn, // this is a compile error?
+                .resizeFn = resize,
             },
             .internal_allocator = allocator,
         };
     }
 
-    fn realloc(allocator: *std.mem.Allocator, old_mem: []u8, old_align: u29, new_size: usize, new_align: u29) ![]u8 {
+    fn alloc(allocator: *std.mem.Allocator, len: usize, alignment: u29) error{OutOfMemory}![]u8 {
         const self = @fieldParentPtr(LeakCountAllocator, "allocator", allocator);
-        var data = try self.internal_allocator.reallocFn(self.internal_allocator, old_mem, old_align, new_size, new_align);
-        if (old_mem.len == 0) {
-            self.count += 1;
-        }
+        var data = try self.internal_allocator.allocMem(len, alignment);
+        self.count += 1;
         return data;
     }
 
-    fn shrink(allocator: *std.mem.Allocator, old_mem: []u8, old_align: u29, new_size: usize, new_align: u29) []u8 {
+    fn shrink(allocator: *std.mem.Allocator, buf: []u8, new_len: usize) void {
         const self = @fieldParentPtr(LeakCountAllocator, "allocator", allocator);
-        if (new_size == 0) {
+        self.internal_allocator.shrinkMem(buf, new_len);
+        if (new_len == 0) {
             if (self.count == 0) {
                 std.debug.panic("error - too many calls to free, most likely double free", .{});
             }
             self.count -= 1;
         }
-        return self.internal_allocator.shrinkFn(self.internal_allocator, old_mem, old_align, new_size, new_align);
+    }
+
+    fn resize(allocator: *std.mem.Allocator, buf: []u8, new_len: usize) error{OutOfMemory}!void {
+        const self = @fieldParentPtr(LeakCountAllocator, "allocator", allocator);
+        return self.internal_allocator.resizeMem(buf, new_len);
     }
 
     pub fn validate(self: LeakCountAllocator) !void {

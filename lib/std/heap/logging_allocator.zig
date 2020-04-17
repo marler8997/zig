@@ -15,22 +15,19 @@ pub fn LoggingAllocator(comptime OutStreamType: type) type {
         pub fn init(parent_allocator: *Allocator, out_stream: OutStreamType) Self {
             return Self{
                 .allocator = Allocator{
-                    .reallocFn = realloc,
+                    .allocFn = alloc,
                     .shrinkFn = shrink,
+                    .resizeFn = resize,
                 },
                 .parent_allocator = parent_allocator,
                 .out_stream = out_stream,
             };
         }
 
-        fn realloc(allocator: *Allocator, old_mem: []u8, old_align: u29, new_size: usize, new_align: u29) ![]u8 {
+        fn alloc(allocator: *std.mem.Allocator, len: usize, alignment: u29) error{OutOfMemory}![]u8 {
             const self = @fieldParentPtr(Self, "allocator", allocator);
-            if (old_mem.len == 0) {
-                self.out_stream.print("allocation of {} ", .{new_size}) catch {};
-            } else {
-                self.out_stream.print("resize from {} to {} ", .{ old_mem.len, new_size }) catch {};
-            }
-            const result = self.parent_allocator.reallocFn(self.parent_allocator, old_mem, old_align, new_size, new_align);
+            self.out_stream.print("allocation of {} ", .{len}) catch {};
+            const result = self.parent_allocator.allocMem(len, alignment);
             if (result) |buff| {
                 self.out_stream.print("success!\n", .{}) catch {};
             } else |err| {
@@ -39,13 +36,24 @@ pub fn LoggingAllocator(comptime OutStreamType: type) type {
             return result;
         }
 
-        fn shrink(allocator: *Allocator, old_mem: []u8, old_align: u29, new_size: usize, new_align: u29) []u8 {
+        fn shrink(allocator: *std.mem.Allocator, buf: []u8, new_len: usize) void {
             const self = @fieldParentPtr(Self, "allocator", allocator);
-            const result = self.parent_allocator.shrinkFn(self.parent_allocator, old_mem, old_align, new_size, new_align);
-            if (new_size == 0) {
-                self.out_stream.print("free of {} bytes success!\n", .{old_mem.len}) catch {};
+            self.parent_allocator.shrinkMem(buf, new_len);
+            if (new_len == 0) {
+                self.out_stream.print("free of {} bytes success!\n", .{buf.len}) catch {};
             } else {
-                self.out_stream.print("shrink from {} bytes to {} bytes success!\n", .{ old_mem.len, new_size }) catch {};
+                self.out_stream.print("shrink from {} bytes to {} bytes success!\n", .{ buf.len, new_len }) catch {};
+            }
+        }
+
+        fn resize(allocator: *std.mem.Allocator, buf: []u8, new_len: usize) error{OutOfMemory}!void {
+            const self = @fieldParentPtr(Self, "allocator", allocator);
+            self.out_stream.print("resize from {} to {} ", .{ buf.len, new_len }) catch {};
+            const result = self.parent_allocator.resizeMem(buf, new_len);
+            if (result) |buff| {
+                self.out_stream.print("success!\n", .{}) catch {};
+            } else |err| {
+                self.out_stream.print("failure!\n", .{}) catch {};
             }
             return result;
         }

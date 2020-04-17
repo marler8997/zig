@@ -39,43 +39,40 @@ pub const FailingAllocator = struct {
             .allocations = 0,
             .deallocations = 0,
             .allocator = mem.Allocator{
-                .reallocFn = realloc,
+                .allocFn = alloc,
                 .shrinkFn = shrink,
+                .resizeFn = resize,
             },
         };
     }
 
-    fn realloc(allocator: *mem.Allocator, old_mem: []u8, old_align: u29, new_size: usize, new_align: u29) ![]u8 {
-        const self = @fieldParentPtr(FailingAllocator, "allocator", allocator);
+    fn alloc(allocator: *std.mem.Allocator, len: usize, alignment: u29) error{OutOfMemory}![]u8 {
+        const self = @fieldParentPtr(@This(), "allocator", allocator);
         if (self.index == self.fail_index) {
             return error.OutOfMemory;
         }
-        const result = try self.internal_allocator.reallocFn(
-            self.internal_allocator,
-            old_mem,
-            old_align,
-            new_size,
-            new_align,
-        );
-        if (new_size < old_mem.len) {
-            self.freed_bytes += old_mem.len - new_size;
-            if (new_size == 0)
-                self.deallocations += 1;
-        } else if (new_size > old_mem.len) {
-            self.allocated_bytes += new_size - old_mem.len;
-            if (old_mem.len == 0)
-                self.allocations += 1;
-        }
+        const result = try self.internal_allocator.allocMem(len, alignment);
+        self.allocated_bytes += len;
+        self.allocations += 1;
         self.index += 1;
         return result;
     }
 
-    fn shrink(allocator: *mem.Allocator, old_mem: []u8, old_align: u29, new_size: usize, new_align: u29) []u8 {
-        const self = @fieldParentPtr(FailingAllocator, "allocator", allocator);
-        const r = self.internal_allocator.shrinkFn(self.internal_allocator, old_mem, old_align, new_size, new_align);
-        self.freed_bytes += old_mem.len - r.len;
-        if (new_size == 0)
+    fn shrink(allocator: *std.mem.Allocator, buf: []u8, new_len: usize) void {
+        const self = @fieldParentPtr(@This(), "allocator", allocator);
+        self.internal_allocator.shrinkMem(buf, new_len);
+        self.freed_bytes += buf.len - new_len;
+        if (new_len == 0)
             self.deallocations += 1;
-        return r;
+    }
+
+    fn resize(allocator: *std.mem.Allocator, buf: []u8, new_len: usize) error{OutOfMemory}!void {
+        const self = @fieldParentPtr(@This(), "allocator", allocator);
+        try self.internal_allocator.resizeMem(buf, new_len);
+        if (new_len < buf.len) {
+            self.freed_bytes += buf.len - new_len;
+        } else {
+            self.allocated_bytes += new_len - buf.len;
+        }
     }
 };
