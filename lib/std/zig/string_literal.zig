@@ -120,8 +120,11 @@ test "parse" {
     var bad_index: usize = undefined;
 
     expect(eql(u8, "foo", try parse(alloc, "\"foo\"", &bad_index)));
+    fixed_buf_alloc.reset();
     expect(eql(u8, "foo", try parse(alloc, "\"f\x6f\x6f\"", &bad_index)));
+    fixed_buf_alloc.reset();
     expect(eql(u8, "f💯", try parse(alloc, "\"f\u{1f4af}\"", &bad_index)));
+    fixed_buf_alloc.reset();
 }
 
 /// Writes a Zig-syntax escaped string literal to the stream. Includes the double quotes.
