@@ -16,6 +16,123 @@ pub const page_size = switch (builtin.arch) {
 pub const Allocator = struct {
     pub const Error = error{OutOfMemory};
 
+    /// The returned slice has a length >= `len` and alignment >= `alignment`.
+    /// If the returned length is greater than requested, it indicates the extra bytes
+    /// would otherwise be wasted in the allocation.
+    allocFn: fn (self: *Allocator, len: usize, alignment: u29) Error![]u8,
+
+    /// Expand or shrink memory in place. Returns the new length of the allocated block which
+    /// may not be equal to `new_len`.  If the returned length is greater than requested, the
+    /// extra bytes would otherwise be wasted in the allocation.  If it is less, then the
+    /// allocator is unable to expand the given block in place. If `new_len` is 0, then the buffer
+    /// becomes invalid after this call so the caller may no longer be passed it into resizeFn.
+    resizeFn: fn (self: *Allocator, buf: []u8, new_len: usize) usize,
+
+    // NOTE: we could add an "isExact" field that specifies whether the underlying
+    //       allocator makes "exact" allocations, meaning we wouldn't need to pad
+    //       allocations.  However, for now we'll just handle all allocators the same as
+    //       its simpler and we may come up with other ideas that would make this feature
+    //       unnecessary.
+
+    pub fn callAllocFn(self: *Allocator, new_len: usize, alignment: u29) Error![]u8 {
+        return self.allocFn(self, new_len, alignment);
+    }
+    pub fn callResizeFn(self: *Allocator, buf: []u8, new_len: usize) usize {
+        return self.resizeFn(self, buf, new_len);
+    }
+
+    /// Set to resizeFn if in-place resize is not supported.
+    pub fn noResize(self: *Allocator, buf: []u8, new_len: usize) usize {
+        return buf.len;
+    }
+
+    // The new allocFn and resizeFn functions are no longer exact, meaning the length of buffers returned
+    // may not match the requested length exactly.  However, there seems to be alot of code that
+    // depends on this behavior, so for now I've modified the allocator code to pad all allocations
+    // with room to store the full-length of the buffer.  So allocators will still receive the full buffer
+    // that was allocated while callers can change the size to anything they require.
+    //
+    // Note that moving forward, my guess is that some code will require exact allocation and some won't.
+    // My guess is that we will want separate types for each kind? i.e. Allocator and ExactAllocator?
+    //
+    const ExactAlloc = struct {
+        magic : u32, // used to debug corrupted data or callers that change the size without calling resize
+        fullLen: usize,
+        const MAGIC = 0x12345678;
+    };
+    pub const ExactAllocPadding = @sizeOf(ExactAlloc) + @alignOf(ExactAlloc) - 1;
+
+    fn getExactAllocRef(exactBuf: []u8) *ExactAlloc {
+        return @intToPtr(*ExactAlloc, mem.alignForward(@ptrToInt(exactBuf.ptr) + exactBuf.len, @alignOf(ExactAlloc)));
+    }
+
+    fn setExactData(fullBuf: []u8, exact_len: usize) []u8 {
+        assert(fullBuf.len >= exact_len + ExactAllocPadding);
+        const exactBuf = fullBuf.ptr[0..exact_len];
+        getExactAllocRef(exactBuf).* = .{ .magic = ExactAlloc.MAGIC, .fullLen = fullBuf.len };
+        return exactBuf;
+    }
+
+    fn allocCommon(self: *Allocator, new_len: usize, alignment: u29, exact: bool) Error![]u8 {
+        assert(new_len > 0);
+        const padded_len = new_len + ExactAllocPadding;
+        const fullBuf = try self.callAllocFn(padded_len, alignment);
+        assert(fullBuf.len >= padded_len);
+        @memset(fullBuf.ptr, undefined, fullBuf.len);
+        return setExactData(fullBuf, if (exact) new_len else (fullBuf.len - ExactAllocPadding));
+    }
+
+    pub fn allocAtLeast(self: *Allocator, new_len: usize, alignment: u29) Error![]u8 {
+        return self.allocCommon(new_len, alignment, false);
+    }
+
+    // allocate a buffer of least `new_len` bytes and set the exact data length to `new_len`.
+    pub fn allocExact(self: *Allocator, new_len: usize, alignment: u29) Error![]u8 {
+        return self.allocCommon(new_len, alignment, true);
+    }
+
+    pub fn shrinkExact(self: *Allocator, exactBuf: []u8, new_len: usize) void {
+        assert(new_len < exactBuf.len);
+        const resize_len = self.resizeExact(exactBuf, new_len);
+        assert(resize_len == new_len);
+    }
+
+    /// tries to resize exactBuf in place to exactly new_len size, however, if new_len is
+    /// > than `exactBuf.len`, it may increase the size but not all the way to `new_len`.
+    pub fn resizeExact(self: *Allocator, exactBuf: []u8, new_len: usize) usize {
+        assert(exactBuf.len > 0);
+        const fullBuf = initFullBuf: {
+            const exactAllocRef = getExactAllocRef(exactBuf).*;
+            assert(exactAllocRef.magic == ExactAlloc.MAGIC);
+            break :initFullBuf exactBuf.ptr[0 .. exactAllocRef.fullLen];
+        };
+        if (new_len == 0) {
+            // TODO: move this @memset undefined into the allocator itself
+            // !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+            // !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+            // !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+            // COMMENTED OUT BECAUSE IT IS EXPOSING BUGS IN TRANSLATE C!!!
+            // !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+            // !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+            // !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+            //@memset(fullBuf.ptr, undefined, fullBuf.len);
+            _ = self.callResizeFn(fullBuf, 0);
+            // don't need to set ExactAlloc data because this buffer is now invalid
+            return 0;
+        } else {
+            const new_padded_len = new_len + ExactAllocPadding;
+            if (new_padded_len < fullBuf.len) {
+                // TODO: move this @memset undefined into the allocator itself
+                @memset(fullBuf.ptr + new_padded_len, undefined, fullBuf.len - new_padded_len);
+            }
+            const new_full_len = self.callResizeFn(fullBuf, new_padded_len);
+            var new_exact_len = new_len;
+            if (new_full_len < new_padded_len)
+                new_exact_len = new_full_len - ExactAllocPadding;
+            return setExactData(exactBuf.ptr[0..new_full_len], new_exact_len).len;
+        }
+    }
+
     /// Realloc is used to modify the size or alignment of an existing allocation,
     /// as well as to provide the allocator with an opportunity to move an allocation
     /// to a better location.
@@ -24,7 +141,7 @@ pub const Allocator = struct {
     /// When the size/alignment is less than or equal to the previous allocation,
     /// this function returns `error.OutOfMemory` when the allocator decides the client
     /// would be better off keeping the extra alignment/size. Clients will call
-    /// `shrinkFn` when they require the allocator to track a new alignment/size,
+    /// `shrinkExact` when they require the allocator to track a new alignment/size,
     /// and so this function should only return success when the allocator considers
     /// the reallocation desirable from the allocator's perspective.
     /// As an example, `std.ArrayList` tracks a "capacity", and therefore can handle
@@ -37,16 +154,16 @@ pub const Allocator = struct {
     /// as `old_mem` was when `reallocFn` is called. The bytes of
     /// `return_value[old_mem.len..]` have undefined values.
     /// The returned slice must have its pointer aligned at least to `new_alignment` bytes.
-    reallocFn: fn (
+    fn reallocExact(
         self: *Allocator,
         /// Guaranteed to be the same as what was returned from most recent call to
-        /// `reallocFn` or `shrinkFn`.
+        /// `allocExact` retaining any length changes from `resizeExact`.
         /// If `old_mem.len == 0` then this is a new allocation and `new_byte_count`
         /// is guaranteed to be >= 1.
         old_mem: []u8,
         /// If `old_mem.len == 0` then this is `undefined`, otherwise:
         /// Guaranteed to be the same as what was returned from most recent call to
-        /// `reallocFn` or `shrinkFn`.
+        /// `allocExact` retaining any length changes from `resizeExact`.
         /// Guaranteed to be >= 1.
         /// Guaranteed to be a power of 2.
         old_alignment: u29,
@@ -57,23 +174,31 @@ pub const Allocator = struct {
         /// Guaranteed to be a power of 2.
         /// Returned slice's pointer must have this alignment.
         new_alignment: u29,
-    ) Error![]u8,
+    ) Error![]u8 {
+        if (old_mem.len == 0)
+            return self.allocExact(new_byte_count, new_alignment);
+        var old_mem_mut = old_mem;
+        if (isAligned(@ptrToInt(old_mem_mut.ptr), new_alignment)) {
+            old_mem_mut = old_mem_mut.ptr[0 .. self.resizeExact(old_mem_mut, new_byte_count)];
+            if (old_mem_mut.len == new_byte_count)
+                return old_mem_mut;
+        }
+        if (new_byte_count <= old_mem_mut.len and new_alignment <= old_alignment) {
+            return error.OutOfMemory;
+        }
+        return try self.moveExact(old_mem_mut, new_byte_count, new_alignment);
+    }
 
-    /// This function deallocates memory. It must succeed.
-    shrinkFn: fn (
-        self: *Allocator,
-        /// Guaranteed to be the same as what was returned from most recent call to
-        /// `reallocFn` or `shrinkFn`.
-        old_mem: []u8,
-        /// Guaranteed to be the same as what was returned from most recent call to
-        /// `reallocFn` or `shrinkFn`.
-        old_alignment: u29,
-        /// Guaranteed to be less than or equal to `old_mem.len`.
-        new_byte_count: usize,
-        /// If `new_byte_count == 0` then this is `undefined`, otherwise:
-        /// Guaranteed to be less than or equal to `old_alignment`.
-        new_alignment: u29,
-    ) []u8,
+    /// Move the given memory to a new location in the given allocator to accomodate a new
+    /// size and alignment.
+    fn moveExact(self: *Allocator, old_mem: []u8, new_len: usize, new_alignment: u29) Error![]u8 {
+        assert(old_mem.len > 0);
+        assert(new_len > 0);
+        const new_mem = try self.allocExact(new_len, new_alignment);
+        @memcpy(new_mem.ptr, old_mem.ptr, std.math.min(new_len, old_mem.len));
+        self.shrinkExact(old_mem, 0);
+        return new_mem;
+    }
 
     /// Returns a pointer to undefined memory.
     /// Call `destroy` with the result to free the memory.
@@ -89,8 +214,7 @@ pub const Allocator = struct {
         const T = @TypeOf(ptr).Child;
         if (@sizeOf(T) == 0) return;
         const non_const_ptr = @intToPtr([*]u8, @ptrToInt(ptr));
-        const shrink_result = self.shrinkFn(self, non_const_ptr[0..@sizeOf(T)], @alignOf(T), 0, 1);
-        assert(shrink_result.len == 0);
+        self.shrinkExact(non_const_ptr[0..@sizeOf(T)], 0);
     }
 
     /// Allocates an array of `n` items of type `T` and sets all the
@@ -161,9 +285,8 @@ pub const Allocator = struct {
         }
 
         const byte_count = math.mul(usize, @sizeOf(T), n) catch return Error.OutOfMemory;
-        const byte_slice = try self.reallocFn(self, &[0]u8{}, undefined, byte_count, a);
+        const byte_slice = try self.allocExact(byte_count, a);
         assert(byte_slice.len == byte_count);
-        @memset(byte_slice.ptr, undefined, byte_slice.len);
         if (alignment == null) {
             // TODO This is a workaround for zig not being able to successfully do
             // @bytesToSlice(T, @alignCast(a, byte_slice)) without resolving alignment of T,
@@ -215,11 +338,8 @@ pub const Allocator = struct {
         const old_byte_slice = mem.sliceAsBytes(old_mem);
         const byte_count = math.mul(usize, @sizeOf(T), new_n) catch return Error.OutOfMemory;
         // Note: can't set shrunk memory to undefined as memory shouldn't be modified on realloc failure
-        const byte_slice = try self.reallocFn(self, old_byte_slice, Slice.alignment, byte_count, new_alignment);
+        const byte_slice = try self.reallocExact(old_byte_slice, Slice.alignment, byte_count, new_alignment);
         assert(byte_slice.len == byte_count);
-        if (new_n > old_mem.len) {
-            @memset(byte_slice.ptr + old_byte_slice.len, undefined, byte_slice.len - old_byte_slice.len);
-        }
         return mem.bytesAsSlice(T, @alignCast(new_alignment, byte_slice));
     }
 
@@ -248,23 +368,15 @@ pub const Allocator = struct {
         const Slice = @typeInfo(@TypeOf(old_mem)).Pointer;
         const T = Slice.child;
 
-        if (new_n == 0) {
-            self.free(old_mem);
-            return old_mem[0..0];
-        }
-
-        assert(new_n <= old_mem.len);
+        if (new_n == old_mem.len)
+            return old_mem;
+        assert(new_n < old_mem.len);
         assert(new_alignment <= Slice.alignment);
 
         // Here we skip the overflow checking on the multiplication because
         // new_n <= old_mem.len and the multiplication didn't overflow for that operation.
-        const byte_count = @sizeOf(T) * new_n;
-
-        const old_byte_slice = mem.sliceAsBytes(old_mem);
-        @memset(old_byte_slice.ptr + byte_count, undefined, old_byte_slice.len - byte_count);
-        const byte_slice = self.shrinkFn(self, old_byte_slice, Slice.alignment, byte_count, new_alignment);
-        assert(byte_slice.len == byte_count);
-        return mem.bytesAsSlice(T, @alignCast(new_alignment, byte_slice));
+        self.shrinkExact(mem.sliceAsBytes(old_mem), @sizeOf(T) * new_n);
+        return old_mem[0..new_n];
     }
 
     /// Free an array allocated with `alloc`. To free a single item,
@@ -275,9 +387,7 @@ pub const Allocator = struct {
         const bytes_len = bytes.len + if (Slice.sentinel != null) @sizeOf(Slice.child) else 0;
         if (bytes_len == 0) return;
         const non_const_ptr = @intToPtr([*]u8, @ptrToInt(bytes.ptr));
-        @memset(non_const_ptr, undefined, bytes_len);
-        const shrink_result = self.shrinkFn(self, non_const_ptr[0..bytes_len], Slice.alignment, 0, 1);
-        assert(shrink_result.len == 0);
+        self.shrinkExact(non_const_ptr[0..bytes_len], 0);
     }
 
     /// Copies `m` to newly allocated memory. Caller owns the memory.
@@ -297,14 +407,11 @@ pub const Allocator = struct {
 };
 
 var failAllocator = Allocator{
-    .reallocFn = failAllocatorRealloc,
-    .shrinkFn = failAllocatorShrink,
+    .allocFn = failAllocatorAlloc,
+    .resizeFn = Allocator.noResize,
 };
-fn failAllocatorRealloc(self: *Allocator, old_mem: []u8, old_align: u29, new_size: usize, new_align: u29) ![]u8 {
+fn failAllocatorAlloc(allocator: *Allocator, n: usize, alignment: u29) ![]u8 {
     return error.OutOfMemory;
-}
-fn failAllocatorShrink(self: *Allocator, old_mem: []u8, old_align: u29, new_size: usize, new_align: u29) []u8 {
-    @panic("failAllocatorShrink should never be called because it cannot allocate");
 }
 
 test "mem.Allocator basics" {

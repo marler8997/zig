@@ -1110,6 +1110,7 @@ pub fn relativePosix(allocator: *Allocator, from: []const u8, to: []const u8) ![
         }
         if (to_rest.len == 0) {
             // shave off the trailing slash
+            allocator.shrinkExact(result, result_index - 1);
             return result[0 .. result_index - 1];
         }
 
