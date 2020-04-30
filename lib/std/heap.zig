@@ -8,30 +8,16 @@ const os = std.os;
 const builtin = @import("builtin");
 const c = std.c;
 const maxInt = std.math.maxInt;
+const Alloc = std.alloc.Alloc;
 
 pub const LoggingAllocator = @import("heap/logging_allocator.zig").LoggingAllocator;
 pub const loggingAllocator = @import("heap/logging_allocator.zig").loggingAllocator;
 
 const Allocator = mem.Allocator;
 
-pub const c_allocator = &c_allocator_state;
-var c_allocator_state = Allocator{
-    .reallocFn = cRealloc,
-    .shrinkFn = cShrink,
-};
+var c_allocator_state = mem.makeMemSliceAllocator(Alloc.c.aligned().precise().slice().init);
+pub const c_allocator = &c_allocator_state.allocator;
 
-fn cRealloc(self: *Allocator, old_mem: []u8, old_align: u29, new_size: usize, new_align: u29) ![]u8 {
-    assert(new_align <= @alignOf(c_longdouble));
-    const old_ptr = if (old_mem.len == 0) null else @ptrCast(*c_void, old_mem.ptr);
-    const buf = c.realloc(old_ptr, new_size) orelse return error.OutOfMemory;
-    return @ptrCast([*]u8, buf)[0..new_size];
-}
-
-fn cShrink(self: *Allocator, old_mem: []u8, old_align: u29, new_size: usize, new_align: u29) []u8 {
-    const old_ptr = @ptrCast(*c_void, old_mem.ptr);
-    const buf = c.realloc(old_ptr, new_size) orelse return old_mem[0..new_size];
-    return @ptrCast([*]u8, buf)[0..new_size];
-}
 
 /// This allocator makes a syscall directly for every allocation and free.
 /// Thread-safe and lock-free.
@@ -39,215 +25,21 @@ pub const page_allocator = if (std.Target.current.isWasm())
     &wasm_page_allocator_state
 else if (std.Target.current.os.tag == .freestanding)
     root.os.heap.page_allocator
+else if (std.Target.current.os.tag == .windows)
+    &windows_heap_allocator.allocator
 else
-    &page_allocator_state;
+    &mmap_allocator.allocator;
 
-var page_allocator_state = Allocator{
-    .reallocFn = PageAllocator.realloc,
-    .shrinkFn = PageAllocator.shrink,
-};
+// NOTE: add '.log()' in between calls to debug allocations
+var mmap_allocator = mem.makeMemSliceAllocator(Alloc.mmap.aligned().precise().slice().init);
+
 var wasm_page_allocator_state = Allocator{
     .reallocFn = WasmPageAllocator.realloc,
     .shrinkFn = WasmPageAllocator.shrink,
 };
+var windows_heap_allocator = mem.makeMemSliceAllocator(Alloc.windowsGlobalHeap.aligned().precise().slice().init);
 
 pub const direct_allocator = @compileError("deprecated; use std.heap.page_allocator");
-
-const PageAllocator = struct {
-    fn alloc(allocator: *Allocator, n: usize, alignment: u29) error{OutOfMemory}![]u8 {
-        if (n == 0) return &[0]u8{};
-
-        if (builtin.os.tag == .windows) {
-            const w = os.windows;
-
-            // Although officially it's at least aligned to page boundary,
-            // Windows is known to reserve pages on a 64K boundary. It's
-            // even more likely that the requested alignment is <= 64K than
-            // 4K, so we're just allocating blindly and hoping for the best.
-            // see https://devblogs.microsoft.com/oldnewthing/?p=42223
-            const addr = w.VirtualAlloc(
-                null,
-                n,
-                w.MEM_COMMIT | w.MEM_RESERVE,
-                w.PAGE_READWRITE,
-            ) catch return error.OutOfMemory;
-
-            // If the allocation is sufficiently aligned, use it.
-            if (@ptrToInt(addr) & (alignment - 1) == 0) {
-                return @ptrCast([*]u8, addr)[0..n];
-            }
-
-            // If it wasn't, actually do an explicitely aligned allocation.
-            w.VirtualFree(addr, 0, w.MEM_RELEASE);
-            const alloc_size = n + alignment;
-
-            const final_addr = while (true) {
-                // Reserve a range of memory large enough to find a sufficiently
-                // aligned address.
-                const reserved_addr = w.VirtualAlloc(
-                    null,
-                    alloc_size,
-                    w.MEM_RESERVE,
-                    w.PAGE_NOACCESS,
-                ) catch return error.OutOfMemory;
-                const aligned_addr = mem.alignForward(@ptrToInt(reserved_addr), alignment);
-
-                // Release the reserved pages (not actually used).
-                w.VirtualFree(reserved_addr, 0, w.MEM_RELEASE);
-
-                // At this point, it is possible that another thread has
-                // obtained some memory space that will cause the next
-                // VirtualAlloc call to fail. To handle this, we will retry
-                // until it succeeds.
-                const ptr = w.VirtualAlloc(
-                    @intToPtr(*c_void, aligned_addr),
-                    n,
-                    w.MEM_COMMIT | w.MEM_RESERVE,
-                    w.PAGE_READWRITE,
-                ) catch continue;
-
-                return @ptrCast([*]u8, ptr)[0..n];
-            };
-
-            return @ptrCast([*]u8, final_addr)[0..n];
-        }
-
-        const alloc_size = if (alignment <= mem.page_size) n else n + alignment;
-        const slice = os.mmap(
-            null,
-            mem.alignForward(alloc_size, mem.page_size),
-            os.PROT_READ | os.PROT_WRITE,
-            os.MAP_PRIVATE | os.MAP_ANONYMOUS,
-            -1,
-            0,
-        ) catch return error.OutOfMemory;
-        if (alloc_size == n) return slice[0..n];
-
-        const aligned_addr = mem.alignForward(@ptrToInt(slice.ptr), alignment);
-
-        // Unmap the extra bytes that were only requested in order to guarantee
-        // that the range of memory we were provided had a proper alignment in
-        // it somewhere. The extra bytes could be at the beginning, or end, or both.
-        const unused_start_len = aligned_addr - @ptrToInt(slice.ptr);
-        if (unused_start_len != 0) {
-            os.munmap(slice[0..unused_start_len]);
-        }
-        const aligned_end_addr = mem.alignForward(aligned_addr + n, mem.page_size);
-        const unused_end_len = @ptrToInt(slice.ptr) + slice.len - aligned_end_addr;
-        if (unused_end_len != 0) {
-            os.munmap(@intToPtr([*]align(mem.page_size) u8, aligned_end_addr)[0..unused_end_len]);
-        }
-
-        return @intToPtr([*]u8, aligned_addr)[0..n];
-    }
-
-    fn shrink(allocator: *Allocator, old_mem_unaligned: []u8, old_align: u29, new_size: usize, new_align: u29) []u8 {
-        const old_mem = @alignCast(mem.page_size, old_mem_unaligned);
-        if (builtin.os.tag == .windows) {
-            const w = os.windows;
-            if (new_size == 0) {
-                // From the docs:
-                // "If the dwFreeType parameter is MEM_RELEASE, this parameter
-                // must be 0 (zero). The function frees the entire region that
-                // is reserved in the initial allocation call to VirtualAlloc."
-                // So we can only use MEM_RELEASE when actually releasing the
-                // whole allocation.
-                w.VirtualFree(old_mem.ptr, 0, w.MEM_RELEASE);
-            } else {
-                const base_addr = @ptrToInt(old_mem.ptr);
-                const old_addr_end = base_addr + old_mem.len;
-                const new_addr_end = base_addr + new_size;
-                const new_addr_end_rounded = mem.alignForward(new_addr_end, mem.page_size);
-                if (old_addr_end > new_addr_end_rounded) {
-                    // For shrinking that is not releasing, we will only
-                    // decommit the pages not needed anymore.
-                    w.VirtualFree(
-                        @intToPtr(*c_void, new_addr_end_rounded),
-                        old_addr_end - new_addr_end_rounded,
-                        w.MEM_DECOMMIT,
-                    );
-                }
-            }
-            return old_mem[0..new_size];
-        }
-        const base_addr = @ptrToInt(old_mem.ptr);
-        const old_addr_end = base_addr + old_mem.len;
-        const new_addr_end = base_addr + new_size;
-        const new_addr_end_rounded = mem.alignForward(new_addr_end, mem.page_size);
-        if (old_addr_end > new_addr_end_rounded) {
-            const ptr = @intToPtr([*]align(mem.page_size) u8, new_addr_end_rounded);
-            os.munmap(ptr[0 .. old_addr_end - new_addr_end_rounded]);
-        }
-        return old_mem[0..new_size];
-    }
-
-    fn realloc(allocator: *Allocator, old_mem_unaligned: []u8, old_align: u29, new_size: usize, new_align: u29) ![]u8 {
-        const old_mem = @alignCast(mem.page_size, old_mem_unaligned);
-        if (builtin.os.tag == .windows) {
-            if (old_mem.len == 0) {
-                return alloc(allocator, new_size, new_align);
-            }
-
-            if (new_size <= old_mem.len and new_align <= old_align) {
-                return shrink(allocator, old_mem, old_align, new_size, new_align);
-            }
-
-            const w = os.windows;
-            const base_addr = @ptrToInt(old_mem.ptr);
-
-            if (new_align > old_align and base_addr & (new_align - 1) != 0) {
-                // Current allocation doesn't satisfy the new alignment.
-                // For now we'll do a new one no matter what, but maybe
-                // there is something smarter to do instead.
-                const result = try alloc(allocator, new_size, new_align);
-                assert(old_mem.len != 0);
-                @memcpy(result.ptr, old_mem.ptr, std.math.min(old_mem.len, result.len));
-                w.VirtualFree(old_mem.ptr, 0, w.MEM_RELEASE);
-
-                return result;
-            }
-
-            const old_addr_end = base_addr + old_mem.len;
-            const old_addr_end_rounded = mem.alignForward(old_addr_end, mem.page_size);
-            const new_addr_end = base_addr + new_size;
-            const new_addr_end_rounded = mem.alignForward(new_addr_end, mem.page_size);
-            if (new_addr_end_rounded == old_addr_end_rounded) {
-                // The reallocation fits in the already allocated pages.
-                return @ptrCast([*]u8, old_mem.ptr)[0..new_size];
-            }
-            assert(new_addr_end_rounded > old_addr_end_rounded);
-
-            // We need to commit new pages.
-            const additional_size = new_addr_end - old_addr_end_rounded;
-            const realloc_addr = w.kernel32.VirtualAlloc(
-                @intToPtr(*c_void, old_addr_end_rounded),
-                additional_size,
-                w.MEM_COMMIT | w.MEM_RESERVE,
-                w.PAGE_READWRITE,
-            ) orelse {
-                // Committing new pages at the end of the existing allocation
-                // failed, we need to try a new one.
-                const new_alloc_mem = try alloc(allocator, new_size, new_align);
-                @memcpy(new_alloc_mem.ptr, old_mem.ptr, old_mem.len);
-                w.VirtualFree(old_mem.ptr, 0, w.MEM_RELEASE);
-
-                return new_alloc_mem;
-            };
-
-            assert(@ptrToInt(realloc_addr) == old_addr_end_rounded);
-            return @ptrCast([*]u8, old_mem.ptr)[0..new_size];
-        }
-        if (new_size <= old_mem.len and new_align <= old_align) {
-            return shrink(allocator, old_mem, old_align, new_size, new_align);
-        }
-        const result = try alloc(allocator, new_size, new_align);
-        if (old_mem.len != 0) {
-            @memcpy(result.ptr, old_mem.ptr, std.math.min(old_mem.len, result.len));
-            os.munmap(old_mem);
-        }
-        return result;
-    }
-};
 
 // TODO Exposed LLVM intrinsics is a bug
 // See: https://github.com/ziglang/zig/issues/2291
@@ -414,98 +206,11 @@ const WasmPageAllocator = struct {
 
 pub const HeapAllocator = switch (builtin.os.tag) {
     .windows => struct {
-        allocator: Allocator,
-        heap_handle: ?HeapHandle,
-
-        const HeapHandle = os.windows.HANDLE;
-
-        pub fn init() HeapAllocator {
-            return HeapAllocator{
-                .allocator = Allocator{
-                    .reallocFn = realloc,
-                    .shrinkFn = shrink,
-                },
-                .heap_handle = null,
-            };
+        allocator: mem.Allocator,
+        pub fn init() @This() {
+            return .{ .allocator = windows_heap_allocator.allocator };
         }
-
-        pub fn deinit(self: *HeapAllocator) void {
-            if (self.heap_handle) |heap_handle| {
-                os.windows.HeapDestroy(heap_handle);
-            }
-        }
-
-        fn alloc(allocator: *Allocator, n: usize, alignment: u29) error{OutOfMemory}![]u8 {
-            const self = @fieldParentPtr(HeapAllocator, "allocator", allocator);
-            if (n == 0) return &[0]u8{};
-
-            const amt = n + alignment + @sizeOf(usize);
-            const optional_heap_handle = @atomicLoad(?HeapHandle, &self.heap_handle, builtin.AtomicOrder.SeqCst);
-            const heap_handle = optional_heap_handle orelse blk: {
-                const options = if (builtin.single_threaded) os.windows.HEAP_NO_SERIALIZE else 0;
-                const hh = os.windows.kernel32.HeapCreate(options, amt, 0) orelse return error.OutOfMemory;
-                const other_hh = @cmpxchgStrong(?HeapHandle, &self.heap_handle, null, hh, builtin.AtomicOrder.SeqCst, builtin.AtomicOrder.SeqCst) orelse break :blk hh;
-                os.windows.HeapDestroy(hh);
-                break :blk other_hh.?; // can't be null because of the cmpxchg
-            };
-            const ptr = os.windows.kernel32.HeapAlloc(heap_handle, 0, amt) orelse return error.OutOfMemory;
-            const root_addr = @ptrToInt(ptr);
-            const adjusted_addr = mem.alignForward(root_addr, alignment);
-            const record_addr = adjusted_addr + n;
-            @intToPtr(*align(1) usize, record_addr).* = root_addr;
-            return @intToPtr([*]u8, adjusted_addr)[0..n];
-        }
-
-        fn shrink(allocator: *Allocator, old_mem: []u8, old_align: u29, new_size: usize, new_align: u29) []u8 {
-            return realloc(allocator, old_mem, old_align, new_size, new_align) catch {
-                const old_adjusted_addr = @ptrToInt(old_mem.ptr);
-                const old_record_addr = old_adjusted_addr + old_mem.len;
-                const root_addr = @intToPtr(*align(1) usize, old_record_addr).*;
-                const old_ptr = @intToPtr(*c_void, root_addr);
-                const new_record_addr = old_record_addr - new_size + old_mem.len;
-                @intToPtr(*align(1) usize, new_record_addr).* = root_addr;
-                return old_mem[0..new_size];
-            };
-        }
-
-        fn realloc(allocator: *Allocator, old_mem: []u8, old_align: u29, new_size: usize, new_align: u29) ![]u8 {
-            if (old_mem.len == 0) return alloc(allocator, new_size, new_align);
-
-            const self = @fieldParentPtr(HeapAllocator, "allocator", allocator);
-            const old_adjusted_addr = @ptrToInt(old_mem.ptr);
-            const old_record_addr = old_adjusted_addr + old_mem.len;
-            const root_addr = @intToPtr(*align(1) usize, old_record_addr).*;
-            const old_ptr = @intToPtr(*c_void, root_addr);
-
-            if (new_size == 0) {
-                os.windows.HeapFree(self.heap_handle.?, 0, old_ptr);
-                return old_mem[0..0];
-            }
-
-            const amt = new_size + new_align + @sizeOf(usize);
-            const new_ptr = os.windows.kernel32.HeapReAlloc(
-                self.heap_handle.?,
-                0,
-                old_ptr,
-                amt,
-            ) orelse return error.OutOfMemory;
-            const offset = old_adjusted_addr - root_addr;
-            const new_root_addr = @ptrToInt(new_ptr);
-            var new_adjusted_addr = new_root_addr + offset;
-            const offset_is_valid = new_adjusted_addr + new_size + @sizeOf(usize) <= new_root_addr + amt;
-            const offset_is_aligned = new_adjusted_addr % new_align == 0;
-            if (!offset_is_valid or !offset_is_aligned) {
-                // If HeapReAlloc didn't happen to move the memory to the new alignment,
-                // or the memory starting at the old offset would be outside of the new allocation,
-                // then we need to copy the memory to a valid aligned address and use that
-                const new_aligned_addr = mem.alignForward(new_root_addr, new_align);
-                @memcpy(@intToPtr([*]u8, new_aligned_addr), @intToPtr([*]u8, new_adjusted_addr), std.math.min(old_mem.len, new_size));
-                new_adjusted_addr = new_aligned_addr;
-            }
-            const new_record_addr = new_adjusted_addr + new_size;
-            @intToPtr(*align(1) usize, new_record_addr).* = new_root_addr;
-            return @intToPtr([*]u8, new_adjusted_addr)[0..new_size];
-        }
+        pub fn deinit(self: @This()) void { }
     },
     else => @compileError("Unsupported OS"),
 };

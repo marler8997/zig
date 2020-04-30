@@ -1,4 +1,5 @@
 const std = @import("std.zig");
+const allocmod = std.alloc;
 const debug = std.debug;
 const assert = debug.assert;
 const math = std.math;
@@ -2093,3 +2094,66 @@ test "freeing empty string with null-terminated sentinel" {
     const empty_string = try dupeZ(testing.allocator, u8, "");
     testing.allocator.free(empty_string);
 }
+
+/// Create a mem.Allocator from a SliceAllocator
+pub fn makeMemSliceAllocator(allocator: var) MemSliceAllocator(@TypeOf(allocator)) {
+    return MemSliceAllocator(@TypeOf(allocator)).init(allocator);
+}
+pub fn MemSliceAllocator(comptime T: type) type { return struct {
+    allocator: Allocator,
+    sliceAllocator: T,
+    pub fn init(sliceAllocator: T) @This() {
+        return .{
+            .allocator = .{
+                .reallocFn = realloc,
+                .shrinkFn = shrink,
+            },
+            .sliceAllocator = sliceAllocator,
+        };
+    }
+
+    pub fn realloc(allocator: *Allocator, old_mem: []u8, old_align: u29,
+        new_len: usize, new_align: u29
+    ) Allocator.Error![]u8 {
+        //std.debug.warn("[DEBUG] realloc old {}:{} oldalign={} newlen {} newalign={}\n", .{old_mem.ptr, old_mem.len, old_align, new_len, new_align});
+        const self = @fieldParentPtr(@This(), "allocator", allocator);
+        if (old_mem.len == 0) {
+            assert(new_len > 0);
+            return try self.sliceAllocator.allocAligned(new_len, new_align);
+        }
+        if (new_len == 0) {
+            self.sliceAllocator.dealloc(@alignCast(T.alignment, old_mem));
+            return old_mem[0..0];
+        }
+        if (!mem.isAligned(@ptrToInt(old_mem.ptr), new_align)) {
+            assert(new_align > T.alignment);
+            const new_mem = try self.sliceAllocator.allocAligned(new_len, new_align);
+            assert(isAligned(@ptrToInt(new_mem.ptr), new_align));
+            @memcpy(new_mem.ptr, old_mem.ptr, std.math.min(new_len, old_mem.len));
+            self.sliceAllocator.dealloc(@alignCast(T.alignment, old_mem));
+            return new_mem;
+        }
+
+        // not sure if this case is supposed to be handled, but I know sliceAllocator.realloc doesn't
+        if (old_mem.len == new_len) return old_mem;
+
+        return try self.sliceAllocator.realloc(@alignCast(T.alignment, old_mem), new_len, old_align, new_align);
+    }
+
+    pub fn shrink(allocator: *Allocator, old_mem: []u8, old_align: u29,
+        new_len: usize, new_align: u29
+    ) []u8 {
+        //std.debug.warn("[DEBUG] shrink old {}:{} oldalign={} newlen={} newalign={}\n", .{old_mem.ptr, old_mem.len, old_align, new_len, new_align});
+        assert(old_mem.len > 0); // I'm assuming this is true in the code, so for now I'm declaring this assumption
+        assert(new_len <= old_mem.len);
+        assert(new_align <= old_align);
+        const self = @fieldParentPtr(@This(), "allocator", allocator);
+        if (new_len == 0) {
+            self.sliceAllocator.dealloc(@alignCast(T.alignment, old_mem));
+        } else if (old_mem.len != new_len) {
+            // already aligned because new_align <= old_align
+            self.sliceAllocator.shrinkInPlace(@alignCast(T.alignment, old_mem), new_len);
+        }
+        return old_mem[0..new_len];
+    }
+};}
