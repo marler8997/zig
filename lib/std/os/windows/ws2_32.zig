@@ -205,6 +205,17 @@ pub const WSAMSG = extern struct {
     dwFlags: DWORD,
 };
 
+pub const addrinfo = extern struct {
+    flags: i32,
+    family: i32,
+    socktype: i32,
+    protocol: i32,
+    addrlen: usize,
+    canonname: ?[*:0]u8,
+    addr: ?*sockaddr,
+    next: ?*addrinfo,
+};
+
 // https://docs.microsoft.com/en-au/windows/win32/winsock/windows-sockets-error-codes-2
 pub const WinsockError = extern enum(u16) {
     /// Specified event object handle is invalid.
