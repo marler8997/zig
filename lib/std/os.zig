@@ -2452,7 +2452,7 @@ pub fn socket(domain: u32, socket_type: u32, protocol: u32) SocketError!fd_t {
     const rc = system.socket(domain, filtered_sock_type, protocol);
     switch (errno(rc)) {
         0 => {
-            const fd = @intCast(fd_t, rc);
+            const fd = if (builtin.os.tag == .windows) rc else @intCast(fd_t, rc);
             if (!have_sock_flags) {
                 try setSockFlags(fd, socket_type);
             }

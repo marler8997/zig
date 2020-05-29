@@ -174,6 +174,8 @@ pub const sockaddr_in = ws2_32.sockaddr_in;
 pub const sockaddr_in6 = ws2_32.sockaddr_in6;
 pub const sockaddr_un = ws2_32.sockaddr_un;
 
+pub const addrinfo = ws2_32.addrinfo;
+
 pub const in6_addr = [16]u8;
 pub const in_addr = u32;
 
@@ -226,3 +228,16 @@ pub const IPPROTO_TCP = ws2_32.IPPROTO_TCP;
 pub const IPPROTO_UDP = ws2_32.IPPROTO_UDP;
 pub const IPPROTO_ICMPV6 = ws2_32.IPPROTO_ICMPV6;
 pub const IPPROTO_RM = ws2_32.IPPROTO_RM;
+
+pub const AI_PASSIVE                = ws2_32.AI_PASSIVE;
+pub const AI_CANONNAME              = ws2_32.AI_CANONNAME;
+pub const AI_NUMERICHOST            = ws2_32.AI_NUMERICHOST;
+pub const AI_NUMERICSERV            = ws2_32.AI_NUMERICSERV;
+pub const AI_ADDRCONFIG             = ws2_32.AI_ADDRCONFIG;
+pub const AI_V4MAPPED               = ws2_32.AI_V4MAPPED;
+pub const AI_NON_AUTHORITATIVE      = ws2_32.AI_NON_AUTHORITATIVE;
+pub const AI_SECURE                 = ws2_32.AI_SECURE;
+pub const AI_RETURN_PREFERRED_NAMES = ws2_32.AI_RETURN_PREFERRED_NAMES;
+pub const AI_DISABLE_IDN_ENCODING   = ws2_32.AI_DISABLE_IDN_ENCODING;
+
+pub const EAI = ws2_32.EAI;

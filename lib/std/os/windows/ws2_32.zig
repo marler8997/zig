@@ -163,6 +163,30 @@ pub const IPPROTO_UDP = 17;
 pub const IPPROTO_ICMPV6 = 58;
 pub const IPPROTO_RM = 113;
 
+pub const AI_PASSIVE                = 0x00001;
+pub const AI_CANONNAME              = 0x00002;
+pub const AI_NUMERICHOST            = 0x00004;
+pub const AI_NUMERICSERV            = 0x00008;
+pub const AI_ADDRCONFIG             = 0x00400;
+pub const AI_V4MAPPED               = 0x00800;
+pub const AI_NON_AUTHORITATIVE      = 0x04000;
+pub const AI_SECURE                 = 0x08000;
+pub const AI_RETURN_PREFERRED_NAMES = 0x10000;
+pub const AI_DISABLE_IDN_ENCODING   = 0x80000;
+
+pub const EAI = extern enum(c_int) {
+    AGAIN    = @intCast(c_int, @enumToInt(WinsockError.WSATRY_AGAIN)),
+    BADFLAGS = @intCast(c_int, @enumToInt(WinsockError.WSAEINVAL)),
+    FAIL     = @intCast(c_int, @enumToInt(WinsockError.WSANO_RECOVERY)),
+    FAMILY   = @intCast(c_int, @enumToInt(WinsockError.WSAEAFNOSUPPORT)),
+    MEMORY   = @intCast(c_int, @enumToInt(WinsockError.WSA_NOT_ENOUGH_MEMORY)),
+    NONAME   = @intCast(c_int, @enumToInt(WinsockError.WSAHOST_NOT_FOUND)),
+    // NODATA seems to be deprecated
+    SERVICE  = @intCast(c_int, @enumToInt(WinsockError.WSATYPE_NOT_FOUND)),
+    SOCKTYPE = @intCast(c_int, @enumToInt(WinsockError.WSAESOCKTNOSUPPORT)),
+    _,
+};
+
 pub const sockaddr = extern struct {
     family: ADDRESS_FAMILY,
     data: [14]u8,
@@ -215,6 +239,8 @@ pub const addrinfo = extern struct {
     addr: ?*sockaddr,
     next: ?*addrinfo,
 };
+
+
 
 // https://docs.microsoft.com/en-au/windows/win32/winsock/windows-sockets-error-codes-2
 pub const WinsockError = extern enum(u16) {

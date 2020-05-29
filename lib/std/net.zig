@@ -406,7 +406,8 @@ pub fn tcpConnectToHost(allocator: *mem.Allocator, name: []const u8, port: u16) 
 
 pub fn tcpConnectToAddress(address: Address) !fs.File {
     const nonblock = if (std.io.is_async) os.SOCK_NONBLOCK else 0;
-    const sock_flags = os.SOCK_STREAM | os.SOCK_CLOEXEC | nonblock;
+    const sock_flags = os.SOCK_STREAM | nonblock |
+        if (builtin.os.tag == .windows) 0 else os.SOCK_CLOEXEC;
     const sockfd = try os.socket(address.any.family, sock_flags, os.IPPROTO_TCP);
     errdefer os.close(sockfd);
     try os.connect(sockfd, &address.any, address.getOsSockLen());
@@ -450,22 +451,41 @@ pub fn getAddressList(allocator: *mem.Allocator, name: []const u8, port: u16) !*
             .next = null,
         };
         var res: *os.addrinfo = undefined;
-        switch (os.system.getaddrinfo(name_c.ptr, @ptrCast([*:0]const u8, port_c.ptr), &hints, &res)) {
-            @intToEnum(os.system.EAI, 0) => {},
-            .ADDRFAMILY => return error.HostLacksNetworkAddresses,
-            .AGAIN => return error.TemporaryNameServerFailure,
-            .BADFLAGS => unreachable, // Invalid hints
-            .FAIL => return error.NameServerFailure,
-            .FAMILY => return error.AddressFamilyNotSupported,
-            .MEMORY => return error.OutOfMemory,
-            .NODATA => return error.HostLacksNetworkAddresses,
-            .NONAME => return error.UnknownHostName,
-            .SERVICE => return error.ServiceUnavailable,
-            .SOCKTYPE => unreachable, // Invalid socket type requested in hints
-            .SYSTEM => switch (os.errno(-1)) {
-                else => |e| return os.unexpectedErrno(e),
-            },
-            else => unreachable,
+        if (builtin.os.tag != .windows) {
+            switch (os.system.getaddrinfo(name_c.ptr, @ptrCast([*:0]const u8, port_c.ptr), &hints, &res)) {
+                @intToEnum(os.system.EAI, 0) => {},
+                .ADDRFAMILY => return error.HostLacksNetworkAddresses,
+                .AGAIN => return error.TemporaryNameServerFailure,
+                .BADFLAGS => unreachable, // Invalid hints
+                .FAIL => return error.NameServerFailure,
+                .FAMILY => return error.AddressFamilyNotSupported,
+                .MEMORY => return error.OutOfMemory,
+                .NODATA => return error.HostLacksNetworkAddresses,
+                .NONAME => return error.UnknownHostName,
+                .SERVICE => return error.ServiceUnavailable,
+                .SOCKTYPE => unreachable, // Invalid socket type requested in hints
+                .SYSTEM => switch (os.errno(-1)) {
+                    else => |e| return os.unexpectedErrno(e),
+                },
+                else => unreachable,
+            }
+        } else {
+            switch (os.system.getaddrinfo(name_c.ptr, @ptrCast([*:0]const u8, port_c.ptr), &hints, &res)) {
+                @intToEnum(os.system.EAI, 0) => {},
+
+                .AGAIN => return error.TemporaryNameServerFailure,
+                .BADFLAGS => unreachable, // Invalid hints
+                .FAIL => return error.NameServerFailure,
+                .FAMILY => return error.AddressFamilyNotSupported,
+                .MEMORY => return error.OutOfMemory,
+                .NONAME => return error.UnknownHostName,
+                .SERVICE => return error.ServiceUnavailable,
+                .SOCKTYPE => unreachable, // Invalid socket type requested in hints
+                ////.SYSTEM => switch (os.errno(-1)) {
+                //    else => |e| return os.unexpectedErrno(e),
+                //},
+                else => unreachable,
+            }
         }
         defer os.system.freeaddrinfo(res);
 
