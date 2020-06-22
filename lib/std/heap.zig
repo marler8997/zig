@@ -13,6 +13,7 @@ pub const LoggingAllocator = @import("heap/logging_allocator.zig").LoggingAlloca
 pub const loggingAllocator = @import("heap/logging_allocator.zig").loggingAllocator;
 pub const ArenaAllocator = @import("heap/arena_allocator.zig").ArenaAllocator;
 
+const InexactAllocator = mem.InexactAllocator;
 const Allocator = mem.Allocator;
 
 pub const c_allocator = &c_allocator_state;
@@ -41,12 +42,12 @@ pub const page_allocator = if (std.Target.current.isWasm())
 else if (std.Target.current.os.tag == .freestanding)
     root.os.heap.page_allocator
 else
-    &page_allocator_state;
+    &page_allocator_state.exact;
 
-var page_allocator_state = Allocator{
-    .reallocFn = PageAllocator.realloc,
-    .shrinkFn = PageAllocator.shrink,
-};
+var page_allocator_state = (InexactAllocator {
+    .allocFn = PageAllocator.alloc,
+    .resizeFn = PageAllocator.resize,
+}).exact();
 var wasm_page_allocator_state = Allocator{
     .reallocFn = WasmPageAllocator.realloc,
     .shrinkFn = WasmPageAllocator.shrink,
@@ -55,8 +56,8 @@ var wasm_page_allocator_state = Allocator{
 pub const direct_allocator = @compileError("deprecated; use std.heap.page_allocator");
 
 const PageAllocator = struct {
-    fn alloc(allocator: *Allocator, n: usize, alignment: u29) error{OutOfMemory}![]u8 {
-        if (n == 0) return &[0]u8{};
+    fn alloc(allocator: *InexactAllocator, n: usize, alignment: u29) error{OutOfMemory}![]u8 {
+        assert(n > 0);
 
         if (builtin.os.tag == .windows) {
             const w = os.windows;
@@ -113,37 +114,33 @@ const PageAllocator = struct {
             return @ptrCast([*]u8, final_addr)[0..n];
         }
 
-        const alloc_size = if (alignment <= mem.page_size) n else n + alignment;
+        const maxDropLen = alignment - std.math.min(alignment, mem.page_size);
+        const alignedLen = mem.alignForward(n, mem.page_size);
+        const allocLen = if (maxDropLen <= alignedLen - n) alignedLen
+            else mem.alignForward(alignedLen + maxDropLen, mem.page_size);
         const slice = os.mmap(
             null,
-            mem.alignForward(alloc_size, mem.page_size),
+            allocLen,
             os.PROT_READ | os.PROT_WRITE,
             os.MAP_PRIVATE | os.MAP_ANONYMOUS,
             -1,
             0,
         ) catch return error.OutOfMemory;
-        if (alloc_size == n) return slice[0..n];
+        assert(mem.isAligned(@ptrToInt(slice.ptr), mem.page_size));
 
         const aligned_addr = mem.alignForward(@ptrToInt(slice.ptr), alignment);
 
         // Unmap the extra bytes that were only requested in order to guarantee
         // that the range of memory we were provided had a proper alignment in
         // it somewhere. The extra bytes could be at the beginning, or end, or both.
-        const unused_start_len = aligned_addr - @ptrToInt(slice.ptr);
-        if (unused_start_len != 0) {
-            os.munmap(slice[0..unused_start_len]);
+        const dropLen = aligned_addr - @ptrToInt(slice.ptr);
+        if (dropLen != 0) {
+            os.munmap(slice[0..dropLen]);
         }
-        const aligned_end_addr = mem.alignForward(aligned_addr + n, mem.page_size);
-        const unused_end_len = @ptrToInt(slice.ptr) + slice.len - aligned_end_addr;
-        if (unused_end_len != 0) {
-            os.munmap(@intToPtr([*]align(mem.page_size) u8, aligned_end_addr)[0..unused_end_len]);
-        }
-
-        return @intToPtr([*]u8, aligned_addr)[0..n];
+        return @intToPtr([*]u8, aligned_addr)[0..allocLen - dropLen];
     }
 
-    fn shrink(allocator: *Allocator, old_mem_unaligned: []u8, old_align: u29, new_size: usize, new_align: u29) []u8 {
-        const old_mem = @alignCast(mem.page_size, old_mem_unaligned);
+    fn resize(allocator: *InexactAllocator, buf_unaligned: []u8, new_size: usize) usize {
         if (builtin.os.tag == .windows) {
             const w = os.windows;
             if (new_size == 0) {
@@ -153,100 +150,40 @@ const PageAllocator = struct {
                 // is reserved in the initial allocation call to VirtualAlloc."
                 // So we can only use MEM_RELEASE when actually releasing the
                 // whole allocation.
-                w.VirtualFree(old_mem.ptr, 0, w.MEM_RELEASE);
-            } else {
-                const base_addr = @ptrToInt(old_mem.ptr);
-                const old_addr_end = base_addr + old_mem.len;
-                const new_addr_end = base_addr + new_size;
-                const new_addr_end_rounded = mem.alignForward(new_addr_end, mem.page_size);
-                if (old_addr_end > new_addr_end_rounded) {
+                w.VirtualFree(buf_unaligned.ptr, 0, w.MEM_RELEASE);
+                return 0;
+            }
+            if (new_size < buf_unaligned.len) {
+                const base_addr = @ptrToInt(buf_unaligned.ptr);
+                const old_addr_end = base_addr + buf_unaligned.len;
+                const new_addr_end = mem.alignForward(base_addr + new_size, mem.page_size);
+                if (old_addr_end > new_addr_end) {
                     // For shrinking that is not releasing, we will only
                     // decommit the pages not needed anymore.
                     w.VirtualFree(
-                        @intToPtr(*c_void, new_addr_end_rounded),
-                        old_addr_end - new_addr_end_rounded,
+                        @intToPtr(*c_void, new_addr_end),
+                        old_addr_end - new_addr_end,
                         w.MEM_DECOMMIT,
                     );
                 }
+                return new_size;
             }
-            return old_mem[0..new_size];
+            // new_size >= buf_unaligned.len not implemented
+            return buf_unaligned.len;
         }
-        const base_addr = @ptrToInt(old_mem.ptr);
-        const old_addr_end = base_addr + old_mem.len;
-        const new_addr_end = base_addr + new_size;
-        const new_addr_end_rounded = mem.alignForward(new_addr_end, mem.page_size);
-        if (old_addr_end > new_addr_end_rounded) {
-            const ptr = @intToPtr([*]align(mem.page_size) u8, new_addr_end_rounded);
-            os.munmap(ptr[0 .. old_addr_end - new_addr_end_rounded]);
+
+        assert(mem.isAligned(buf_unaligned.len, mem.page_size));
+        const new_size_aligned = mem.alignForward(new_size, mem.page_size);
+        if (new_size_aligned == buf_unaligned.len)
+            return new_size_aligned;
+        if (new_size_aligned < buf_unaligned.len) {
+            const ptr = @intToPtr([*]align(mem.page_size) u8, @ptrToInt(buf_unaligned.ptr) + new_size_aligned);
+            os.munmap(ptr[0 .. buf_unaligned.len - new_size_aligned]);
+            return new_size_aligned;
         }
-        return old_mem[0..new_size];
-    }
 
-    fn realloc(allocator: *Allocator, old_mem_unaligned: []u8, old_align: u29, new_size: usize, new_align: u29) ![]u8 {
-        const old_mem = @alignCast(mem.page_size, old_mem_unaligned);
-        if (builtin.os.tag == .windows) {
-            if (old_mem.len == 0) {
-                return alloc(allocator, new_size, new_align);
-            }
-
-            if (new_size <= old_mem.len and new_align <= old_align) {
-                return shrink(allocator, old_mem, old_align, new_size, new_align);
-            }
-
-            const w = os.windows;
-            const base_addr = @ptrToInt(old_mem.ptr);
-
-            if (new_align > old_align and base_addr & (new_align - 1) != 0) {
-                // Current allocation doesn't satisfy the new alignment.
-                // For now we'll do a new one no matter what, but maybe
-                // there is something smarter to do instead.
-                const result = try alloc(allocator, new_size, new_align);
-                assert(old_mem.len != 0);
-                @memcpy(result.ptr, old_mem.ptr, std.math.min(old_mem.len, result.len));
-                w.VirtualFree(old_mem.ptr, 0, w.MEM_RELEASE);
-
-                return result;
-            }
-
-            const old_addr_end = base_addr + old_mem.len;
-            const old_addr_end_rounded = mem.alignForward(old_addr_end, mem.page_size);
-            const new_addr_end = base_addr + new_size;
-            const new_addr_end_rounded = mem.alignForward(new_addr_end, mem.page_size);
-            if (new_addr_end_rounded == old_addr_end_rounded) {
-                // The reallocation fits in the already allocated pages.
-                return @ptrCast([*]u8, old_mem.ptr)[0..new_size];
-            }
-            assert(new_addr_end_rounded > old_addr_end_rounded);
-
-            // We need to commit new pages.
-            const additional_size = new_addr_end - old_addr_end_rounded;
-            const realloc_addr = w.kernel32.VirtualAlloc(
-                @intToPtr(*c_void, old_addr_end_rounded),
-                additional_size,
-                w.MEM_COMMIT | w.MEM_RESERVE,
-                w.PAGE_READWRITE,
-            ) orelse {
-                // Committing new pages at the end of the existing allocation
-                // failed, we need to try a new one.
-                const new_alloc_mem = try alloc(allocator, new_size, new_align);
-                @memcpy(new_alloc_mem.ptr, old_mem.ptr, old_mem.len);
-                w.VirtualFree(old_mem.ptr, 0, w.MEM_RELEASE);
-
-                return new_alloc_mem;
-            };
-
-            assert(@ptrToInt(realloc_addr) == old_addr_end_rounded);
-            return @ptrCast([*]u8, old_mem.ptr)[0..new_size];
-        }
-        if (new_size <= old_mem.len and new_align <= old_align) {
-            return shrink(allocator, old_mem, old_align, new_size, new_align);
-        }
-        const result = try alloc(allocator, new_size, new_align);
-        if (old_mem.len != 0) {
-            @memcpy(result.ptr, old_mem.ptr, std.math.min(old_mem.len, result.len));
-            os.munmap(old_mem);
-        }
-        return result;
+        // TODO: call mremap
+        return buf_unaligned.len;
     }
 };
 

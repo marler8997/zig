@@ -13,8 +13,45 @@ pub const page_size = switch (builtin.arch) {
     else => 4 * 1024,
 };
 
-pub const Allocator = struct {
+/// New allocator interface.
+pub const InexactAllocator = struct {
     pub const Error = error{OutOfMemory};
+
+    /// The returned slice has a length >= `len` and alignment >= `alignment`.
+    /// If the returned length is greater than requested, it indicates the extra bytes
+    /// would otherwise be wasted in the allocation.
+    allocFn: fn (self: *InexactAllocator, len: usize, alignment: u29) Error![]u8,
+
+    /// Expand or shrink memory in place. Returns the new length of the allocated block which
+    /// may not be equal to `new_len`.  If the returned length is greater than requested, the
+    /// extra bytes would otherwise be wasted in the allocation.  If it is less, then the
+    /// allocator is unable to expand the given block in place. If `new_len` is 0, then the buffer
+    /// becomes invalid after this call so the caller may no longer be passed it into resizeFn.
+    resizeFn: fn (self: *InexactAllocator, buf: []u8, new_len: usize) usize,
+
+    pub fn callAllocFn(self: *InexactAllocator, new_len: usize, alignment: u29) Error![]u8 {
+        return self.allocFn(self, new_len, alignment);
+    }
+    pub fn callResizeFn(self: *InexactAllocator, buf: []u8, new_len: usize) usize {
+        return self.resizeFn(self, buf, new_len);
+    }
+
+    /// Set to resizeFn if in-place resize is not supported.
+    pub fn noResize(self: *InexactAllocator, buf: []u8, new_len: usize) usize {
+        return buf.len;
+    }
+
+    /// Turn an InexactAllocator into an ExactAllocator
+    pub fn exact(self: InexactAllocator) InexactToExactAllocator {
+        return InexactToExactAllocator.init(self);
+    }
+};
+
+/// Deprecated: use `ExactAllocator`
+pub const Allocator = ExactAllocator;
+
+pub const ExactAllocator = struct {
+    pub const Error = InexactAllocator.Error;
 
     /// Realloc is used to modify the size or alignment of an existing allocation,
     /// as well as to provide the allocator with an opportunity to move an allocation
@@ -293,6 +330,109 @@ pub const Allocator = struct {
         copy(T, new_buf, m);
         new_buf[m.len] = 0;
         return new_buf[0..m.len :0];
+    }
+};
+
+/// Turns an InexactAllocator into an ExactAllocator by padding each allocation and storing
+/// the exact size in each allocation.
+pub const InexactToExactAllocator = struct {
+    const Error = InexactAllocator.Error;
+
+    exact: ExactAllocator,
+    inexact: InexactAllocator,
+
+    pub fn init(inexact: InexactAllocator) InexactToExactAllocator {
+        return .{
+            .exact = .{
+                .reallocFn = exactRealloc,
+                .shrinkFn = exactShrink,
+            },
+            .inexact = inexact,
+        };
+    }
+
+    const ExactAlloc = struct {
+        magic : u32, // used to debug corrupted data or callers that change the size without calling resize
+        fullLen: usize,
+        const MAGIC = 0x213465a9;
+    };
+
+    pub const ExactAllocPadding = @sizeOf(ExactAlloc) + @alignOf(ExactAlloc) - 1;
+
+    fn getExactAllocRef(exactBuf: []u8) *ExactAlloc {
+        return @intToPtr(*ExactAlloc, mem.alignForward(@ptrToInt(exactBuf.ptr) + exactBuf.len, @alignOf(ExactAlloc)));
+    }
+
+    fn setExactData(fullBuf: []u8, exact_len: usize) []u8 {
+        assert(fullBuf.len >= exact_len + ExactAllocPadding);
+        const exactBuf = fullBuf.ptr[0..exact_len];
+        getExactAllocRef(exactBuf).* = .{ .magic = ExactAlloc.MAGIC, .fullLen = fullBuf.len };
+        return exactBuf;
+    }
+
+    fn exactAlloc(self: *InexactToExactAllocator, init_len: usize, init_align: u29) Error![]u8 {
+        const padded_len = init_len + ExactAllocPadding;
+        const full_buf = try self.inexact.callAllocFn(padded_len, init_align);
+        assert(full_buf.len >= padded_len);
+        @memset(full_buf.ptr, undefined, full_buf.len);
+        return setExactData(full_buf, init_len);
+    }
+
+    fn exactResize(self: *InexactToExactAllocator, exact_buf: []u8, new_len: usize) usize {
+        assert(exact_buf.len > 0);
+        const fullBuf = init: {
+            const exactAllocRef = getExactAllocRef(exact_buf).*;
+            assert(exactAllocRef.magic == ExactAlloc.MAGIC);
+            break :init exact_buf.ptr[0 .. exactAllocRef.fullLen];
+        };
+        if (new_len == 0) {
+            @memset(fullBuf.ptr, undefined, fullBuf.len);
+            const resized = self.inexact.callResizeFn(fullBuf, 0);
+            assert(resized == 0);
+            // don't need to set ExactAlloc data because this buffer is now invalid
+            return 0;
+        }
+
+        const new_padded_len = new_len + ExactAllocPadding;
+        if (new_padded_len < fullBuf.len) {
+            @memset(fullBuf.ptr + new_padded_len, undefined, fullBuf.len - new_padded_len);
+        }
+        const new_full_len = self.inexact.callResizeFn(fullBuf, new_padded_len);
+        const new_exact_len = if (new_full_len >= new_padded_len) new_len
+            else new_full_len - ExactAllocPadding;
+        return setExactData(exact_buf.ptr[0..new_full_len], new_exact_len).len;
+    }
+
+    fn exactRealloc(allocator: *ExactAllocator, old_mem: []u8, old_align: u29, new_len: usize, new_align: u29) ![]u8 {
+        const self = @fieldParentPtr(InexactToExactAllocator, "exact", allocator);
+        if (old_mem.len == 0) {
+            return self.exactAlloc(new_len, new_align);
+        }
+        if (isAligned(@ptrToInt(old_mem.ptr), new_align)) {
+            const new_mem = old_mem.ptr[0..self.exactResize(old_mem, new_len)];
+            if (new_mem.len == new_len)
+                return new_mem;
+            if (new_mem.len != old_mem.len) {
+                const restored = self.exactResize(new_mem, old_mem.len);
+                assert(restored == old_mem.len);
+            }
+        }
+        if (new_len <= old_mem.len and new_align <= old_align) {
+            return error.OutOfMemory;
+        }
+        const new_mem = try self.exactAlloc(new_len, new_align);
+        @memcpy(new_mem.ptr, old_mem.ptr, std.math.min(new_len, old_mem.len));
+        const old_mem_resized_len = self.exactResize(old_mem, 0);
+        assert(old_mem_resized_len == 0);
+        return new_mem;
+    }
+
+    fn exactShrink(allocator: *ExactAllocator, old_mem: []u8, old_align: u29, new_len: usize, new_align: u29) []u8 {
+        assert(new_len < old_mem.len);
+        const self = @fieldParentPtr(InexactToExactAllocator, "exact", allocator);
+        const resized_len = self.exactResize(old_mem, new_len);
+        assert(resized_len == new_len); // because we are shrinking
+        return old_mem[0..new_len];
     }
 };
 
