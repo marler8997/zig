@@ -47,16 +47,21 @@ pub const Hasher = crypto.auth.siphash.SipHash128(1, 3);
 pub const hasher_init: Hasher = Hasher.init(&[_]u8{0} ** Hasher.key_length);
 
 pub const File = struct {
-    path: ?[]const u8,
+    dir: ?std.fs.Dir,
+    sub_path: ?[]const u8,
     max_file_size: ?usize,
     stat: fs.File.Stat,
     bin_digest: BinDigest,
     contents: ?[]const u8,
 
     pub fn deinit(self: *File, allocator: *Allocator) void {
-        if (self.path) |owned_slice| {
+        if (self.sub_path) |owned_slice| {
             allocator.free(owned_slice);
-            self.path = null;
+            self.sub_path = null;
+        }
+        if (self.dir) |_| {
+            self.dir.?.close();
+            self.dir = null;
         }
         if (self.contents) |contents| {
             allocator.free(contents);
@@ -209,15 +214,16 @@ pub const Manifest = struct {
     /// ```
     /// var file_contents = cache_hash.files.items[file_index].contents.?;
     /// ```
-    pub fn addFile(self: *Manifest, file_path: []const u8, max_file_size: ?usize) !usize {
+    pub fn addFile(self: *Manifest, dir: fs.Dir, sub_path: []const u8, max_file_size: ?usize) !usize {
         assert(self.manifest_file == null);
 
         try self.files.ensureCapacity(self.cache.gpa, self.files.items.len + 1);
-        const resolved_path = try fs.path.resolve(self.cache.gpa, &[_][]const u8{file_path});
+        const resolved_path = try fs.path.resolve(self.cache.gpa, &[_][]const u8{sub_path});
 
         const idx = self.files.items.len;
         self.files.addOneAssumeCapacity().* = .{
-            .path = resolved_path,
+            .dir = dir,
+            .sub_path = resolved_path,
             .contents = null,
             .max_file_size = max_file_size,
             .stat = undefined,
@@ -232,13 +238,13 @@ pub const Manifest = struct {
     pub fn addOptionalFile(self: *Manifest, optional_file_path: ?[]const u8) !void {
         self.hash.add(optional_file_path != null);
         const file_path = optional_file_path orelse return;
-        _ = try self.addFile(file_path, null);
+        _ = try self.addFile(std.fs.cwd(), file_path, null);
     }
 
     pub fn addListOfFiles(self: *Manifest, list_of_files: []const []const u8) !void {
         self.hash.add(list_of_files.len);
         for (list_of_files) |file_path| {
-            _ = try self.addFile(file_path, null);
+            _ = try self.addFile(std.fs.cwd(), file_path, null);
         }
     }
 
@@ -271,7 +277,7 @@ pub const Manifest = struct {
             if (gop.found_existing) {
                 std.debug.print("Cache deadlock detected in Cache.hit. Manifest has {d} files:\n", .{self.files.items.len});
                 for (self.files.items) |file| {
-                    const p: []const u8 = file.path orelse "(null)";
+                    const p: []const u8 = file.sub_path orelse "(null)";
                     std.debug.print("  file: {s}\n", .{p});
                 }
                 @panic("Cache deadlock detected");
@@ -326,7 +332,8 @@ pub const Manifest = struct {
             const cache_hash_file = if (idx < input_file_count) &self.files.items[idx] else blk: {
                 const new = try self.files.addOne(self.cache.gpa);
                 new.* = .{
-                    .path = null,
+                    .dir = null,
+                    .sub_path = null,
                     .contents = null,
                     .max_file_size = null,
                     .stat = undefined,
@@ -350,17 +357,18 @@ pub const Manifest = struct {
             if (file_path.len == 0) {
                 return error.InvalidFormat;
             }
-            if (cache_hash_file.path) |p| {
+            if (cache_hash_file.sub_path) |p| {
                 if (!mem.eql(u8, file_path, p)) {
                     return error.InvalidFormat;
                 }
             }
 
-            if (cache_hash_file.path == null) {
-                cache_hash_file.path = try self.cache.gpa.dupe(u8, file_path);
+            if (cache_hash_file.sub_path == null) {
+                cache_hash_file.sub_path = try self.cache.gpa.dupe(u8, file_path);
+                cache_hash_file.dir = std.fs.cwd();
             }
 
-            const this_file = fs.cwd().openFile(cache_hash_file.path.?, .{ .read = true }) catch |err| switch (err) {
+            const this_file = cache_hash_file.dir.?.openFile(cache_hash_file.sub_path.?, .{ .read = true }) catch |err| switch (err) {
                 error.FileNotFound => return false,
                 else => return error.CacheUnavailable,
             };
@@ -432,7 +440,7 @@ pub const Manifest = struct {
     }
 
     fn populateFileHash(self: *Manifest, ch_file: *File) !void {
-        const file = try fs.cwd().openFile(ch_file.path.?, .{});
+        const file = try ch_file.dir.?.openFile(ch_file.sub_path.?, .{});
         defer file.close();
 
         ch_file.stat = try file.stat();
@@ -483,7 +491,8 @@ pub const Manifest = struct {
 
         const new_ch_file = try self.files.addOne(self.cache.gpa);
         new_ch_file.* = .{
-            .path = resolved_path,
+            .sub_path = resolved_path,
+            .dir = std.fs.cwd(),
             .max_file_size = max_file_size,
             .stat = undefined,
             .bin_digest = undefined,
@@ -500,15 +509,16 @@ pub const Manifest = struct {
     /// calculated. This is useful for processes that don't know the all the files that
     /// are depended on ahead of time. For example, a source file that can import other files
     /// will need to be recompiled if the imported file is changed.
-    pub fn addFilePost(self: *Manifest, file_path: []const u8) !void {
+    pub fn addFilePost(self: *Manifest, dir: fs.Dir, sub_path: []const u8) !void {
         assert(self.manifest_file != null);
 
-        const resolved_path = try fs.path.resolve(self.cache.gpa, &[_][]const u8{file_path});
-        errdefer self.cache.gpa.free(resolved_path);
+        const resolved_sub_path = try fs.path.resolve(self.cache.gpa, &[_][]const u8{sub_path});
+        errdefer self.cache.gpa.free(resolved_sub_path);
 
         const new_ch_file = try self.files.addOne(self.cache.gpa);
         new_ch_file.* = .{
-            .path = resolved_path,
+            .dir = dir,
+            .sub_path = resolved_sub_path,
             .max_file_size = null,
             .stat = undefined,
             .bin_digest = undefined,
@@ -544,7 +554,7 @@ pub const Manifest = struct {
         while (true) {
             switch (it.next() orelse return) {
                 .target, .target_must_resolve => return,
-                .prereq => |bytes| try self.addFilePost(bytes),
+                .prereq => |bytes| try self.addFilePost(std.fs.cwd(), bytes),
                 else => |err| {
                     try err.printError(error_buf.writer());
                     std.log.err("failed parsing {}: {}", .{ dep_file_basename, error_buf.items });
@@ -590,7 +600,7 @@ pub const Manifest = struct {
                 file.stat.inode,
                 file.stat.mtime,
                 &encoded_digest,
-                file.path,
+                file.sub_path,
             });
         }
 

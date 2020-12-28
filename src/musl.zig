@@ -36,7 +36,8 @@ pub fn buildCRTFile(comp: *Compilation, crt_file: CRTFile) !void {
             });
             return comp.build_crt_file("crti", .Obj, &[1]Compilation.CSourceFile{
                 .{
-                    .src_path = try start_asm_path(comp, arena, "crti.s"),
+                    .src_dir = std.fs.cwd(),
+                    .src_sub_path = try start_asm_path(comp, arena, "crti.s"),
                     .extra_flags = args.items,
                 },
             });
@@ -49,7 +50,8 @@ pub fn buildCRTFile(comp: *Compilation, crt_file: CRTFile) !void {
             });
             return comp.build_crt_file("crtn", .Obj, &[1]Compilation.CSourceFile{
                 .{
-                    .src_path = try start_asm_path(comp, arena, "crtn.s"),
+                    .src_dir = std.fs.cwd(),
+                    .src_sub_path = try start_asm_path(comp, arena, "crtn.s"),
                     .extra_flags = args.items,
                 },
             });
@@ -63,7 +65,8 @@ pub fn buildCRTFile(comp: *Compilation, crt_file: CRTFile) !void {
             });
             return comp.build_crt_file("crt1", .Obj, &[1]Compilation.CSourceFile{
                 .{
-                    .src_path = try comp.zig_lib_directory.join(arena, &[_][]const u8{
+                    .src_dir = std.fs.cwd(),
+                    .src_sub_path = try comp.zig_lib_directory.join(arena, &[_][]const u8{
                         "libc", "musl", "crt", "crt1.c",
                     }),
                     .extra_flags = args.items,
@@ -80,7 +83,8 @@ pub fn buildCRTFile(comp: *Compilation, crt_file: CRTFile) !void {
             });
             return comp.build_crt_file("rcrt1", .Obj, &[1]Compilation.CSourceFile{
                 .{
-                    .src_path = try comp.zig_lib_directory.join(arena, &[_][]const u8{
+                    .src_dir = std.fs.cwd(),
+                    .src_sub_path = try comp.zig_lib_directory.join(arena, &[_][]const u8{
                         "libc", "musl", "crt", "rcrt1.c",
                     }),
                     .extra_flags = args.items,
@@ -97,7 +101,8 @@ pub fn buildCRTFile(comp: *Compilation, crt_file: CRTFile) !void {
             });
             return comp.build_crt_file("Scrt1", .Obj, &[1]Compilation.CSourceFile{
                 .{
-                    .src_path = try comp.zig_lib_directory.join(arena, &[_][]const u8{
+                    .src_dir = std.fs.cwd(),
+                    .src_sub_path = try comp.zig_lib_directory.join(arena, &[_][]const u8{
                         "libc", "musl", "crt", "Scrt1.c",
                     }),
                     .extra_flags = args.items,
@@ -184,7 +189,8 @@ pub fn buildCRTFile(comp: *Compilation, crt_file: CRTFile) !void {
                 });
                 const c_source_file = try c_source_files.addOne();
                 c_source_file.* = .{
-                    .src_path = try comp.zig_lib_directory.join(arena, &[_][]const u8{ "libc", src_file }),
+                    .src_dir = std.fs.cwd(),
+                    .src_sub_path = try comp.zig_lib_directory.join(arena, &[_][]const u8{ "libc", src_file }),
                     .extra_flags = args.items,
                 };
             }
@@ -223,7 +229,7 @@ pub fn buildCRTFile(comp: *Compilation, crt_file: CRTFile) !void {
                 .verbose_llvm_cpu_features = comp.verbose_llvm_cpu_features,
                 .clang_passthrough_mode = comp.clang_passthrough_mode,
                 .c_source_files = &[_]Compilation.CSourceFile{
-                    .{ .src_path = try comp.zig_lib_directory.join(arena, &[_][]const u8{ "libc", "musl", "libc.s" }) },
+                    .{ .src_dir = std.fs.cwd(), .src_sub_path = try comp.zig_lib_directory.join(arena, &[_][]const u8{ "libc", "musl", "libc.s" }) },
                 },
                 .skip_linker_dependencies = true,
                 .soname = "libc.so",

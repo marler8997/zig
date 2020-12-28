@@ -157,7 +157,8 @@ pub const CRTFile = struct {
 
 /// For passing to a C compiler.
 pub const CSourceFile = struct {
-    src_path: []const u8,
+    src_dir: std.fs.Dir,
+    src_sub_path: []const u8,
     extra_flags: []const []const u8 = &[0][]const u8{},
 };
 
@@ -484,10 +485,7 @@ fn addPackageTableToCacheHash(
                 hash.addOptionalBytes(pkg.value.root_src_directory.path);
             },
             .files => |man| {
-                const pkg_zig_file = try pkg.value.root_src_directory.join(allocator, &[_][]const u8{
-                    pkg.value.root_src_path,
-                });
-                _ = try man.addFile(pkg_zig_file, null);
+                _ = try man.addFile(pkg.value.root_src_directory.handle, pkg.value.root_src_path, null);
             },
         }
         // Recurse to handle the package's dependencies
@@ -899,7 +897,9 @@ pub fn create(gpa: *Allocator, options: InitOptions) !*Compilation {
             // directories.
             var hash = cache.hash;
             if (options.c_source_files.len >= 1) {
-                hash.addBytes(options.c_source_files[0].src_path);
+                const filename = try options.c_source_files[0].src_dir.realpathAlloc(gpa, options.c_source_files[0].src_sub_path);
+                defer gpa.free(filename);
+                hash.addBytes(filename);
             } else if (options.link_objects.len >= 1) {
                 hash.addBytes(options.link_objects[0]);
             }
@@ -1377,7 +1377,9 @@ pub fn getAllErrorsAlloc(self: *Compilation) !AllErrors {
     for (self.failed_c_objects.items()) |entry| {
         const c_object = entry.key;
         const err_msg = entry.value;
-        try AllErrors.add(&arena, &errors, c_object.src.src_path, "", err_msg.*);
+        const filename = try c_object.src.src_dir.realpathAlloc(&arena.allocator, c_object.src.src_sub_path);
+        defer arena.allocator.free(filename);
+        try AllErrors.add(&arena, &errors, filename, "", err_msg.*);
     }
     if (self.bin_file.options.module) |module| {
         for (module.failed_files.items()) |entry| {
@@ -1847,7 +1849,7 @@ fn updateCObject(comp: *Compilation, c_object: *CObject, c_comp_progress_node: *
 
     man.hash.add(comp.clang_preprocessor_mode);
 
-    _ = try man.addFile(c_object.src.src_path, null);
+    _ = try man.addFile(c_object.src.src_dir, c_object.src.src_sub_path, null);
     {
         // Hash the extra flags, with special care to call addFile for file parameters.
         // TODO this logic can likely be improved by utilizing clang_options_data.zig.
@@ -1859,7 +1861,7 @@ fn updateCObject(comp: *Compilation, c_object: *CObject, c_comp_progress_node: *
             for (file_args) |file_arg| {
                 if (mem.eql(u8, file_arg, arg) and arg_i + 1 < c_object.src.extra_flags.len) {
                     arg_i += 1;
-                    _ = try man.addFile(c_object.src.extra_flags[arg_i], null);
+                    _ = try man.addFile(std.fs.cwd(), c_object.src.extra_flags[arg_i], null);
                 }
             }
         }
@@ -1888,7 +1890,7 @@ fn updateCObject(comp: *Compilation, c_object: *CObject, c_comp_progress_node: *
     defer arena_allocator.deinit();
     const arena = &arena_allocator.allocator;
 
-    const c_source_basename = std.fs.path.basename(c_object.src.src_path);
+    const c_source_basename = std.fs.path.basename(c_object.src.src_sub_path);
 
     c_comp_progress_node.activate();
     var child_progress_node = c_comp_progress_node.start(c_source_basename, 0);
@@ -1917,7 +1919,7 @@ fn updateCObject(comp: *Compilation, c_object: *CObject, c_comp_progress_node: *
 
         try argv.appendSlice(&[_][]const u8{ self_exe_path, "clang" });
 
-        const ext = classifyFileExt(c_object.src.src_path);
+        const ext = classifyFileExt(c_object.src.src_sub_path);
         const out_dep_path: ?[]const u8 = if (comp.disable_c_depfile or !ext.clangSupportsDepFile())
             null
         else

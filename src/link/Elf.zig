@@ -1293,7 +1293,7 @@ fn linkWithLLD(self: *Elf, comp: *Compilation) !void {
         try man.addOptionalFile(self.base.options.version_script);
         try man.addListOfFiles(self.base.options.objects);
         for (comp.c_object_table.items()) |entry| {
-            _ = try man.addFile(entry.key.status.success.object_path, null);
+            _ = try man.addFile(std.fs.cwd(), entry.key.status.success.object_path, null);
         }
         try man.addOptionalFile(module_obj_path);
         try man.addOptionalFile(compiler_rt_path);

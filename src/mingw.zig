@@ -43,7 +43,8 @@ pub fn buildCRTFile(comp: *Compilation, crt_file: CRTFile) !void {
             });
             return comp.build_crt_file("crt2", .Obj, &[1]Compilation.CSourceFile{
                 .{
-                    .src_path = try comp.zig_lib_directory.join(arena, &[_][]const u8{
+                    .src_dir = comp.zig_lib_directory.handle,
+                    .src_sub_path = try std.fs.path.join(arena, &[_][]const u8{
                         "libc", "mingw", "crt", "crtexe.c",
                     }),
                     .extra_flags = args.items,
@@ -62,7 +63,8 @@ pub fn buildCRTFile(comp: *Compilation, crt_file: CRTFile) !void {
             });
             return comp.build_crt_file("dllcrt2", .Obj, &[1]Compilation.CSourceFile{
                 .{
-                    .src_path = try comp.zig_lib_directory.join(arena, &[_][]const u8{
+                    .src_dir = std.fs.cwd(),
+                    .src_sub_path = try comp.zig_lib_directory.join(arena, &[_][]const u8{
                         "libc", "mingw", "crt", "crtdll.c",
                     }),
                     .extra_flags = args.items,
@@ -93,7 +95,8 @@ pub fn buildCRTFile(comp: *Compilation, crt_file: CRTFile) !void {
                     "-D__MSVCRT_VERSION__=0x700",
                 });
                 c_source_files[i] = .{
-                    .src_path = try comp.zig_lib_directory.join(arena, &[_][]const u8{
+                    .src_dir = std.fs.cwd(),
+                    .src_sub_path = try comp.zig_lib_directory.join(arena, &[_][]const u8{
                         "libc", "mingw", "crt", dep,
                     }),
                     .extra_flags = args.items,
@@ -122,14 +125,16 @@ pub fn buildCRTFile(comp: *Compilation, crt_file: CRTFile) !void {
 
             for (msvcrt_common_src) |dep| {
                 (try c_source_files.addOne()).* = .{
-                    .src_path = try comp.zig_lib_directory.join(arena, &[_][]const u8{ "libc", "mingw", dep }),
+                    .src_dir = std.fs.cwd(),
+                    .src_sub_path = try comp.zig_lib_directory.join(arena, &[_][]const u8{ "libc", "mingw", dep }),
                     .extra_flags = extra_flags,
                 };
             }
             if (comp.getTarget().cpu.arch == .i386) {
                 for (msvcrt_i386_src) |dep| {
                     (try c_source_files.addOne()).* = .{
-                        .src_path = try comp.zig_lib_directory.join(arena, &[_][]const u8{
+                        .src_dir = std.fs.cwd(),
+                        .src_sub_path = try comp.zig_lib_directory.join(arena, &[_][]const u8{
                             "libc", "mingw", dep,
                         }),
                         .extra_flags = extra_flags,
@@ -138,7 +143,8 @@ pub fn buildCRTFile(comp: *Compilation, crt_file: CRTFile) !void {
             } else {
                 for (msvcrt_other_src) |dep| {
                     (try c_source_files.addOne()).* = .{
-                        .src_path = try comp.zig_lib_directory.join(arena, &[_][]const u8{
+                        .src_dir = std.fs.cwd(),
+                        .src_sub_path = try comp.zig_lib_directory.join(arena, &[_][]const u8{
                             "libc", "mingw", dep,
                         }),
                         .extra_flags = extra_flags,
@@ -170,7 +176,8 @@ pub fn buildCRTFile(comp: *Compilation, crt_file: CRTFile) !void {
 
             for (mingwex_generic_src) |dep| {
                 (try c_source_files.addOne()).* = .{
-                    .src_path = try comp.zig_lib_directory.join(arena, &[_][]const u8{
+                    .src_dir = std.fs.cwd(),
+                    .src_sub_path = try comp.zig_lib_directory.join(arena, &[_][]const u8{
                         "libc", "mingw", dep,
                     }),
                     .extra_flags = extra_flags,
@@ -180,7 +187,8 @@ pub fn buildCRTFile(comp: *Compilation, crt_file: CRTFile) !void {
             if (target.cpu.arch == .i386 or target.cpu.arch == .x86_64) {
                 for (mingwex_x86_src) |dep| {
                     (try c_source_files.addOne()).* = .{
-                        .src_path = try comp.zig_lib_directory.join(arena, &[_][]const u8{
+                        .src_dir = std.fs.cwd(),
+                        .src_sub_path = try comp.zig_lib_directory.join(arena, &[_][]const u8{
                             "libc", "mingw", dep,
                         }),
                         .extra_flags = extra_flags,
@@ -190,7 +198,8 @@ pub fn buildCRTFile(comp: *Compilation, crt_file: CRTFile) !void {
                 if (target.cpu.arch.ptrBitWidth() == 32) {
                     for (mingwex_arm32_src) |dep| {
                         (try c_source_files.addOne()).* = .{
-                            .src_path = try comp.zig_lib_directory.join(arena, &[_][]const u8{
+                            .src_dir = std.fs.cwd(),
+                            .src_sub_path = try comp.zig_lib_directory.join(arena, &[_][]const u8{
                                 "libc", "mingw", dep,
                             }),
                             .extra_flags = extra_flags,
@@ -199,7 +208,8 @@ pub fn buildCRTFile(comp: *Compilation, crt_file: CRTFile) !void {
                 } else {
                     for (mingwex_arm64_src) |dep| {
                         (try c_source_files.addOne()).* = .{
-                            .src_path = try comp.zig_lib_directory.join(arena, &[_][]const u8{
+                            .src_dir = std.fs.cwd(),
+                            .src_sub_path = try comp.zig_lib_directory.join(arena, &[_][]const u8{
                                 "libc", "mingw", dep,
                             }),
                             .extra_flags = extra_flags,
@@ -235,7 +245,8 @@ pub fn buildCRTFile(comp: *Compilation, crt_file: CRTFile) !void {
             var c_source_files: [uuid_src.len]Compilation.CSourceFile = undefined;
             for (uuid_src) |dep, i| {
                 c_source_files[i] = .{
-                    .src_path = try comp.zig_lib_directory.join(arena, &[_][]const u8{
+                    .src_dir = std.fs.cwd(),
+                    .src_sub_path = try comp.zig_lib_directory.join(arena, &[_][]const u8{
                         "libc", "mingw", "libsrc", dep,
                     }),
                     .extra_flags = extra_flags,
@@ -306,7 +317,7 @@ pub fn buildImportLib(comp: *Compilation, lib_name: []const u8) !void {
     var man = cache.obtain();
     defer man.deinit();
 
-    _ = try man.addFile(def_file_path, null);
+    _ = try man.addFile(std.fs.cwd(), def_file_path, null);
 
     const final_lib_basename = try std.fmt.allocPrint(comp.gpa, "{s}.lib", .{lib_name});
     errdefer comp.gpa.free(final_lib_basename);

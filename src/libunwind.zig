@@ -89,7 +89,8 @@ pub fn buildStaticLib(comp: *Compilation) !void {
         try cflags.append("-Wno-incompatible-pointer-types");
 
         c_source_files[i] = .{
-            .src_path = try comp.zig_lib_directory.join(arena, &[_][]const u8{unwind_src}),
+            .src_dir = std.fs.cwd(),
+            .src_sub_path = try comp.zig_lib_directory.join(arena, &[_][]const u8{unwind_src}),
             .extra_flags = cflags.items,
         };
     }

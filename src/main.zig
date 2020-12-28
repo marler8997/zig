@@ -976,7 +976,8 @@ fn buildOutputType(
                     },
                     .assembly, .c, .cpp, .h, .ll, .bc => {
                         try c_source_files.append(.{
-                            .src_path = arg,
+                            .src_dir = std.fs.cwd(),
+                            .src_sub_path = arg,
                             .extra_flags = try arena.dupe([]const u8, extra_cflags.items),
                         });
                     },
@@ -1032,7 +1033,8 @@ fn buildOutputType(
                     .positional => {
                         const file_ext = Compilation.classifyFileExt(mem.spanZ(it.only_arg));
                         switch (file_ext) {
-                            .assembly, .c, .cpp, .ll, .bc, .h => try c_source_files.append(.{ .src_path = it.only_arg }),
+                            .assembly, .c, .cpp, .ll, .bc, .h => try c_source_files.append(
+                                .{ .src_dir = std.fs.cwd(), .src_sub_path = it.only_arg }),
                             .unknown, .shared_library, .object, .static_library => {
                                 try link_objects.append(it.only_arg);
                             },
@@ -1342,7 +1344,7 @@ fn buildOutputType(
             const basename = fs.path.basename(file);
             break :blk basename[0 .. basename.len - fs.path.extension(basename).len];
         } else if (c_source_files.items.len >= 1) {
-            const basename = fs.path.basename(c_source_files.items[0].src_path);
+            const basename = fs.path.basename(c_source_files.items[0].src_sub_path);
             break :blk basename[0 .. basename.len - fs.path.extension(basename).len];
         } else if (link_objects.items.len >= 1) {
             const basename = fs.path.basename(link_objects.items[0]);
@@ -1977,8 +1979,8 @@ fn cmdTranslateC(comp: *Compilation, arena: *Allocator, enable_cache: bool) !voi
     defer if (enable_cache) man.deinit();
 
     man.hash.add(@as(u16, 0xb945)); // Random number to distinguish translate-c from compiling C objects
-    _ = man.addFile(c_source_file.src_path, null) catch |err| {
-        fatal("unable to process '{}': {}", .{ c_source_file.src_path, @errorName(err) });
+    _ = man.addFile(c_source_file.src_dir, c_source_file.src_sub_path, null) catch |err| {
+        fatal("unable to process '{}': {}", .{ c_source_file.src_sub_path, @errorName(err) });
     };
 
     const digest = if (try man.hit()) man.final() else digest: {
@@ -1987,19 +1989,20 @@ fn cmdTranslateC(comp: *Compilation, arena: *Allocator, enable_cache: bool) !voi
         var zig_cache_tmp_dir = try comp.local_cache_directory.handle.makeOpenPath("tmp", .{});
         defer zig_cache_tmp_dir.close();
 
-        const ext = Compilation.classifyFileExt(c_source_file.src_path);
+        const ext = Compilation.classifyFileExt(c_source_file.src_sub_path);
         const out_dep_path: ?[]const u8 = blk: {
             if (comp.disable_c_depfile or !ext.clangSupportsDepFile())
                 break :blk null;
 
-            const c_src_basename = fs.path.basename(c_source_file.src_path);
+            const c_src_basename = fs.path.basename(c_source_file.src_sub_path);
             const dep_basename = try std.fmt.allocPrint(arena, "{}.d", .{c_src_basename});
             const out_dep_path = try comp.tmpFilePath(arena, dep_basename);
             break :blk out_dep_path;
         };
 
         try comp.addTranslateCCArgs(arena, &argv, ext, out_dep_path);
-        try argv.append(c_source_file.src_path);
+        const c_filename = try c_source_file.src_dir.realpathAlloc(arena, c_source_file.src_sub_path);
+        try argv.append(c_filename);
 
         if (comp.verbose_cc) {
             std.debug.print("clang ", .{});

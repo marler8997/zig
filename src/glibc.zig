@@ -275,7 +275,8 @@ pub fn buildCRTFile(comp: *Compilation, crt_file: CRTFile) !void {
             });
             return comp.build_crt_file("crti", .Obj, &[1]Compilation.CSourceFile{
                 .{
-                    .src_path = try start_asm_path(comp, arena, "crti.S"),
+                    .src_dir = std.fs.cwd(),
+                    .src_sub_path = try start_asm_path(comp, arena, "crti.S"),
                     .extra_flags = args.items,
                 },
             });
@@ -294,7 +295,8 @@ pub fn buildCRTFile(comp: *Compilation, crt_file: CRTFile) !void {
             });
             return comp.build_crt_file("crtn", .Obj, &[1]Compilation.CSourceFile{
                 .{
-                    .src_path = try start_asm_path(comp, arena, "crtn.S"),
+                    .src_dir = std.fs.cwd(),
+                    .src_sub_path = try start_asm_path(comp, arena, "crtn.S"),
                     .extra_flags = args.items,
                 },
             });
@@ -318,7 +320,8 @@ pub fn buildCRTFile(comp: *Compilation, crt_file: CRTFile) !void {
                     "-Wa,--noexecstack",
                 });
                 break :blk .{
-                    .src_path = try start_asm_path(comp, arena, "start.S"),
+                    .src_dir = std.fs.cwd(),
+                    .src_sub_path = try start_asm_path(comp, arena, "start.S"),
                     .extra_flags = args.items,
                 };
             };
@@ -337,7 +340,8 @@ pub fn buildCRTFile(comp: *Compilation, crt_file: CRTFile) !void {
                     "-Wa,--noexecstack",
                 });
                 break :blk .{
-                    .src_path = try lib_path(comp, arena, lib_libc_glibc ++ "csu" ++ path.sep_str ++ "abi-note.S"),
+                    .src_dir = std.fs.cwd(),
+                    .src_sub_path = try lib_path(comp, arena, lib_libc_glibc ++ "csu" ++ path.sep_str ++ "abi-note.S"),
                     .extra_flags = args.items,
                 };
             };
@@ -393,7 +397,8 @@ pub fn buildCRTFile(comp: *Compilation, crt_file: CRTFile) !void {
                     "-DTOP_NAMESPACE=glibc",
                 });
                 break :blk .{
-                    .src_path = try lib_path(comp, arena, lib_libc_glibc ++ "csu" ++ path.sep_str ++ "elf-init.c"),
+                    .src_dir = std.fs.cwd(),
+                    .src_sub_path = try lib_path(comp, arena, lib_libc_glibc ++ "csu" ++ path.sep_str ++ "elf-init.c"),
                     .extra_flags = args.items,
                 };
             };
@@ -423,7 +428,8 @@ pub fn buildCRTFile(comp: *Compilation, crt_file: CRTFile) !void {
                     "-DTOP_NAMESPACE=glibc",
                 });
                 c_source_files[i + 1] = .{
-                    .src_path = try lib_path(comp, arena, dep),
+                    .src_dir = std.fs.cwd(),
+                    .src_sub_path = try lib_path(comp, arena, dep),
                     .extra_flags = args.items,
                 };
             }
@@ -916,7 +922,8 @@ fn buildSharedLib(
     const map_file_path = try path.join(arena, &[_][]const u8{ bin_directory.path.?, all_map_basename });
     const c_source_files = [1]Compilation.CSourceFile{
         .{
-            .src_path = try path.join(arena, &[_][]const u8{ bin_directory.path.?, asm_file_basename }),
+            .src_dir = bin_directory.handle,
+            .src_sub_path = asm_file_basename,
         },
     };
     const sub_compilation = try Compilation.create(comp.gpa, .{
