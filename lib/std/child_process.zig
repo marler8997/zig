@@ -32,8 +32,6 @@ pub const ChildProcess = struct {
     stdout: ?File,
     stderr: ?File,
 
-    overlapped: if (builtin.os.tag == .windows) [2]windows.OVERLAPPED else struct {} = undefined,
-
     term: ?(SpawnError!Term),
 
     argv: []const []const u8,
@@ -259,19 +257,30 @@ pub const ChildProcess = struct {
         }
     }
 
-    fn collectOutputWindows(child: *ChildProcess, outs: [2]*std.ArrayList(u8), max_output_bytes: usize) !void {
+    fn collectOutputWindows(child: *const ChildProcess, outs: [2]*std.ArrayList(u8), max_output_bytes: usize) !void {
         const bump_amt = 512;
         const handles = [_]windows.HANDLE{ child.stdout.?.handle, child.stderr.?.handle };
+
+        var overlapped = [_]windows.OVERLAPPED{
+            mem.zeroes(windows.OVERLAPPED),
+            mem.zeroes(windows.OVERLAPPED),
+        };
+
+        var wait_objects: [2]windows.HANDLE = undefined;
+        var wait_object_count: u2 = 0;
+
+        // we need to cancel all pending IO before returning so our OVERLAPPED values don't go out of scope
+        defer for (wait_objects[0..wait_object_count]) |o| {
+            _ = windows.kernel32.CancelIo(o);
+        };
 
         for ([_]u1{ 0, 1 }) |i| {
             try outs[i].ensureCapacity(bump_amt);
             const buf = outs[i].unusedCapacitySlice();
-            child.overlapped[i] = mem.zeroes(windows.OVERLAPPED);
-            _ = windows.kernel32.ReadFile(handles[i], buf.ptr, @intCast(u32, buf.len), null, &child.overlapped[i]);
+            _ = windows.kernel32.ReadFile(handles[i], buf.ptr, @intCast(u32, buf.len), null, &overlapped[i]);
+            wait_objects[wait_object_count] = handles[i];
+            wait_object_count += 1;
         }
-
-        var wait_objects = handles;
-        var wait_object_count: u2 = wait_objects.len;
 
         while (true) {
             const status = windows.kernel32.WaitForMultipleObjects(wait_object_count, &wait_objects, 0, windows.INFINITE);
@@ -284,9 +293,13 @@ pub const ChildProcess = struct {
                 unreachable;
 
             const wait_idx = status - windows.WAIT_OBJECT_0;
+            wait_object_count -= 1;
+            if (wait_idx == 0)
+                wait_objects[0] = wait_objects[1];
+
             const i = @as(u1, if (wait_objects[wait_idx] == handles[0]) 0 else 1);
             var read_bytes: u32 = undefined;
-            const overlapped_result = windows.kernel32.GetOverlappedResult(handles[i], &child.overlapped[i], &read_bytes, 0);
+            const overlapped_result = windows.kernel32.GetOverlappedResult(handles[i], &overlapped[i], &read_bytes, 0);
             if (overlapped_result == 0) switch (windows.kernel32.GetLastError()) {
                 .BROKEN_PIPE => {
                     wait_object_count -= 1;
@@ -304,7 +317,9 @@ pub const ChildProcess = struct {
             try outs[i].ensureCapacity(new_capacity);
             const buf = outs[i].unusedCapacitySlice();
             if (buf.len == 0) return if (i == 0) error.StdoutStreamTooLong else error.StderrStreamTooLong;
-            _ = windows.kernel32.ReadFile(handles[i], buf.ptr, @intCast(u32, buf.len), null, &child.overlapped[i]);
+            _ = windows.kernel32.ReadFile(handles[i], buf.ptr, @intCast(u32, buf.len), null, &overlapped[i]);
+            wait_objects[wait_object_count] = handles[i];
+            wait_object_count += 1;
         }
     }
 
