@@ -13,6 +13,7 @@ const process = std.process;
 const File = std.fs.File;
 const windows = os.windows;
 const mem = std.mem;
+const math = std.math;
 const debug = std.debug;
 const BufMap = std.BufMap;
 const builtin = std.builtin;
@@ -259,7 +260,10 @@ pub const ChildProcess = struct {
 
     fn collectOutputWindows(child: *const ChildProcess, outs: [2]*std.ArrayList(u8), max_output_bytes: usize) !void {
         const bump_amt = 512;
-        const handles = [_]windows.HANDLE{ child.stdout.?.handle, child.stderr.?.handle };
+        const handles = [_]windows.HANDLE{
+            child.stdout.?.handle,
+            child.stderr.?.handle,
+        };
 
         var overlapped = [_]windows.OVERLAPPED{
             mem.zeroes(windows.OVERLAPPED),
@@ -274,10 +278,11 @@ pub const ChildProcess = struct {
             _ = windows.kernel32.CancelIo(o);
         };
 
+        // Windows Async IO requires an initial call to ReadFile before waiting on the handle
         for ([_]u1{ 0, 1 }) |i| {
             try outs[i].ensureCapacity(bump_amt);
             const buf = outs[i].unusedCapacitySlice();
-            _ = windows.kernel32.ReadFile(handles[i], buf.ptr, @intCast(u32, buf.len), null, &overlapped[i]);
+            _ = windows.kernel32.ReadFile(handles[i], buf.ptr, math.cast(u32, buf.len) catch maxInt(u32), null, &overlapped[i]);
             wait_objects[wait_object_count] = handles[i];
             wait_object_count += 1;
         }
@@ -297,27 +302,30 @@ pub const ChildProcess = struct {
             if (wait_idx == 0)
                 wait_objects[0] = wait_objects[1];
 
-            const i = @as(u1, if (wait_objects[wait_idx] == handles[0]) 0 else 1);
+            // this extra `i` index is needed to map the wait handle back to the stdout or stderr
+            // values since the wait_idx can change which handle it corresponds with
+            const i: u1 = if (wait_objects[wait_idx] == handles[0]) 0 else 1;
             var read_bytes: u32 = undefined;
-            const overlapped_result = windows.kernel32.GetOverlappedResult(handles[i], &overlapped[i], &read_bytes, 0);
-            if (overlapped_result == 0) switch (windows.kernel32.GetLastError()) {
-                .BROKEN_PIPE => {
-                    wait_object_count -= 1;
-                    if (wait_object_count == 0)
-                        break;
-                    if (wait_idx == 0)
-                        wait_objects[0] = wait_objects[1];
-                    continue;
-                },
-                else => |err| return windows.unexpectedError(err),
-            };
+            if (windows.kernel32.GetOverlappedResult(handles[i], &overlapped[i], &read_bytes, 0) == 0) {
+                switch (windows.kernel32.GetLastError()) {
+                    .BROKEN_PIPE => {
+                        wait_object_count -= 1;
+                        if (wait_object_count == 0)
+                            break;
+                        if (wait_idx == 0)
+                            wait_objects[0] = wait_objects[1];
+                        continue;
+                    },
+                    else => |err| return windows.unexpectedError(err),
+                }
+            }
 
             outs[i].items.len += read_bytes;
             const new_capacity = std.math.min(outs[i].items.len + bump_amt, max_output_bytes);
             try outs[i].ensureCapacity(new_capacity);
             const buf = outs[i].unusedCapacitySlice();
             if (buf.len == 0) return if (i == 0) error.StdoutStreamTooLong else error.StderrStreamTooLong;
-            _ = windows.kernel32.ReadFile(handles[i], buf.ptr, @intCast(u32, buf.len), null, &overlapped[i]);
+            _ = windows.kernel32.ReadFile(handles[i], buf.ptr, math.cast(u32, buf.len) catch maxInt(u32), null, &overlapped[i]);
             wait_objects[wait_object_count] = handles[i];
             wait_object_count += 1;
         }
@@ -714,7 +722,7 @@ pub const ChildProcess = struct {
         var g_hChildStd_OUT_Wr: ?windows.HANDLE = null;
         switch (self.stdout_behavior) {
             StdIo.Pipe => {
-                try windowsMakeAsyncPipe(&g_hChildStd_OUT_Rd, &g_hChildStd_OUT_Wr, &saAttr, .{});
+                try windowsMakeAsyncPipe(&g_hChildStd_OUT_Rd, &g_hChildStd_OUT_Wr, &saAttr);
             },
             StdIo.Ignore => {
                 g_hChildStd_OUT_Wr = nul_handle;
@@ -734,7 +742,7 @@ pub const ChildProcess = struct {
         var g_hChildStd_ERR_Wr: ?windows.HANDLE = null;
         switch (self.stderr_behavior) {
             StdIo.Pipe => {
-                try windowsMakeAsyncPipe(&g_hChildStd_ERR_Rd, &g_hChildStd_ERR_Wr, &saAttr, .{});
+                try windowsMakeAsyncPipe(&g_hChildStd_ERR_Rd, &g_hChildStd_ERR_Wr, &saAttr);
             },
             StdIo.Ignore => {
                 g_hChildStd_ERR_Wr = nul_handle;
@@ -979,10 +987,7 @@ fn windowsMakePipeIn(rd: *?windows.HANDLE, wr: *?windows.HANDLE, sattr: *const w
 
 var pipe_name_counter = std.atomic.Atomic(u32).init(1);
 
-fn windowsMakeAsyncPipe(rd: *?windows.HANDLE, wr: *?windows.HANDLE, sattr: *const windows.SECURITY_ATTRIBUTES, opt: struct {
-    in_size: u32 = 4096,
-    out_size: u32 = 4096,
-}) !void {
+fn windowsMakeAsyncPipe(rd: *?windows.HANDLE, wr: *?windows.HANDLE, sattr: *const windows.SECURITY_ATTRIBUTES) !void {
     var tmp_bufw: [128]u16 = undefined;
 
     // We must make a named pipe on windows because anonymous pipes do not support async IO
@@ -1005,8 +1010,8 @@ fn windowsMakeAsyncPipe(rd: *?windows.HANDLE, wr: *?windows.HANDLE, sattr: *cons
         windows.PIPE_ACCESS_INBOUND | windows.FILE_FLAG_OVERLAPPED,
         windows.PIPE_TYPE_BYTE,
         1,
-        opt.in_size,
-        opt.out_size,
+        4096,
+        4096,
         0,
         sattr,
     );
