@@ -39,6 +39,17 @@ pub extern "kernel32" fn CreatePipe(
     nSize: DWORD,
 ) callconv(WINAPI) BOOL;
 
+pub extern "kernel32" fn CreateNamedPipeW(
+    lpName: LPCWSTR,
+    dwOpenMode: DWORD,
+    dwPipeMode: DWORD,
+    nMaxInstances: DWORD,
+    nOutBufferSize: DWORD,
+    nInBufferSize: DWORD,
+    nDefaultTimeOut: DWORD,
+    lpSecurityAttributes: ?*const SECURITY_ATTRIBUTES,
+) callconv(WINAPI) HANDLE;
+
 pub extern "kernel32" fn CreateProcessW(
     lpApplicationName: ?LPWSTR,
     lpCommandLine: LPWSTR,
@@ -98,6 +109,8 @@ pub extern "kernel32" fn GetCurrentDirectoryW(nBufferLength: DWORD, lpBuffer: ?[
 
 pub extern "kernel32" fn GetCurrentThread() callconv(WINAPI) HANDLE;
 pub extern "kernel32" fn GetCurrentThreadId() callconv(WINAPI) DWORD;
+
+pub extern "kernel32" fn GetCurrentProcessId() callconv(WINAPI) DWORD;
 
 pub extern "kernel32" fn GetCurrentProcess() callconv(WINAPI) HANDLE;
 
