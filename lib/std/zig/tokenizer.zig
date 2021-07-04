@@ -325,8 +325,14 @@ pub const Token = struct {
     };
 };
 
-pub const Tokenizer = struct {
-    buffer: [:0]const u8,
+const NullTerm = enum {null_term, no_null_term};
+
+pub const Tokenizer = TokenizerTemplate(.null_term);
+
+pub fn TokenizerTemplate(comptime term: NullTerm) type { return struct {
+    const Buffer = if (term == .null_term) [:0]const u8 else []const u8;
+
+    buffer: Buffer,
     index: usize,
     pending_invalid_token: ?Token,
 
@@ -335,7 +341,7 @@ pub const Tokenizer = struct {
         std.debug.warn("{s} \"{s}\"\n", .{ @tagName(token.tag), self.buffer[token.start..token.end] });
     }
 
-    pub fn init(buffer: [:0]const u8) Tokenizer {
+    pub fn init(buffer: Buffer) Tokenizer {
         // Skip the UTF-8 BOM if present
         const src_start = if (mem.startsWith(u8, buffer, "\xEF\xBB\xBF")) 3 else @as(usize, 0);
         return Tokenizer{
@@ -421,7 +427,10 @@ pub const Tokenizer = struct {
         };
         var seen_escape_digits: usize = undefined;
         var remaining_code_units: usize = undefined;
-        while (true) : (self.index += 1) {
+        while (switch (term) {
+            .null_term => true,
+            .no_null_term => self.index != self.buffer.len
+        }) : (self.index += 1) {
             const c = self.buffer[self.index];
             switch (state) {
                 .start => switch (c) {
@@ -1379,7 +1388,7 @@ pub const Tokenizer = struct {
             return 0;
         }
     }
-};
+};}
 
 test "tokenizer" {
     try testTokenize("test", &.{.keyword_test});
