@@ -952,6 +952,14 @@ pub fn addCases(ctx: *TestContext) !void {
         ":5:1: note: declared here",
     });
 
+    ctx.addCompareOutput("allow param shadowing on extern functions",
+        \\const a = 0;
+        \\fn b() void { }
+        \\extern fn foo(a: u32, b: u32) void;
+    ,
+        "",
+    );
+
     ctx.compileError("returns in try", linux_x64,
         \\pub fn main() !void {
         \\	try a();

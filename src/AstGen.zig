@@ -2963,7 +2963,9 @@ fn fnDecl(
                 const param_name = try astgen.identAsString(name_token);
                 // Create an arg instruction. This is needed to emit a semantic analysis
                 // error for shadowing decls.
-                try astgen.detectLocalShadowing(params_scope, param_name, name_token);
+                if (!is_extern) {
+                    try astgen.detectLocalShadowing(params_scope, param_name, name_token);
+                }
                 const arg_inst = try fn_gz.addStrTok(.arg, param_name, name_token);
                 const sub_scope = try astgen.arena.create(Scope.LocalVal);
                 sub_scope.* = .{
