@@ -40,7 +40,25 @@ jobs:
   - powershell: |
       (New-Object Net.WebClient).DownloadFile("https://github.com/msys2/msys2-installer/releases/download/2021-06-04/msys2-base-x86_64-20210604.sfx.exe", "sfx.exe")
       .\sfx.exe -y -o\
-      del sfx.exe
+      # try a few times to remove the file because windows keeps a hold of executables
+      # from recently run processes which prevents them from being deleted
+      function DeleteFileWithRetry {
+          param  (
+              [Parameter(Mandatory)]
+              [string]$Path,
+              [int]$Attempts = 10,
+              [int]$SleepMillis = 50
+          )
+          for ($attempt = 1; $attempt -le $Attempts; $attempt++) {
+              Remove-Item -Path $Path -ErrorAction Continue
+              if ($?) {
+                  return
+              }
+              Start-Sleep -Milliseconds $SleepMillis
+          }
+          throw "failed to remove $($Path) after $($Attempts) attempts"
+      }
+      DeleteFileWithRetry sfx.exe
     displayName: Download/Extract/Install MSYS2
   - script: |
       @REM install updated filesystem package first without dependency checking
