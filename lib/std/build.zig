@@ -8,6 +8,7 @@ const panic = std.debug.panic;
 const assert = debug.assert;
 const warn = std.debug.warn;
 const ArrayList = std.ArrayList;
+const StringArrayHashMap = std.StringArrayHashMap;
 const StringHashMap = std.StringHashMap;
 const Allocator = mem.Allocator;
 const process = std.process;
@@ -26,8 +27,8 @@ pub const InstallRawStep = @import("build/InstallRawStep.zig");
 pub const OptionsStep = @import("build/OptionsStep.zig");
 
 pub const Builder = struct {
-    install_tls: TopLevelStep,
-    uninstall_tls: TopLevelStep,
+    install_tls: Step,
+    uninstall_tls: Step,
     allocator: *Allocator,
     user_input_options: UserInputOptionsMap,
     available_options_map: AvailableOptionsMap,
@@ -48,7 +49,7 @@ pub const Builder = struct {
     zig_exe: []const u8,
     default_step: *Step,
     env_map: *BufMap,
-    top_level_steps: ArrayList(*TopLevelStep),
+    step_map: StringArrayHashMap(*Step),
     install_prefix: []const u8,
     dest_dir: ?[]const u8,
     lib_dir: []const u8,
@@ -68,6 +69,7 @@ pub const Builder = struct {
     vcpkg_root: VcpkgRoot,
     pkg_config_pkg_list: ?(PkgConfigError![]const PkgConfigPkg) = null,
     args: ?[][]const u8 = null,
+    finalized: bool = false,
 
     const PkgConfigError = error{
         PkgConfigCrashed,
@@ -119,13 +121,6 @@ pub const Builder = struct {
         list,
     };
 
-    const TopLevelStep = struct {
-        pub const base_id = .top_level;
-
-        step: Step,
-        description: []const u8,
-    };
-
     pub const DirList = struct {
         lib_dir: ?[]const u8 = null,
         exe_dir: ?[]const u8 = null,
@@ -163,7 +158,7 @@ pub const Builder = struct {
             .user_input_options = UserInputOptionsMap.init(allocator),
             .available_options_map = AvailableOptionsMap.init(allocator),
             .available_options_list = ArrayList(AvailableOption).init(allocator),
-            .top_level_steps = ArrayList(*TopLevelStep).init(allocator),
+            .step_map = StringArrayHashMap(*Step).init(allocator),
             .default_step = undefined,
             .env_map = env_map,
             .search_prefixes = ArrayList([]const u8).init(allocator),
@@ -173,14 +168,8 @@ pub const Builder = struct {
             .h_dir = undefined,
             .dest_dir = env_map.get("DESTDIR"),
             .installed_files = ArrayList(InstalledFile).init(allocator),
-            .install_tls = TopLevelStep{
-                .step = Step.initNoOp(.top_level, "install", allocator),
-                .description = "Copy build artifacts to prefix path",
-            },
-            .uninstall_tls = TopLevelStep{
-                .step = Step.init(.top_level, "uninstall", allocator, makeUninstall),
-                .description = "Remove build artifacts from prefix path",
-            },
+            .install_tls = Step.initNoOp(.generic, "Copy build artifacts to prefix path", "install", allocator),
+            .uninstall_tls = Step.init(.generic, "Remove build artifacts from prefix path", "uninstall", allocator, makeUninstall),
             .release_mode = null,
             .is_release = false,
             .override_lib_dir = null,
@@ -188,15 +177,15 @@ pub const Builder = struct {
             .vcpkg_root = VcpkgRoot{ .unattempted = {} },
             .args = null,
         };
-        try self.top_level_steps.append(&self.install_tls);
-        try self.top_level_steps.append(&self.uninstall_tls);
-        self.default_step = &self.install_tls.step;
+        try self.step_map.put(self.install_tls.TMP_name.?, &self.install_tls);
+        try self.step_map.put(self.uninstall_tls.TMP_name.?, &self.uninstall_tls);
+        self.default_step = &self.install_tls;
         return self;
     }
 
     pub fn destroy(self: *Builder) void {
         self.env_map.deinit();
-        self.top_level_steps.deinit();
+        self.step_map.deinit();
         self.allocator.destroy(self);
     }
 
@@ -416,7 +405,10 @@ pub const Builder = struct {
             try wanted_steps.append(self.default_step);
         } else {
             for (step_names) |step_name| {
-                const s = try self.getTopLevelStepByName(step_name);
+                const s = self.step_map.get(step_name) orelse {
+                    warn("Unknown step '{s}'", .{step_name});
+                    return error.UnknownStep;
+                };
                 try wanted_steps.append(s);
             }
         }
@@ -434,8 +426,7 @@ pub const Builder = struct {
         return &self.uninstall_tls.step;
     }
 
-    fn makeUninstall(uninstall_step: *Step) anyerror!void {
-        const uninstall_tls = @fieldParentPtr(TopLevelStep, "step", uninstall_step);
+    fn makeUninstall(uninstall_tls: *Step) anyerror!void {
         const self = @fieldParentPtr(Builder, "uninstall_tls", uninstall_tls);
 
         for (self.installed_files.items) |installed_file| {
@@ -470,11 +461,13 @@ pub const Builder = struct {
         try s.make();
     }
 
-    fn getTopLevelStepByName(self: *Builder, name: []const u8) !*Step {
-        for (self.top_level_steps.items) |top_level_step| {
-            if (mem.eql(u8, top_level_step.step.name, name)) {
-                return &top_level_step.step;
-            }
+    // TODO: maybe we should create a hash set of all the steps and their
+    //       names.  This will make lookup much faster (because we won't re-check
+    //       step trees) and will ensure all step names are unique.
+    fn getStepByNameFromRoots(self: *Builder, name: []const u8) !*Step {
+        for (self.roots.items) |root_step| {
+            if (root_step.getStepByName(name)) |match|
+                return match;
         }
         warn("Cannot run step '{s}' because it does not exist\n", .{name});
         return error.InvalidStepName;
@@ -622,12 +615,9 @@ pub const Builder = struct {
         }
     }
 
-    pub fn step(self: *Builder, name: []const u8, description: []const u8) *Step {
-        const step_info = self.allocator.create(TopLevelStep) catch unreachable;
-        step_info.* = TopLevelStep{
-            .step = Step.initNoOp(.top_level, name, self.allocator),
-            .description = self.dupe(description),
-        };
+    pub fn step(self: *Builder, name: ?[]const u8, description: []const u8) *Step {
+        const step_info = self.allocator.create(Step) catch unreachable;
+        step_info.* = Step.initNoOp(.generic, name, description, self.allocator);
         self.top_level_steps.append(step_info) catch unreachable;
         return &step_info.step;
     }
@@ -913,6 +903,13 @@ pub const Builder = struct {
 
         return self.invalid_user_input;
     }
+
+//    pub fn finalize(self: *Builder) void {
+//        if (self.finalized)
+//            std.log.err("the finalize method should only be called by build_runner.zig before it calls make");
+//        !!!
+//        self.finialized = true;
+//    }
 
     pub fn spawnChild(self: *Builder, argv: []const []const u8) !void {
         return self.spawnChildEnvMap(null, self.env_map, argv);
@@ -3008,14 +3005,17 @@ pub const RemoveDirStep = struct {
 const ThisModule = @This();
 pub const Step = struct {
     id: Id,
-    name: []const u8,
+    /// A unique way to identify this step that can be called out by the end user
+    TMP_name: ?[]const u8,
+    TMP_description: ?[]const u8,
     makeFn: fn (self: *Step) anyerror!void,
     dependencies: ArrayList(*Step),
     loop_flag: bool,
     done_flag: bool,
 
     pub const Id = enum {
-        top_level,
+        top_level_remove_me,
+        generic,
         lib_exe_obj,
         install_artifact,
         install_file,
@@ -3032,18 +3032,22 @@ pub const Step = struct {
         custom,
     };
 
-    pub fn init(id: Id, name: []const u8, allocator: *Allocator, makeFn: fn (*Step) anyerror!void) Step {
+    pub fn init(id: Id, name: ?[]const u8, description: ?[]const u8, allocator: *Allocator, makeFn: fn (*Step) anyerror!void) Step {
+        if (name == null and description == null)
+            @panic("steps should at least have a name or a description, but this one has neither");
+
         return Step{
             .id = id,
-            .name = allocator.dupe(u8, name) catch unreachable,
+            .TMP_name = if (name) |n| (allocator.dupe(u8, n) catch unreachable) else null,
+            .TMP_description = if (description) |d| (allocator.dupe(u8, d) catch unreachable) else null,
             .makeFn = makeFn,
             .dependencies = ArrayList(*Step).init(allocator),
             .loop_flag = false,
             .done_flag = false,
         };
     }
-    pub fn initNoOp(id: Id, name: []const u8, allocator: *Allocator) Step {
-        return init(id, name, allocator, makeNoOp);
+    pub fn initNoOp(id: Id, name: ?[]const u8, description: ?[]const u8, allocator: *Allocator) Step {
+        return init(id, name, description, allocator, makeNoOp);
     }
 
     pub fn make(self: *Step) !void {
@@ -3064,6 +3068,22 @@ pub const Step = struct {
     pub fn cast(step: *Step, comptime T: type) ?*T {
         if (step.id == T.base_id) {
             return @fieldParentPtr(T, "step", step);
+        }
+        return null;
+    }
+
+    pub fn getStepByName(self: *Step, name: []const u8) ?*Step {
+        // TODO: should we protect from infinite recursion here?  (i.e. use loop_flag or similar mechanism?)
+        //       if we use loop_flag then we should protect from calling this while we are building since
+        //       it uses the loop_flag (or use another loop flag or something)
+        if (self.name) |self_name| {
+            if (mem.eql(u8, self_name, name))
+                return self;
+        }
+        for (self.dependencies.items) |dep| {
+            if (dep.getStepDepByName(dep, name)) |dep_step|
+                return dep_step;
+            
         }
         return null;
     }

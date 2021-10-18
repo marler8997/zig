@@ -172,6 +172,8 @@ pub fn main() !void {
     if (builder.validateUserInputDidItFail())
         return usageAndErr(builder, true, stderr_stream);
 
+    //builder.finalize();
+
     builder.make(targets.items) catch |err| {
         switch (err) {
             error.InvalidStepName => {
@@ -206,12 +208,15 @@ fn usage(builder: *Builder, already_ran_build: bool, out_stream: anytype) !void 
     , .{builder.zig_exe});
 
     const allocator = builder.allocator;
-    for (builder.top_level_steps.items) |top_level_step| {
-        const name = if (&top_level_step.step == builder.default_step)
-            try fmt.allocPrint(allocator, "{s} (default)", .{top_level_step.step.name})
+    var step_it = builder.step_map.iterator();
+    while (step_it.next()) |kv| {
+        const name = kv.key_ptr.*;
+        const step = kv.value_ptr.*;
+        const usage_name = if (step == builder.default_step)
+            try fmt.allocPrint(allocator, "{s} (default)", .{name})
         else
-            top_level_step.step.name;
-        try out_stream.print("  {s:<28} {s}\n", .{ name, top_level_step.description });
+            name;
+        try out_stream.print("  {s:<28} {s}\n", .{ usage_name, if (step.TMP_description) |d| d else "" });
     }
 
     try out_stream.writeAll(
