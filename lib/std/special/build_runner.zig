@@ -206,12 +206,12 @@ fn usage(builder: *Builder, already_ran_build: bool, out_stream: anytype) !void 
     , .{builder.zig_exe});
 
     const allocator = builder.allocator;
-    for (builder.top_level_steps.items) |top_level_step| {
-        const name = if (&top_level_step.step == builder.default_step)
-            try fmt.allocPrint(allocator, "{s} (default)", .{top_level_step.step.name})
+    for (builder.roots.items) |root_info| {
+        const name = if (root_info.step == builder.default_step)
+            try fmt.allocPrint(allocator, "{s} (default)", .{root_info.name})
         else
-            top_level_step.step.name;
-        try out_stream.print("  {s:<28} {s}\n", .{ name, top_level_step.description });
+            root_info.name;
+        try out_stream.print("  {s:<28} {s}\n", .{ name, root_info.description });
     }
 
     try out_stream.writeAll(

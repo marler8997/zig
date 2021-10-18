@@ -26,8 +26,8 @@ pub const InstallRawStep = @import("build/InstallRawStep.zig");
 pub const OptionsStep = @import("build/OptionsStep.zig");
 
 pub const Builder = struct {
-    install_tls: TopLevelStep,
-    uninstall_tls: TopLevelStep,
+    install_tls: Step,
+    uninstall_tls: Step,
     allocator: *Allocator,
     user_input_options: UserInputOptionsMap,
     available_options_map: AvailableOptionsMap,
@@ -48,7 +48,7 @@ pub const Builder = struct {
     zig_exe: []const u8,
     default_step: *Step,
     env_map: *BufMap,
-    top_level_steps: ArrayList(*TopLevelStep),
+    roots: ArrayList(Root),
     install_prefix: []const u8,
     dest_dir: ?[]const u8,
     lib_dir: []const u8,
@@ -119,11 +119,22 @@ pub const Builder = struct {
         list,
     };
 
-    const TopLevelStep = struct {
-        pub const base_id = .top_level;
-
-        step: Step,
+    // A step that is exposed to the user such that it can be called out by the user directly.
+    const Root = struct {
+        step: *Step,
+        name: []const u8,
         description: []const u8,
+        pub fn init(
+            underlying_step: *Step,
+            description: []const u8,
+            opt: struct { name: ?[]const u8 = null },
+        ) Root {
+            return .{
+                .step = underlying_step,
+                .description = description,
+                .name = if (opt.name) |n| n else underlying_step.name,
+            };
+        }
     };
 
     pub const DirList = struct {
@@ -163,7 +174,7 @@ pub const Builder = struct {
             .user_input_options = UserInputOptionsMap.init(allocator),
             .available_options_map = AvailableOptionsMap.init(allocator),
             .available_options_list = ArrayList(AvailableOption).init(allocator),
-            .top_level_steps = ArrayList(*TopLevelStep).init(allocator),
+            .roots = ArrayList(Root).init(allocator),
             .default_step = undefined,
             .env_map = env_map,
             .search_prefixes = ArrayList([]const u8).init(allocator),
@@ -173,14 +184,8 @@ pub const Builder = struct {
             .h_dir = undefined,
             .dest_dir = env_map.get("DESTDIR"),
             .installed_files = ArrayList(InstalledFile).init(allocator),
-            .install_tls = TopLevelStep{
-                .step = Step.initNoOp(.top_level, "install", allocator),
-                .description = "Copy build artifacts to prefix path",
-            },
-            .uninstall_tls = TopLevelStep{
-                .step = Step.init(.top_level, "uninstall", allocator, makeUninstall),
-                .description = "Remove build artifacts from prefix path",
-            },
+            .install_tls = Step.initNoOp(.installer, "install", allocator),
+            .uninstall_tls = Step.init(.installer, "uninstall", allocator, makeUninstall),
             .release_mode = null,
             .is_release = false,
             .override_lib_dir = null,
@@ -188,15 +193,23 @@ pub const Builder = struct {
             .vcpkg_root = VcpkgRoot{ .unattempted = {} },
             .args = null,
         };
-        try self.top_level_steps.append(&self.install_tls);
-        try self.top_level_steps.append(&self.uninstall_tls);
-        self.default_step = &self.install_tls.step;
+        try self.roots.append(Root.init(
+            &self.install_tls,
+            "Copy build artifacts to prefix path",
+            .{},
+        ));
+        try self.roots.append(Root.init(
+            &self.uninstall_tls,
+            "Remove build artifacts from prefix path",
+            .{},
+        ));
+        self.default_step = &self.install_tls;
         return self;
     }
 
     pub fn destroy(self: *Builder) void {
         self.env_map.deinit();
-        self.top_level_steps.deinit();
+        self.roots.deinit();
         self.allocator.destroy(self);
     }
 
@@ -416,7 +429,7 @@ pub const Builder = struct {
             try wanted_steps.append(self.default_step);
         } else {
             for (step_names) |step_name| {
-                const s = try self.getTopLevelStepByName(step_name);
+                const s = try self.getRootStepByName(step_name);
                 try wanted_steps.append(s);
             }
         }
@@ -427,15 +440,14 @@ pub const Builder = struct {
     }
 
     pub fn getInstallStep(self: *Builder) *Step {
-        return &self.install_tls.step;
+        return &self.install_tls;
     }
 
     pub fn getUninstallStep(self: *Builder) *Step {
-        return &self.uninstall_tls.step;
+        return &self.uninstall_tls;
     }
 
-    fn makeUninstall(uninstall_step: *Step) anyerror!void {
-        const uninstall_tls = @fieldParentPtr(TopLevelStep, "step", uninstall_step);
+    fn makeUninstall(uninstall_tls: *Step) anyerror!void {
         const self = @fieldParentPtr(Builder, "uninstall_tls", uninstall_tls);
 
         for (self.installed_files.items) |installed_file| {
@@ -470,10 +482,10 @@ pub const Builder = struct {
         try s.make();
     }
 
-    fn getTopLevelStepByName(self: *Builder, name: []const u8) !*Step {
-        for (self.top_level_steps.items) |top_level_step| {
-            if (mem.eql(u8, top_level_step.step.name, name)) {
-                return &top_level_step.step;
+    fn getRootStepByName(self: *Builder, name: []const u8) !*Step {
+        for (self.roots.items) |root| {
+            if (mem.eql(u8, root.name, name)) {
+                return root.step;
             }
         }
         warn("Cannot run step '{s}' because it does not exist\n", .{name});
@@ -622,14 +634,18 @@ pub const Builder = struct {
         }
     }
 
-    pub fn step(self: *Builder, name: []const u8, description: []const u8) *Step {
-        const step_info = self.allocator.create(TopLevelStep) catch unreachable;
-        step_info.* = TopLevelStep{
-            .step = Step.initNoOp(.top_level, name, self.allocator),
-            .description = self.dupe(description),
-        };
-        self.top_level_steps.append(step_info) catch unreachable;
-        return &step_info.step;
+    // TODO: remove this in favor of addRoot
+    pub fn stepDeprecated(self: *Builder, name: []const u8, description: []const u8) *Step {
+        const step_info = self.allocator.create(Step) catch unreachable;
+        step_info.* = Step.initNoOp(.old_top_level, name, self.allocator);
+        self.addRoot(step_info, description, .{ .name = name });
+        return step_info;
+    }
+
+    pub fn addRoot(self: *Builder, root_step: *Step, description: []const u8, opt: struct { name: ?[]const u8 = null }) void {
+        self.roots.append(
+            Root.init(root_step, self.dupe(description), .{ .name = opt.name })
+        ) catch unreachable;
     }
 
     /// This provides the -Drelease option to the build user and does not give them the choice.
@@ -3015,7 +3031,8 @@ pub const Step = struct {
     done_flag: bool,
 
     pub const Id = enum {
-        top_level,
+        old_top_level,
+        installer,
         lib_exe_obj,
         install_artifact,
         install_file,

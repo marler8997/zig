@@ -36,10 +36,9 @@ pub fn build(b: *Builder) !void {
     });
     docgen_cmd.step.dependOn(&docgen_exe.step);
 
-    const docs_step = b.step("docs", "Build documentation");
-    docs_step.dependOn(&docgen_cmd.step);
+    b.addRoot(&docgen_cmd.step, "Build documentation", .{ .name = "docs" });
 
-    const toolchain_step = b.step("test-toolchain", "Run the tests for the toolchain");
+    const toolchain_step = b.stepDeprecated("test-toolchain", "Run the tests for the toolchain");
 
     var test_stage2 = b.addTest("src/test.zig");
     test_stage2.setBuildMode(mode);
@@ -319,10 +318,9 @@ pub fn build(b: *Builder) !void {
     test_stage2_options.addOption([:0]const u8, "version", try b.allocator.dupeZ(u8, version));
     test_stage2_options.addOption(std.SemanticVersion, "semver", semver);
 
-    const test_stage2_step = b.step("test-stage2", "Run the stage2 compiler tests");
-    test_stage2_step.dependOn(&test_stage2.step);
+    b.addRoot(&test_stage2.step, "Run the stage2 compiler tests", .{ .name = "test-stage2" });
     if (!skip_stage2_tests) {
-        toolchain_step.dependOn(test_stage2_step);
+        toolchain_step.dependOn(&test_stage2.step);
     }
 
     var chosen_modes: [4]builtin.Mode = undefined;
@@ -347,8 +345,7 @@ pub fn build(b: *Builder) !void {
 
     // run stage1 `zig fmt` on this build.zig file just to make sure it works
     toolchain_step.dependOn(&fmt_build_zig.step);
-    const fmt_step = b.step("test-fmt", "Run zig fmt against build.zig to make sure it works");
-    fmt_step.dependOn(&fmt_build_zig.step);
+    b.addRoot(&fmt_build_zig.step, "Run zig fmt against build.zig to make sure it works", .{ .name = "test-fmt" });
 
     toolchain_step.dependOn(tests.addPkgTests(
         b,
@@ -431,10 +428,10 @@ pub fn build(b: *Builder) !void {
         glibc_multi_dir,
     );
 
-    const test_step = b.step("test", "Run all the tests");
+    const test_step = b.stepDeprecated("test", "Run all the tests");
     test_step.dependOn(toolchain_step);
     test_step.dependOn(std_step);
-    test_step.dependOn(docs_step);
+    test_step.dependOn(&docgen_cmd.step);
 }
 
 const exe_cflags = [_][]const u8{

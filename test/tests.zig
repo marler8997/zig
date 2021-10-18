@@ -354,7 +354,7 @@ pub fn addCompareOutputTests(b: *build.Builder, test_filter: ?[]const u8, modes:
     const cases = b.allocator.create(CompareOutputContext) catch unreachable;
     cases.* = CompareOutputContext{
         .b = b,
-        .step = b.step("test-compare-output", "Run the compare output tests"),
+        .step = b.stepDeprecated("test-compare-output", "Run the compare output tests"),
         .test_index = 0,
         .test_filter = test_filter,
         .modes = modes,
@@ -369,7 +369,7 @@ pub fn addStackTraceTests(b: *build.Builder, test_filter: ?[]const u8, modes: []
     const cases = b.allocator.create(StackTracesContext) catch unreachable;
     cases.* = StackTracesContext{
         .b = b,
-        .step = b.step("test-stack-traces", "Run the stack trace tests"),
+        .step = b.stepDeprecated("test-stack-traces", "Run the stack trace tests"),
         .test_index = 0,
         .test_filter = test_filter,
         .modes = modes,
@@ -384,7 +384,7 @@ pub fn addRuntimeSafetyTests(b: *build.Builder, test_filter: ?[]const u8, modes:
     const cases = b.allocator.create(CompareOutputContext) catch unreachable;
     cases.* = CompareOutputContext{
         .b = b,
-        .step = b.step("test-runtime-safety", "Run the runtime safety tests"),
+        .step = b.stepDeprecated("test-runtime-safety", "Run the runtime safety tests"),
         .test_index = 0,
         .test_filter = test_filter,
         .modes = modes,
@@ -514,7 +514,7 @@ pub fn addPkgTests(
     is_darling_enabled: bool,
     glibc_dir: ?[]const u8,
 ) *build.Step {
-    const step = b.step(b.fmt("test-{s}", .{name}), desc);
+    const step = b.stepDeprecated(b.fmt("test-{s}", .{name}), desc);
 
     for (test_targets) |test_target| {
         if (skip_non_native and !test_target.target.isNative())
