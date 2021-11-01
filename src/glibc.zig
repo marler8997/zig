@@ -57,6 +57,31 @@ pub const LoadMetaDataError = error{
     OutOfMemory,
 };
 
+const max_txt_size = 500 * 1024; // Bigger than this and something is definitely borked.
+
+fn decompressMetaDataFile(gpa: *std.mem.Allocator, content_allocator: *std.mem.Allocator, glibc_dir: std.fs.Dir, filename: []const u8) LoadMetaDataError![]u8 {
+    const file = glibc_dir.openFile(filename, .{}) catch |err| {
+        std.log.err("failed to open {s}: {s}", .{filename, @errorName(err)});
+        return error.ZigInstallationCorrupt;
+    };
+    defer file.close();
+    var stream = std.compress.gzip.gzipStream(gpa, file.reader()) catch |err| switch (err) {
+        error.OutOfMemory => return error.OutOfMemory,
+        else => {
+            std.log.err("failed to decompress {s}: {s}", .{filename, @errorName(err)});
+            return error.ZigInstallationCorrupt;
+        },
+    };
+    defer stream.deinit();
+    return stream.reader().readAllAlloc(content_allocator, max_txt_size) catch |err| switch (err) {
+        error.OutOfMemory => return error.OutOfMemory,
+        else => {
+            std.log.err("failed to decompress {s}: {s}", .{filename, @errorName(err)});
+            return error.ZigInstallationCorrupt;
+        },
+    };
+}
+
 /// This function will emit a log error when there is a problem with the zig installation and then return
 /// `error.ZigInstallationCorrupt`.
 pub fn loadMetaData(gpa: *Allocator, zig_lib_dir: std.fs.Dir) LoadMetaDataError!*ABI {
@@ -78,7 +103,6 @@ pub fn loadMetaData(gpa: *Allocator, zig_lib_dir: std.fs.Dir) LoadMetaDataError!
     };
     defer glibc_dir.close();
 
-    const max_txt_size = 500 * 1024; // Bigger than this and something is definitely borked.
     const vers_txt_contents = glibc_dir.readFileAlloc(gpa, "vers.txt", max_txt_size) catch |err| switch (err) {
         error.OutOfMemory => return error.OutOfMemory,
         else => {
@@ -89,21 +113,9 @@ pub fn loadMetaData(gpa: *Allocator, zig_lib_dir: std.fs.Dir) LoadMetaDataError!
     defer gpa.free(vers_txt_contents);
 
     // Arena allocated because the result contains references to function names.
-    const fns_txt_contents = glibc_dir.readFileAlloc(arena, "fns.txt", max_txt_size) catch |err| switch (err) {
-        error.OutOfMemory => return error.OutOfMemory,
-        else => {
-            std.log.err("unable to read fns.txt: {s}", .{@errorName(err)});
-            return error.ZigInstallationCorrupt;
-        },
-    };
+    const fns_txt_contents = try decompressMetaDataFile(gpa, arena, glibc_dir, "fns.txt.gz");
 
-    const abi_txt_contents = glibc_dir.readFileAlloc(gpa, "abi.txt", max_txt_size) catch |err| switch (err) {
-        error.OutOfMemory => return error.OutOfMemory,
-        else => {
-            std.log.err("unable to read abi.txt: {s}", .{@errorName(err)});
-            return error.ZigInstallationCorrupt;
-        },
-    };
+    const abi_txt_contents = try decompressMetaDataFile(gpa, gpa, glibc_dir, "abi.txt.gz");
     defer gpa.free(abi_txt_contents);
 
     {
