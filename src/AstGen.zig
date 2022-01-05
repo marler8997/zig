@@ -2469,14 +2469,14 @@ fn checkUsed(
             .local_val => {
                 const s = scope.cast(Scope.LocalVal).?;
                 if (!s.used) {
-                    try astgen.appendErrorTok(s.token_src, "unused {s}", .{@tagName(s.id_cat)});
+                    try astgen.appendWarnTok(s.token_src, "unused {s}", .{@tagName(s.id_cat)});
                 }
                 scope = s.parent;
             },
             .local_ptr => {
                 const s = scope.cast(Scope.LocalPtr).?;
                 if (!s.used) {
-                    try astgen.appendErrorTok(s.token_src, "unused {s}", .{@tagName(s.id_cat)});
+                    try astgen.appendWarnTok(s.token_src, "unused {s}", .{@tagName(s.id_cat)});
                 }
                 scope = s.parent;
             },
@@ -8584,6 +8584,17 @@ fn appendErrorTok(
     args: anytype,
 ) !void {
     try astgen.appendErrorTokNotes(token, format, args, &[0]u32{});
+}
+
+fn appendWarnTok(
+    astgen: *AstGen,
+    token: Ast.TokenIndex,
+    comptime format: []const u8,
+    args: anytype,
+) !void {
+    // for now we'll just log the warning
+    //try astgen.appendWarnTokNotes(token, format, args, &[0]u32{});
+    std.log.warn(format, args);
 }
 
 fn failTokNotes(

@@ -6,6 +6,7 @@ test {
     _ = @import("behavior/bugs/2346.zig");
     _ = @import("behavior/bugs/3586.zig");
     _ = @import("behavior/slice_sentinel_comptime.zig");
+    _ = @import("behavior/sloppy.zig");
 
     if (!builtin.zig_is_stage2 or builtin.stage2_arch != .x86_64) {
         // Tests that pass for stage1, llvm backend, C backend, wasm backend, and arm backend.
