@@ -281,22 +281,53 @@ test "expectApproxEqRel" {
 /// equal, prints diagnostics to stderr to show exactly how they are not equal,
 /// then aborts.
 /// If your inputs are UTF-8 encoded strings, consider calling `expectEqualStrings` instead.
-pub fn expectEqualSlices(comptime T: type, expected: []const T, actual: []const T) !void {
+pub fn expectEqualSlices(comptime T: type, expected: anytype, actual: @TypeOf(expected)) !void {
+    const Slice = @TypeOf(actual);
+    const optional_sentinel = blk: {
+        switch (@typeInfo(Slice)) {
+            .Pointer => |info| switch (info.size) {
+                .Many => {
+                    const sentinel = info.sentinel orelse
+                        @compileError("Many pointer " ++ @typeName(Slice) ++ " requires a sentinel to compare equality");
+                    break :blk sentinel;
+                },
+                .Slice => break :blk info.sentinel,
+                else => {},
+            },
+        }
+        @compileError("expectEqualSlices does not support " ++ @typeName(Slice));
+    };
+
     // TODO better printing of the difference
     // If the arrays are small enough we could print the whole thing
     // If the child type is u8 and no weird bytes, we could print it as strings
     // Even for the length difference, it would be useful to see the values of the slices probably.
-    if (expected.len != actual.len) {
-        std.debug.print("slice lengths differ. expected {d}, found {d}\n", .{ expected.len, actual.len });
+    const expected_len = std.mem.len(expected);
+    const actual_len = std.mem.len(actual);
+    if (expected_len != actual_len) {
+        std.debug.print("slice lengths differ. expected {d}, found {d}\n", .{ expected_len, actual_len });
         return error.TestExpectedEqual;
     }
     var i: usize = 0;
-    while (i < expected.len) : (i += 1) {
+    while (i < expected_len) : (i += 1) {
         if (!std.meta.eql(expected[i], actual[i])) {
             std.debug.print("index {} incorrect. expected {any}, found {any}\n", .{ i, expected[i], actual[i] });
             return error.TestExpectedEqual;
         }
     }
+
+    if (optional_sentinel) |sentinel| {
+        if (expected[expected_len] != sentinel) {
+            std.debug.print("incorrect sentinel value.  expected {any}, found {any}\n", .{ sentinel, expected[expected_len] });
+            return error.TestExpectedEqual;
+        }
+    }
+}
+
+test "expectEqualSlices" {
+    expectEqualSlices(@as([]u8, &[_]u8 { 45, 89, 230 }), &[_]u8 { 45, 89, 230 });
+    expectEqualSlices(@as([:10]u8, &[_:10]u8 { 45, 89, 230 }), &[_:10]u8 { 45, 89, 230 });
+    expectEqualSlices(@as([*:10]u8, &[_:10]u8 { 45, 89, 230 }), &[_:10]u8 { 45, 89, 230 });
 }
 
 /// This function is intended to be used only in tests. When `ok` is false, the test fails.
