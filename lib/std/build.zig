@@ -2141,6 +2141,12 @@ pub const LibExeObjStep = struct {
         self.linkLibraryOrObject(obj);
     }
 
+    pub fn addPrecompiledHeader(self: *LibExeObjStep, pch: *LibExeObjStep) void {
+        assert(pch.kind == .obj);
+        // TODO: linkLibraryOrObject adds include dirs, should we do this for pch headers?
+        self.linkLibraryOrObject(pch);
+    }
+
     /// TODO deprecated, use `addSystemIncludePath`.
     pub fn addSystemIncludeDir(self: *LibExeObjStep, path: []const u8) void {
         self.addSystemIncludePath(path);

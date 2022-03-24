@@ -78,6 +78,7 @@ pub fn addCases(cases: *tests.StandaloneContext) void {
         .build_modes = true,
         .requires_macos_sdk = true,
     });
+    cases.addBuildFile("test/standalone/pch/build.zig", .{});
 
     // Ensure the development tools are buildable.
     cases.add("tools/gen_spirv_spec.zig");
