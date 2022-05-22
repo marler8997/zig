@@ -21,11 +21,11 @@ test "peer type resolution: ?T and T" {
     if (builtin.zig_backend == .stage2_aarch64) return error.SkipZigTest;
     if (builtin.zig_backend == .stage2_arm) return error.SkipZigTest;
 
-    try expect(peerTypeTAndOptionalT(true, false).? == 0);
-    try expect(peerTypeTAndOptionalT(false, false).? == 3);
+    try expect(peerTypeTAndOptionalT(true, false) orelse unreachable == 0);
+    try expect(peerTypeTAndOptionalT(false, false) orelse unreachable == 3);
     comptime {
-        try expect(peerTypeTAndOptionalT(true, false).? == 0);
-        try expect(peerTypeTAndOptionalT(false, false).? == 3);
+        try expect(peerTypeTAndOptionalT(true, false) orelse unreachable == 0);
+        try expect(peerTypeTAndOptionalT(false, false) orelse unreachable == 3);
     }
 }
 fn peerTypeTAndOptionalT(c: bool, b: bool) ?usize {
@@ -181,13 +181,13 @@ test "implicitly cast indirect pointer to maybe-indirect pointer" {
             return p.*.x;
         }
         fn maybeConstConst(p: ?*const *const Self) u8 {
-            return p.?.*.x;
+            return p orelse unreachable.*.x;
         }
         fn constConstConst(p: *const *const *const Self) u8 {
             return p.*.*.x;
         }
         fn maybeConstConstConst(p: ?*const *const *const Self) u8 {
-            return p.?.*.*.x;
+            return p orelse unreachable.*.*.x;
         }
     };
     const s = S{ .x = 42 };
@@ -303,10 +303,10 @@ test "peer result null and comptime_int" {
 
     try expect(S.blah(0) == null);
     comptime try expect(S.blah(0) == null);
-    try expect(S.blah(10).? == 1);
-    comptime try expect(S.blah(10).? == 1);
-    try expect(S.blah(-10).? == -1);
-    comptime try expect(S.blah(-10).? == -1);
+    try expect(S.blah(10) orelse unreachable == 1);
+    comptime try expect(S.blah(10) orelse unreachable == 1);
+    try expect(S.blah(-10) orelse unreachable == -1);
+    comptime try expect(S.blah(-10) orelse unreachable == -1);
 }
 
 test "*const ?[*]const T to [*c]const [*c]const T" {
@@ -355,7 +355,7 @@ test "return u8 coercing into ?u32 return type" {
 
     const S = struct {
         fn doTheTest() !void {
-            try expect(foo(123).? == 123);
+            try expect(foo(123) orelse unreachable == 123);
         }
         fn foo(arg: u8) ?u32 {
             return arg;
@@ -367,7 +367,7 @@ test "return u8 coercing into ?u32 return type" {
 
 test "cast from ?[*]T to ??[*]T" {
     const a: ??[*]u8 = @as(?[*]u8, null);
-    try expect(a != null and a.? == null);
+    try expect(a != null and a orelse unreachable == null);
 }
 
 test "peer type unsigned int to signed" {
@@ -437,7 +437,7 @@ const A = struct {
 fn castToOptionalTypeError(z: i32) !void {
     const x = @as(i32, 1);
     const y: anyerror!?i32 = x;
-    try expect((try y).? == 1);
+    try expect((try y) orelse unreachable == 1);
 
     const f = z;
     const g: anyerror!?i32 = f;
@@ -445,7 +445,7 @@ fn castToOptionalTypeError(z: i32) !void {
 
     const a = A{ .a = z };
     const b: anyerror!?A = a;
-    try expect((b catch unreachable).?.a == 1);
+    try expect((b catch unreachable) orelse unreachable.a == 1);
 }
 
 test "implicitly cast from [0]T to anyerror![]T" {
@@ -583,7 +583,7 @@ test "cast *[1][*]const u8 to [*]const ?[*]const u8" {
 
     const window_name = [1][*]const u8{"window name"};
     const x: [*]const ?[*]const u8 = &window_name;
-    try expect(mem.eql(u8, std.mem.sliceTo(@ptrCast([*:0]const u8, x[0].?), 0), "window name"));
+    try expect(mem.eql(u8, std.mem.sliceTo(@ptrCast([*:0]const u8, x[0] orelse unreachable), 0), "window name"));
 }
 
 test "vector casts" {
@@ -693,9 +693,9 @@ test "peer type resolution: error set supersets" {
         const ty = @TypeOf(a, b);
         const error_set_info = @typeInfo(ty);
         try expect(error_set_info == .ErrorSet);
-        try expect(error_set_info.ErrorSet.?.len == 2);
-        try expect(mem.eql(u8, error_set_info.ErrorSet.?[0].name, "One"));
-        try expect(mem.eql(u8, error_set_info.ErrorSet.?[1].name, "Two"));
+        try expect(error_set_info.ErrorSet orelse unreachable.len == 2);
+        try expect(mem.eql(u8, error_set_info.ErrorSet orelse unreachable[0].name, "One"));
+        try expect(mem.eql(u8, error_set_info.ErrorSet orelse unreachable[1].name, "Two"));
     }
 
     // B superset of A
@@ -703,9 +703,9 @@ test "peer type resolution: error set supersets" {
         const ty = @TypeOf(b, a);
         const error_set_info = @typeInfo(ty);
         try expect(error_set_info == .ErrorSet);
-        try expect(error_set_info.ErrorSet.?.len == 2);
-        try expect(mem.eql(u8, error_set_info.ErrorSet.?[0].name, "One"));
-        try expect(mem.eql(u8, error_set_info.ErrorSet.?[1].name, "Two"));
+        try expect(error_set_info.ErrorSet orelse unreachable.len == 2);
+        try expect(mem.eql(u8, error_set_info.ErrorSet orelse unreachable[0].name, "One"));
+        try expect(mem.eql(u8, error_set_info.ErrorSet orelse unreachable[1].name, "Two"));
     }
 }
 
@@ -726,20 +726,20 @@ test "peer type resolution: disjoint error sets" {
         const ty = @TypeOf(a, b);
         const error_set_info = @typeInfo(ty);
         try expect(error_set_info == .ErrorSet);
-        try expect(error_set_info.ErrorSet.?.len == 3);
-        try expect(mem.eql(u8, error_set_info.ErrorSet.?[0].name, "One"));
-        try expect(mem.eql(u8, error_set_info.ErrorSet.?[1].name, "Three"));
-        try expect(mem.eql(u8, error_set_info.ErrorSet.?[2].name, "Two"));
+        try expect(error_set_info.ErrorSet orelse unreachable.len == 3);
+        try expect(mem.eql(u8, error_set_info.ErrorSet orelse unreachable[0].name, "One"));
+        try expect(mem.eql(u8, error_set_info.ErrorSet orelse unreachable[1].name, "Three"));
+        try expect(mem.eql(u8, error_set_info.ErrorSet orelse unreachable[2].name, "Two"));
     }
 
     {
         const ty = @TypeOf(b, a);
         const error_set_info = @typeInfo(ty);
         try expect(error_set_info == .ErrorSet);
-        try expect(error_set_info.ErrorSet.?.len == 3);
-        try expect(mem.eql(u8, error_set_info.ErrorSet.?[0].name, "One"));
-        try expect(mem.eql(u8, error_set_info.ErrorSet.?[1].name, "Three"));
-        try expect(mem.eql(u8, error_set_info.ErrorSet.?[2].name, "Two"));
+        try expect(error_set_info.ErrorSet orelse unreachable.len == 3);
+        try expect(mem.eql(u8, error_set_info.ErrorSet orelse unreachable[0].name, "One"));
+        try expect(mem.eql(u8, error_set_info.ErrorSet orelse unreachable[1].name, "Three"));
+        try expect(mem.eql(u8, error_set_info.ErrorSet orelse unreachable[2].name, "Two"));
     }
 }
 
@@ -762,10 +762,10 @@ test "peer type resolution: error union and error set" {
         try expect(info == .ErrorUnion);
 
         const error_set_info = @typeInfo(info.ErrorUnion.error_set);
-        try expect(error_set_info.ErrorSet.?.len == 3);
-        try expect(mem.eql(u8, error_set_info.ErrorSet.?[0].name, "One"));
-        try expect(mem.eql(u8, error_set_info.ErrorSet.?[1].name, "Three"));
-        try expect(mem.eql(u8, error_set_info.ErrorSet.?[2].name, "Two"));
+        try expect(error_set_info.ErrorSet orelse unreachable.len == 3);
+        try expect(mem.eql(u8, error_set_info.ErrorSet orelse unreachable[0].name, "One"));
+        try expect(mem.eql(u8, error_set_info.ErrorSet orelse unreachable[1].name, "Three"));
+        try expect(mem.eql(u8, error_set_info.ErrorSet orelse unreachable[2].name, "Two"));
     }
 
     {
@@ -774,10 +774,10 @@ test "peer type resolution: error union and error set" {
         try expect(info == .ErrorUnion);
 
         const error_set_info = @typeInfo(info.ErrorUnion.error_set);
-        try expect(error_set_info.ErrorSet.?.len == 3);
-        try expect(mem.eql(u8, error_set_info.ErrorSet.?[0].name, "One"));
-        try expect(mem.eql(u8, error_set_info.ErrorSet.?[1].name, "Three"));
-        try expect(mem.eql(u8, error_set_info.ErrorSet.?[2].name, "Two"));
+        try expect(error_set_info.ErrorSet orelse unreachable.len == 3);
+        try expect(mem.eql(u8, error_set_info.ErrorSet orelse unreachable[0].name, "One"));
+        try expect(mem.eql(u8, error_set_info.ErrorSet orelse unreachable[1].name, "Three"));
+        try expect(mem.eql(u8, error_set_info.ErrorSet orelse unreachable[2].name, "Two"));
     }
 }
 
@@ -796,9 +796,9 @@ test "peer type resolution: error union after non-error" {
         try expect(info.ErrorUnion.payload == u32);
 
         const error_set_info = @typeInfo(info.ErrorUnion.error_set);
-        try expect(error_set_info.ErrorSet.?.len == 2);
-        try expect(mem.eql(u8, error_set_info.ErrorSet.?[0].name, "One"));
-        try expect(mem.eql(u8, error_set_info.ErrorSet.?[1].name, "Two"));
+        try expect(error_set_info.ErrorSet orelse unreachable.len == 2);
+        try expect(mem.eql(u8, error_set_info.ErrorSet orelse unreachable[0].name, "One"));
+        try expect(mem.eql(u8, error_set_info.ErrorSet orelse unreachable[1].name, "Two"));
     }
 
     {
@@ -808,9 +808,9 @@ test "peer type resolution: error union after non-error" {
         try expect(info.ErrorUnion.payload == u32);
 
         const error_set_info = @typeInfo(info.ErrorUnion.error_set);
-        try expect(error_set_info.ErrorSet.?.len == 2);
-        try expect(mem.eql(u8, error_set_info.ErrorSet.?[0].name, "One"));
-        try expect(mem.eql(u8, error_set_info.ErrorSet.?[1].name, "Two"));
+        try expect(error_set_info.ErrorSet orelse unreachable.len == 2);
+        try expect(mem.eql(u8, error_set_info.ErrorSet orelse unreachable[0].name, "One"));
+        try expect(mem.eql(u8, error_set_info.ErrorSet orelse unreachable[1].name, "Two"));
     }
 }
 
@@ -1109,7 +1109,7 @@ test "implicit cast from [*]T to ?*anyopaque" {
 fn incrementVoidPtrArray(array: ?*anyopaque, len: usize) void {
     var n: usize = 0;
     while (n < len) : (n += 1) {
-        @ptrCast([*]u8, array.?)[n] += 1;
+        @ptrCast([*]u8, array orelse unreachable)[n] += 1;
     }
 }
 
@@ -1142,7 +1142,7 @@ test "implicit ptr to *anyopaque" {
     var b: *u32 = @ptrCast(*u32, ptr);
     try expect(b.* == 1);
     var ptr2: ?*align(@alignOf(u32)) anyopaque = &a;
-    var c: *u32 = @ptrCast(*u32, ptr2.?);
+    var c: *u32 = @ptrCast(*u32, ptr2 orelse unreachable);
     try expect(c.* == 1);
 }
 
@@ -1186,8 +1186,8 @@ test "implicitly cast from [N]T to ?[]const T" {
     if (builtin.zig_backend == .stage2_c) return error.SkipZigTest; // TODO
     if (builtin.zig_backend == .stage2_arm) return error.SkipZigTest; // TODO
 
-    try expect(mem.eql(u8, castToOptionalSlice().?, "hi"));
-    comptime try expect(mem.eql(u8, castToOptionalSlice().?, "hi"));
+    try expect(mem.eql(u8, castToOptionalSlice() orelse unreachable, "hi"));
+    comptime try expect(mem.eql(u8, castToOptionalSlice() orelse unreachable, "hi"));
 }
 
 fn castToOptionalSlice() ?[]const u8 {
@@ -1227,10 +1227,10 @@ test "implicit cast from *[N]T to ?[*]T" {
     var y: [4]u16 = [4]u16{ 0, 1, 2, 3 };
 
     x = &y;
-    try expect(std.mem.eql(u16, x.?[0..4], y[0..4]));
-    x.?[0] = 8;
+    try expect(std.mem.eql(u16, x orelse unreachable[0..4], y[0..4]));
+    x orelse unreachable[0] = 8;
     y[3] = 6;
-    try expect(std.mem.eql(u16, x.?[0..4], y[0..4]));
+    try expect(std.mem.eql(u16, x orelse unreachable[0..4], y[0..4]));
 }
 
 test "implicit cast from *T to ?*anyopaque" {
@@ -1244,7 +1244,7 @@ test "implicit cast from *T to ?*anyopaque" {
 }
 
 fn incrementVoidPtrValue(value: ?*anyopaque) void {
-    @ptrCast(*u8, value.?).* += 1;
+    @ptrCast(*u8, value orelse unreachable).* += 1;
 }
 
 test "implicit cast *[0]T to E![]const u8" {
@@ -1277,7 +1277,7 @@ test "*const [N]null u8 to ?[]const u8" {
         fn doTheTest() !void {
             var a = "Hello";
             var b: ?[]const u8 = a;
-            try expect(mem.eql(u8, b.?, "Hello"));
+            try expect(mem.eql(u8, b orelse unreachable, "Hello"));
         }
     };
     try S.doTheTest();
@@ -1309,7 +1309,7 @@ test "assignment to optional pointer result loc" {
     if (builtin.zig_backend == .stage2_arm) return error.SkipZigTest; // TODO
 
     var foo: struct { ptr: ?*anyopaque } = .{ .ptr = &global_struct };
-    try expect(foo.ptr.? == @ptrCast(*anyopaque, &global_struct));
+    try expect(foo.ptr orelse unreachable == @ptrCast(*anyopaque, &global_struct));
 }
 
 test "cast between *[N]void and []void" {
@@ -1381,7 +1381,7 @@ test "peer type resolution: unreachable, null, slice" {
                 1 => word,
                 else => unreachable,
             };
-            try expect(mem.eql(u8, result.?, "hi"));
+            try expect(mem.eql(u8, result orelse unreachable, "hi"));
         }
     };
     try S.doTheTest(1, "hi");

@@ -64,10 +64,10 @@ const BinaryElfOutput = struct {
 
             var section_counter: usize = 0;
             while (section_counter < elf_hdr.shstrndx) : (section_counter += 1) {
-                _ = (try section_headers.next()).?;
+                _ = (try section_headers.next()) orelse unreachable;
             }
 
-            const shstrtab_shdr = (try section_headers.next()).?;
+            const shstrtab_shdr = (try section_headers.next()) orelse unreachable;
 
             const buffer = try allocator.alloc(u8, shstrtab_shdr.sh_size);
             errdefer allocator.free(buffer);
@@ -313,7 +313,7 @@ const HexWriter = struct {
 
     fn writeDataRow(self: *HexWriter, address: u32, data: []const u8) File.WriteError!void {
         const record = Record.Data(address, data);
-        if (address > 0xFFFF and (self.prev_addr == null or record.address != self.prev_addr.?)) {
+        if (address > 0xFFFF and (self.prev_addr == null or record.address != self.prev_addr orelse unreachable)) {
             try Record.Address(address).write(self.out_file);
         }
         try record.write(self.out_file);

@@ -94,7 +94,7 @@ pub fn Blake2s(comptime out_bits: usize) type {
             }
             if (key_len > 0) {
                 mem.set(u8, d.buf[key_len..], 0);
-                d.update(options.key.?);
+                d.update(options.key orelse unreachable);
                 d.buf_len = 64;
             }
             return d;
@@ -529,7 +529,7 @@ pub fn Blake2b(comptime out_bits: usize) type {
             }
             if (key_len > 0) {
                 mem.set(u8, d.buf[key_len..], 0);
-                d.update(options.key.?);
+                d.update(options.key orelse unreachable);
                 d.buf_len = 128;
             }
             return d;

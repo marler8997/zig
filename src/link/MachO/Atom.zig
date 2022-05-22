@@ -286,7 +286,7 @@ pub fn parseRelocs(self: *Atom, relocs: []macho.relocation_info, context: RelocC
             assert(subtractor == null);
             const sym = context.object.symtab.items[rel.r_symbolnum];
             if (sym.sect() and !sym.ext()) {
-                subtractor = context.object.symbol_mapping.get(rel.r_symbolnum).?;
+                subtractor = context.object.symbol_mapping.get(rel.r_symbolnum) orelse unreachable;
             } else {
                 const sym_name = context.object.getString(sym.n_strx);
                 const n_strx = context.macho_file.strtab_dir.getKeyAdapted(
@@ -294,8 +294,8 @@ pub fn parseRelocs(self: *Atom, relocs: []macho.relocation_info, context: RelocC
                     StringIndexAdapter{
                         .bytes = &context.macho_file.strtab,
                     },
-                ).?;
-                const resolv = context.macho_file.symbol_resolver.get(n_strx).?;
+                ) orelse unreachable;
+                const resolv = context.macho_file.symbol_resolver.get(n_strx) orelse unreachable;
                 assert(resolv.where == .global);
                 subtractor = resolv.local_sym_index;
             }
@@ -332,7 +332,7 @@ pub fn parseRelocs(self: *Atom, relocs: []macho.relocation_info, context: RelocC
             if (rel.r_extern == 0) {
                 const sect_id = @intCast(u16, rel.r_symbolnum - 1);
                 const local_sym_index = context.object.sections_as_symbols.get(sect_id) orelse blk: {
-                    const seg = context.object.load_commands.items[context.object.segment_cmd_index.?].segment;
+                    const seg = context.object.load_commands.items[context.object.segment_cmd_index orelse unreachable].segment;
                     const sect = seg.sections.items[sect_id];
                     const match = (try context.macho_file.getMatchingSection(sect)) orelse
                         unreachable;
@@ -340,7 +340,7 @@ pub fn parseRelocs(self: *Atom, relocs: []macho.relocation_info, context: RelocC
                     try context.macho_file.locals.append(context.allocator, .{
                         .n_strx = 0,
                         .n_type = macho.N_SECT,
-                        .n_sect = @intCast(u8, context.macho_file.section_ordinals.getIndex(match).? + 1),
+                        .n_sect = @intCast(u8, context.macho_file.section_ordinals.getIndex(match) orelse unreachable + 1),
                         .n_desc = 0,
                         .n_value = 0,
                     });
@@ -388,7 +388,7 @@ pub fn parseRelocs(self: *Atom, relocs: []macho.relocation_info, context: RelocC
                         else
                             mem.readIntLittle(i32, self.code.items[offset..][0..4]);
                         if (rel.r_extern == 0) {
-                            const seg = context.object.load_commands.items[context.object.segment_cmd_index.?].segment;
+                            const seg = context.object.load_commands.items[context.object.segment_cmd_index orelse unreachable].segment;
                             const target_sect_base_addr = seg.sections.items[rel.r_symbolnum - 1].addr;
                             addend -= @intCast(i64, target_sect_base_addr);
                         }
@@ -423,7 +423,7 @@ pub fn parseRelocs(self: *Atom, relocs: []macho.relocation_info, context: RelocC
                         else
                             mem.readIntLittle(i32, self.code.items[offset..][0..4]);
                         if (rel.r_extern == 0) {
-                            const seg = context.object.load_commands.items[context.object.segment_cmd_index.?].segment;
+                            const seg = context.object.load_commands.items[context.object.segment_cmd_index orelse unreachable].segment;
                             const target_sect_base_addr = seg.sections.items[rel.r_symbolnum - 1].addr;
                             addend -= @intCast(i64, target_sect_base_addr);
                         }
@@ -445,7 +445,7 @@ pub fn parseRelocs(self: *Atom, relocs: []macho.relocation_info, context: RelocC
                         if (rel.r_extern == 0) {
                             // Note for the future self: when r_extern == 0, we should subtract correction from the
                             // addend.
-                            const seg = context.object.load_commands.items[context.object.segment_cmd_index.?].segment;
+                            const seg = context.object.load_commands.items[context.object.segment_cmd_index orelse unreachable].segment;
                             const target_sect_base_addr = seg.sections.items[rel.r_symbolnum - 1].addr;
                             addend += @intCast(i64, context.base_addr + offset + 4) -
                                 @intCast(i64, target_sect_base_addr);
@@ -546,7 +546,7 @@ fn addTlvPtrEntry(target: Relocation.Target, context: RelocContext) !void {
         .segname = MachO.makeStaticString("__DATA"),
         .sectname = MachO.makeStaticString("__thread_ptrs"),
         .flags = macho.S_THREAD_LOCAL_VARIABLE_POINTERS,
-    })).?;
+    })) orelse unreachable;
     if (!context.object.start_atoms.contains(match)) {
         try context.object.start_atoms.putNoClobber(context.allocator, match, atom);
     }
@@ -567,8 +567,8 @@ fn addGotEntry(target: Relocation.Target, context: RelocContext) !void {
     context.macho_file.got_entries.items[index].atom = atom;
 
     const match = MachO.MatchingSection{
-        .seg = context.macho_file.data_const_segment_cmd_index.?,
-        .sect = context.macho_file.got_section_index.?,
+        .seg = context.macho_file.data_const_segment_cmd_index orelse unreachable,
+        .sect = context.macho_file.got_section_index orelse unreachable,
     };
     if (!context.object.start_atoms.contains(match)) {
         try context.object.start_atoms.putNoClobber(context.allocator, match, atom);
@@ -588,7 +588,7 @@ fn addStub(target: Relocation.Target, context: RelocContext) !void {
     // If the symbol has been resolved as defined globally elsewhere (in a different translation unit),
     // then skip creating stub entry.
     // TODO Is this the correct for the incremental?
-    if (context.macho_file.symbol_resolver.get(target.global).?.where == .global) return;
+    if (context.macho_file.symbol_resolver.get(target.global) orelse unreachable.where == .global) return;
 
     const stub_index = try context.macho_file.allocateStubEntry(target.global);
 
@@ -596,8 +596,8 @@ fn addStub(target: Relocation.Target, context: RelocContext) !void {
     const stub_helper_atom = atom: {
         const atom = try context.macho_file.createStubHelperAtom();
         const match = MachO.MatchingSection{
-            .seg = context.macho_file.text_segment_cmd_index.?,
-            .sect = context.macho_file.stub_helper_section_index.?,
+            .seg = context.macho_file.text_segment_cmd_index orelse unreachable,
+            .sect = context.macho_file.stub_helper_section_index orelse unreachable,
         };
         if (!context.object.start_atoms.contains(match)) {
             try context.object.start_atoms.putNoClobber(context.allocator, match, atom);
@@ -617,8 +617,8 @@ fn addStub(target: Relocation.Target, context: RelocContext) !void {
             target.global,
         );
         const match = MachO.MatchingSection{
-            .seg = context.macho_file.data_segment_cmd_index.?,
-            .sect = context.macho_file.la_symbol_ptr_section_index.?,
+            .seg = context.macho_file.data_segment_cmd_index orelse unreachable,
+            .sect = context.macho_file.la_symbol_ptr_section_index orelse unreachable,
         };
         if (!context.object.start_atoms.contains(match)) {
             try context.object.start_atoms.putNoClobber(context.allocator, match, atom);
@@ -634,8 +634,8 @@ fn addStub(target: Relocation.Target, context: RelocContext) !void {
     };
     const atom = try context.macho_file.createStubAtom(laptr_atom.local_sym_index);
     const match = MachO.MatchingSection{
-        .seg = context.macho_file.text_segment_cmd_index.?,
-        .sect = context.macho_file.stubs_section_index.?,
+        .seg = context.macho_file.text_segment_cmd_index orelse unreachable,
+        .sect = context.macho_file.stubs_section_index orelse unreachable,
     };
     if (!context.object.start_atoms.contains(match)) {
         try context.object.start_atoms.putNoClobber(context.allocator, match, atom);
@@ -710,7 +710,7 @@ pub fn resolveRelocs(self: *Atom, macho_file: *MachO) !void {
                         // defined TLV template init section in the following order:
                         // * wrt to __thread_data if defined, then
                         // * wrt to __thread_bss
-                        const seg = macho_file.load_commands.items[macho_file.data_segment_cmd_index.?].segment;
+                        const seg = macho_file.load_commands.items[macho_file.data_segment_cmd_index orelse unreachable].segment;
                         const base_address = inner: {
                             if (macho_file.tlv_data_section_index) |i| {
                                 break :inner seg.sections.items[i].addr;
@@ -732,7 +732,7 @@ pub fn resolveRelocs(self: *Atom, macho_file: *MachO) !void {
                     // branching instructions. If it is not possible, then the best course of action is to
                     // resurrect the former approach of defering creating synthethic atoms in __got and __la_symbol_ptr
                     // sections until we resolve the relocations.
-                    const resolv = macho_file.symbol_resolver.get(n_strx).?;
+                    const resolv = macho_file.symbol_resolver.get(n_strx) orelse unreachable;
                     switch (resolv.where) {
                         .global => break :blk macho_file.globals.items[resolv.where_index].n_value,
                         .undef => {

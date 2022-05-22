@@ -25,5 +25,5 @@ test "fixed" {
     if (builtin.zig_backend == .stage2_c) return error.SkipZigTest; // TODO
 
     default_foo = get_foo() catch null; // This Line
-    try std.testing.expect(!default_foo.?.free);
+    try std.testing.expect(!default_foo orelse unreachable.free);
 }

@@ -203,7 +203,7 @@ pub fn generateSymbol(
         },
         .Array => switch (typed_value.val.tag()) {
             .bytes => {
-                const payload = typed_value.val.castTag(.bytes).?;
+                const payload = typed_value.val.castTag(.bytes) orelse unreachable;
                 const len = @intCast(usize, typed_value.ty.arrayLenIncludingSentinel());
                 // The bytes payload already includes the sentinel, if any
                 try code.ensureUnusedCapacity(len);
@@ -211,7 +211,7 @@ pub fn generateSymbol(
                 return Result{ .appended = {} };
             },
             .aggregate => {
-                const elem_vals = typed_value.val.castTag(.aggregate).?.data;
+                const elem_vals = typed_value.val.castTag(.aggregate) orelse unreachable.data;
                 const elem_ty = typed_value.ty.elemType();
                 const len = @intCast(usize, typed_value.ty.arrayLenIncludingSentinel());
                 for (elem_vals[0..len]) |elem_val| {
@@ -229,7 +229,7 @@ pub fn generateSymbol(
                 return Result{ .appended = {} };
             },
             .repeated => {
-                const array = typed_value.val.castTag(.repeated).?.data;
+                const array = typed_value.val.castTag(.repeated) orelse unreachable.data;
                 const elem_ty = typed_value.ty.childType();
                 const sentinel = typed_value.ty.sentinel();
                 const len = typed_value.ty.arrayLen();
@@ -265,7 +265,7 @@ pub fn generateSymbol(
             },
             .empty_array_sentinel => {
                 const elem_ty = typed_value.ty.childType();
-                const sentinel_val = typed_value.ty.sentinel().?;
+                const sentinel_val = typed_value.ty.sentinel() orelse unreachable;
                 switch (try generateSymbol(bin_file, src_loc, .{
                     .ty = elem_ty,
                     .val = sentinel_val,
@@ -303,15 +303,15 @@ pub fn generateSymbol(
                 return Result{ .appended = {} };
             },
             .variable => {
-                const decl = typed_value.val.castTag(.variable).?.data.owner_decl;
+                const decl = typed_value.val.castTag(.variable) orelse unreachable.data.owner_decl;
                 return lowerDeclRef(bin_file, src_loc, typed_value, decl, code, debug_output, reloc_info);
             },
             .decl_ref => {
-                const decl = typed_value.val.castTag(.decl_ref).?.data;
+                const decl = typed_value.val.castTag(.decl_ref) orelse unreachable.data;
                 return lowerDeclRef(bin_file, src_loc, typed_value, decl, code, debug_output, reloc_info);
             },
             .slice => {
-                const slice = typed_value.val.castTag(.slice).?.data;
+                const slice = typed_value.val.castTag(.slice) orelse unreachable.data;
 
                 // generate ptr
                 var buf: Type.SlicePtrFieldTypeBuffer = undefined;
@@ -342,13 +342,13 @@ pub fn generateSymbol(
                 return Result{ .appended = {} };
             },
             .field_ptr => {
-                const field_ptr = typed_value.val.castTag(.field_ptr).?.data;
+                const field_ptr = typed_value.val.castTag(.field_ptr) orelse unreachable.data;
                 const container_ptr = field_ptr.container_ptr;
 
                 switch (container_ptr.tag()) {
                     .decl_ref => {
-                        const decl_index = container_ptr.castTag(.decl_ref).?.data;
-                        const mod = bin_file.options.module.?;
+                        const decl_index = container_ptr.castTag(.decl_ref) orelse unreachable.data;
+                        const mod = bin_file.options.module orelse unreachable;
                         const decl = mod.declPtr(decl_index);
                         const addend = blk: {
                             switch (decl.ty.tag()) {
@@ -395,14 +395,14 @@ pub fn generateSymbol(
                 }
             },
             .elem_ptr => {
-                const elem_ptr = typed_value.val.castTag(.elem_ptr).?.data;
+                const elem_ptr = typed_value.val.castTag(.elem_ptr) orelse unreachable.data;
                 const elem_size = typed_value.ty.childType().abiSize(target);
                 const addend = @intCast(u32, elem_ptr.index * elem_size);
                 const array_ptr = elem_ptr.array_ptr;
 
                 switch (array_ptr.tag()) {
                     .decl_ref => {
-                        const decl_index = array_ptr.castTag(.decl_ref).?.data;
+                        const decl_index = array_ptr.castTag(.decl_ref) orelse unreachable.data;
                         return lowerDeclRef(bin_file, src_loc, typed_value, decl_index, code, debug_output, .{
                             .parent_atom_index = reloc_info.parent_atom_index,
                             .addend = (reloc_info.addend orelse 0) + addend,
@@ -537,7 +537,7 @@ pub fn generateSymbol(
             }
 
             const struct_begin = code.items.len;
-            const field_vals = typed_value.val.castTag(.aggregate).?.data;
+            const field_vals = typed_value.val.castTag(.aggregate) orelse unreachable.data;
             for (field_vals) |field_val, index| {
                 const field_ty = typed_value.ty.structFieldType(index);
                 if (!field_ty.hasRuntimeBits()) continue;
@@ -566,12 +566,12 @@ pub fn generateSymbol(
             return Result{ .appended = {} };
         },
         .Union => {
-            const union_obj = typed_value.val.castTag(.@"union").?.data;
+            const union_obj = typed_value.val.castTag(.@"union") orelse unreachable.data;
             const layout = typed_value.ty.unionGetLayout(target);
 
             if (layout.payload_size == 0) {
                 return generateSymbol(bin_file, src_loc, .{
-                    .ty = typed_value.ty.unionTagType().?,
+                    .ty = typed_value.ty.unionTagType() orelse unreachable,
                     .val = union_obj.tag,
                 }, code, debug_output, reloc_info);
             }
@@ -579,7 +579,7 @@ pub fn generateSymbol(
             // Check if we should store the tag first.
             if (layout.tag_align >= layout.payload_align) {
                 switch (try generateSymbol(bin_file, src_loc, .{
-                    .ty = typed_value.ty.unionTagType().?,
+                    .ty = typed_value.ty.unionTagType() orelse unreachable,
                     .val = union_obj.tag,
                 }, code, debug_output, reloc_info)) {
                     .appended => {},
@@ -590,9 +590,9 @@ pub fn generateSymbol(
                 }
             }
 
-            const union_ty = typed_value.ty.cast(Type.Payload.Union).?.data;
-            const mod = bin_file.options.module.?;
-            const field_index = union_ty.tag_ty.enumTagFieldIndex(union_obj.tag, mod).?;
+            const union_ty = typed_value.ty.cast(Type.Payload.Union) orelse unreachable.data;
+            const mod = bin_file.options.module orelse unreachable;
+            const field_index = union_ty.tag_ty.enumTagFieldIndex(union_obj.tag, mod) orelse unreachable;
             assert(union_ty.haveFieldTypes());
             const field_ty = union_ty.fields.values()[field_index].ty;
             if (!field_ty.hasRuntimeBits()) {
@@ -743,8 +743,8 @@ pub fn generateSymbol(
         .ErrorSet => {
             switch (typed_value.val.tag()) {
                 .@"error" => {
-                    const name = typed_value.val.getError().?;
-                    const kv = try bin_file.options.module.?.getErrorValue(name);
+                    const name = typed_value.val.getError() orelse unreachable;
+                    const kv = try bin_file.options.module orelse unreachable.getErrorValue(name);
                     try code.writer().writeInt(u32, kv.value, endian);
                 },
                 else => {
@@ -781,7 +781,7 @@ fn lowerDeclRef(
     reloc_info: RelocInfo,
 ) GenerateSymbolError!Result {
     const target = bin_file.options.target;
-    const module = bin_file.options.module.?;
+    const module = bin_file.options.module orelse unreachable;
     if (typed_value.ty.isSlice()) {
         // generate ptr
         var buf: Type.SlicePtrFieldTypeBuffer = undefined;

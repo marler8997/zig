@@ -731,7 +731,7 @@ fn Parser(comptime ReaderType: type) type {
                         try reader.readNoEof(name);
                         symbol.name = try self.object.string_table.put(gpa, name);
                     } else {
-                        symbol.name = maybe_import.?.name;
+                        symbol.name = maybe_import orelse unreachable.name;
                     }
                 },
             }

@@ -36,7 +36,7 @@ test {
 
     {
         const dir_path = try std.fs.path.join(arena, &.{
-            std.fs.path.dirname(@src().file).?, "..", "test", "cases",
+            std.fs.path.dirname(@src().file) orelse unreachable, "..", "test", "cases",
         });
 
         var dir = try std.fs.cwd().openDir(dir_path, .{ .iterate = true });
@@ -326,7 +326,7 @@ const TestManifest = struct {
 
     fn getConfigForKeyAssertSingle(self: TestManifest, key: []const u8, comptime T: type) T {
         var it = self.getConfigForKey(key, T);
-        const res = it.next().?;
+        const res = it.next() orelse unreachable;
         assert(it.next() == null);
         return res;
     }
@@ -435,12 +435,12 @@ const TestIterator = struct {
                     return error.InvalidIncrementalTestIndex;
                 if (new_parts.test_index == null)
                     return error.InvalidIncrementalTestIndex;
-                if (new_parts.test_index.? != prev_parts.test_index.? + 1)
+                if (new_parts.test_index orelse unreachable != prev_parts.test_index orelse unreachable + 1)
                     return error.InvalidIncrementalTestIndex;
             } else {
                 // This is not the same test sequence, so the new file must be the first file
                 // in a new sequence ("*.0.zig") or an independent test file ("*.zig")
-                if (new_parts.test_index != null and new_parts.test_index.? != 0)
+                if (new_parts.test_index != null and new_parts.test_index orelse unreachable != 0)
                     return error.InvalidIncrementalTestIndex;
 
                 it.end += it.index + 1;
@@ -512,7 +512,7 @@ fn sortTestFilenames(
                         if (b_parts.test_index == null) break :b false;
 
                         // Make sure that incremental tests appear in linear order
-                        return a_parts.test_index.? < b_parts.test_index.?;
+                        return a_parts.test_index orelse unreachable < b_parts.test_index orelse unreachable;
                     },
                 },
             };
@@ -1181,7 +1181,7 @@ pub const TestContext = struct {
 
         var zig_lib_directory = try introspect.findZigLibDir(std.testing.allocator);
         defer zig_lib_directory.handle.close();
-        defer std.testing.allocator.free(zig_lib_directory.path.?);
+        defer std.testing.allocator.free(zig_lib_directory.path orelse unreachable);
 
         var thread_pool: ThreadPool = undefined;
         try thread_pool.init(std.testing.allocator);
@@ -1201,7 +1201,7 @@ pub const TestContext = struct {
             .handle = cache_dir,
             .path = try std.fs.path.join(std.testing.allocator, &[_][]const u8{ tmp_dir_path, "zig-cache" }),
         };
-        defer std.testing.allocator.free(global_cache_directory.path.?);
+        defer std.testing.allocator.free(global_cache_directory.path orelse unreachable);
 
         var fail_count: usize = 0;
 
@@ -1708,7 +1708,7 @@ pub const TestContext = struct {
                         // We use relative to cwd here because we pass a new cwd to the
                         // child process.
                         const exe_path = try std.fmt.allocPrint(arena, "." ++ std.fs.path.sep_str ++ "{s}", .{bin_name});
-                        if (case.object_format != null and case.object_format.? == .c) {
+                        if (case.object_format != null and case.object_format orelse unreachable == .c) {
                             if (host.getExternalExecutor(target_info, .{ .link_libc = true }) != .native) {
                                 // We wouldn't be able to run the compiled C code.
                                 return; // Pass test.

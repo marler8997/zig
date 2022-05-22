@@ -205,8 +205,8 @@ pub const DeclGen = struct {
         if (self.air.value(inst)) |val| {
             return self.genConstant(self.air.typeOf(inst), val);
         }
-        const index = Air.refToIndex(inst).?;
-        return self.inst_results.get(index).?; // Assertion means instruction does not dominate usage.
+        const index = Air.refToIndex(inst) orelse unreachable;
+        return self.inst_results.get(index) orelse unreachable; // Assertion means instruction does not dominate usage.
     }
 
     /// Start a new SPIR-V block, Emits the label of the new block, and stores which
@@ -823,7 +823,7 @@ pub const DeclGen = struct {
 
     fn airBr(self: *DeclGen, inst: Air.Inst.Index) !void {
         const br = self.air.instructions.items(.data)[inst].br;
-        const block = self.blocks.get(br.block_inst).?;
+        const block = self.blocks.get(br.block_inst) orelse unreachable;
         const operand_ty = self.air.typeOf(br.operand);
 
         if (operand_ty.hasRuntimeBits()) {

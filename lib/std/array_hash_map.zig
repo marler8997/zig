@@ -1918,21 +1918,21 @@ test "basic hash map usage" {
     try testing.expect((try map.fetchPut(4, 44)) == null);
 
     try map.putNoClobber(5, 55);
-    try testing.expect((try map.fetchPut(5, 66)).?.value == 55);
-    try testing.expect((try map.fetchPut(5, 55)).?.value == 66);
+    try testing.expect((try map.fetchPut(5, 66)) orelse unreachable.value == 55);
+    try testing.expect((try map.fetchPut(5, 55)) orelse unreachable.value == 66);
 
     const gop1 = try map.getOrPut(5);
     try testing.expect(gop1.found_existing == true);
     try testing.expect(gop1.value_ptr.* == 55);
     try testing.expect(gop1.index == 4);
     gop1.value_ptr.* = 77;
-    try testing.expect(map.getEntry(5).?.value_ptr.* == 77);
+    try testing.expect(map.getEntry(5) orelse unreachable.value_ptr.* == 77);
 
     const gop2 = try map.getOrPut(99);
     try testing.expect(gop2.found_existing == false);
     try testing.expect(gop2.index == 5);
     gop2.value_ptr.* = 42;
-    try testing.expect(map.getEntry(99).?.value_ptr.* == 42);
+    try testing.expect(map.getEntry(99) orelse unreachable.value_ptr.* == 42);
 
     const gop3 = try map.getOrPutValue(5, 5);
     try testing.expect(gop3.value_ptr.* == 77);
@@ -1941,19 +1941,19 @@ test "basic hash map usage" {
     try testing.expect(gop4.value_ptr.* == 41);
 
     try testing.expect(map.contains(2));
-    try testing.expect(map.getEntry(2).?.value_ptr.* == 22);
-    try testing.expect(map.get(2).? == 22);
+    try testing.expect(map.getEntry(2) orelse unreachable.value_ptr.* == 22);
+    try testing.expect(map.get(2) orelse unreachable == 22);
 
     const rmv1 = map.fetchSwapRemove(2);
-    try testing.expect(rmv1.?.key == 2);
-    try testing.expect(rmv1.?.value == 22);
+    try testing.expect(rmv1 orelse unreachable.key == 2);
+    try testing.expect(rmv1 orelse unreachable.value == 22);
     try testing.expect(map.fetchSwapRemove(2) == null);
     try testing.expect(map.swapRemove(2) == false);
     try testing.expect(map.getEntry(2) == null);
     try testing.expect(map.get(2) == null);
 
     // Since we've used `swapRemove` above, the index of this entry should remain unchanged.
-    try testing.expect(map.getIndex(100).? == 1);
+    try testing.expect(map.getIndex(100) orelse unreachable == 1);
     const gop5 = try map.getOrPut(5);
     try testing.expect(gop5.found_existing == true);
     try testing.expect(gop5.value_ptr.* == 77);
@@ -1961,8 +1961,8 @@ test "basic hash map usage" {
 
     // Whereas, if we do an `orderedRemove`, it should move the index forward one spot.
     const rmv2 = map.fetchOrderedRemove(100);
-    try testing.expect(rmv2.?.key == 100);
-    try testing.expect(rmv2.?.value == 41);
+    try testing.expect(rmv2 orelse unreachable.key == 100);
+    try testing.expect(rmv2 orelse unreachable.value == 41);
     try testing.expect(map.fetchOrderedRemove(100) == null);
     try testing.expect(map.orderedRemove(100) == false);
     try testing.expect(map.getEntry(100) == null);
@@ -1999,7 +1999,7 @@ test "iterator hash map" {
     };
 
     var it = reset_map.iterator();
-    const first_entry = it.next().?;
+    const first_entry = it.next() orelse unreachable;
     it.reset();
 
     var count: usize = 0;
@@ -2026,7 +2026,7 @@ test "iterator hash map" {
     }
 
     it.reset();
-    var entry = it.next().?;
+    var entry = it.next() orelse unreachable;
     try testing.expect(entry.key_ptr.* == first_entry.key_ptr.*);
     try testing.expect(entry.value_ptr.* == first_entry.value_ptr.*);
 }
@@ -2114,9 +2114,9 @@ test "clone" {
 
     i = 0;
     while (i < 10) : (i += 1) {
-        try testing.expect(original.get(i).? == i * 10);
-        try testing.expect(copy.get(i).? == i * 10);
-        try testing.expect(original.getPtr(i).? != copy.getPtr(i).?);
+        try testing.expect(original.get(i) orelse unreachable == i * 10);
+        try testing.expect(copy.get(i) orelse unreachable == i * 10);
+        try testing.expect(original.getPtr(i) orelse unreachable != copy.getPtr(i) orelse unreachable);
     }
 
     while (i < 20) : (i += 1) {

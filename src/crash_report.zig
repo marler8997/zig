@@ -53,7 +53,7 @@ pub const AnalyzeBody = struct {
     pub fn pop(self: *@This()) void {
         if (!is_enabled) return;
         const head = &zir_state;
-        const old = head.*.?;
+        const old = head.* orelse unreachable;
         debug.assert(old == self);
         head.* = old.parent;
     }

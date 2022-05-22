@@ -174,7 +174,7 @@ pub fn PriorityDequeue(comptime T: type, comptime Context: type, comptime compar
         /// Remove and return the largest element from the
         /// dequeue.
         pub fn removeMax(self: *Self) T {
-            return self.removeIndex(self.maxIndex().?);
+            return self.removeIndex(self.maxIndex() orelse unreachable);
         }
 
         /// Remove and return element at index. Indices are in the
@@ -610,8 +610,8 @@ test "std.PriorityDequeue: peekMin" {
     try queue.add(3);
     try queue.add(2);
 
-    try expect(queue.peekMin().? == 2);
-    try expect(queue.peekMin().? == 2);
+    try expect(queue.peekMin() orelse unreachable == 2);
+    try expect(queue.peekMin() orelse unreachable == 2);
 }
 
 test "std.PriorityDequeue: peekMax" {
@@ -624,8 +624,8 @@ test "std.PriorityDequeue: peekMax" {
     try queue.add(3);
     try queue.add(2);
 
-    try expect(queue.peekMax().? == 9);
-    try expect(queue.peekMax().? == 9);
+    try expect(queue.peekMax() orelse unreachable == 9);
+    try expect(queue.peekMax() orelse unreachable == 9);
 }
 
 test "std.PriorityDequeue: sift up with odd indices" {
@@ -809,7 +809,7 @@ test "std.PriorityDequeue: remove at index" {
     var elem = it.next();
     var idx: usize = 0;
     const two_idx = while (elem != null) : (elem = it.next()) {
-        if (elem.? == 2)
+        if (elem orelse unreachable == 2)
             break idx;
         idx += 1;
     } else unreachable;

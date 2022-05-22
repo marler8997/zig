@@ -23,7 +23,7 @@ pub fn cmdTargets(
         fatal("unable to find zig installation directory: {s}\n", .{@errorName(err)});
     };
     defer zig_lib_directory.handle.close();
-    defer allocator.free(zig_lib_directory.path.?);
+    defer allocator.free(zig_lib_directory.path orelse unreachable);
 
     const glibc_abi = try glibc.loadMetaData(allocator, zig_lib_directory.handle);
     defer glibc_abi.destroy(allocator);

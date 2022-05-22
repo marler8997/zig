@@ -42,13 +42,13 @@ pub fn bindInfoSize(pointers: []const Pointer) !u64 {
 
     for (pointers) |pointer| {
         size += 1;
-        if (pointer.dylib_ordinal.? > 15) {
-            try leb.writeULEB128(writer, @bitCast(u64, pointer.dylib_ordinal.?));
+        if (pointer.dylib_ordinal orelse unreachable > 15) {
+            try leb.writeULEB128(writer, @bitCast(u64, pointer.dylib_ordinal orelse unreachable));
         }
         size += 1;
 
         size += 1;
-        size += pointer.name.?.len;
+        size += pointer.name orelse unreachable.len;
         size += 1;
 
         size += 1;
@@ -63,18 +63,18 @@ pub fn bindInfoSize(pointers: []const Pointer) !u64 {
 
 pub fn writeBindInfo(pointers: []const Pointer, writer: anytype) !void {
     for (pointers) |pointer| {
-        if (pointer.dylib_ordinal.? > 15) {
+        if (pointer.dylib_ordinal orelse unreachable > 15) {
             try writer.writeByte(macho.BIND_OPCODE_SET_DYLIB_ORDINAL_ULEB);
-            try leb.writeULEB128(writer, @bitCast(u64, pointer.dylib_ordinal.?));
-        } else if (pointer.dylib_ordinal.? > 0) {
-            try writer.writeByte(macho.BIND_OPCODE_SET_DYLIB_ORDINAL_IMM | @truncate(u4, @bitCast(u64, pointer.dylib_ordinal.?)));
+            try leb.writeULEB128(writer, @bitCast(u64, pointer.dylib_ordinal orelse unreachable));
+        } else if (pointer.dylib_ordinal orelse unreachable > 0) {
+            try writer.writeByte(macho.BIND_OPCODE_SET_DYLIB_ORDINAL_IMM | @truncate(u4, @bitCast(u64, pointer.dylib_ordinal orelse unreachable)));
         } else {
-            try writer.writeByte(macho.BIND_OPCODE_SET_DYLIB_SPECIAL_IMM | @truncate(u4, @bitCast(u64, pointer.dylib_ordinal.?)));
+            try writer.writeByte(macho.BIND_OPCODE_SET_DYLIB_SPECIAL_IMM | @truncate(u4, @bitCast(u64, pointer.dylib_ordinal orelse unreachable)));
         }
         try writer.writeByte(macho.BIND_OPCODE_SET_TYPE_IMM | @truncate(u4, macho.BIND_TYPE_POINTER));
 
         try writer.writeByte(macho.BIND_OPCODE_SET_SYMBOL_TRAILING_FLAGS_IMM); // TODO Sometimes we might want to add flags.
-        try writer.writeAll(pointer.name.?);
+        try writer.writeAll(pointer.name orelse unreachable);
         try writer.writeByte(0);
 
         try writer.writeByte(macho.BIND_OPCODE_SET_SEGMENT_AND_OFFSET_ULEB | @truncate(u4, pointer.segment_id));
@@ -97,12 +97,12 @@ pub fn lazyBindInfoSize(pointers: []const Pointer) !u64 {
         try leb.writeILEB128(writer, pointer.offset);
 
         size += 1;
-        if (pointer.dylib_ordinal.? > 15) {
-            try leb.writeULEB128(writer, @bitCast(u64, pointer.dylib_ordinal.?));
+        if (pointer.dylib_ordinal orelse unreachable > 15) {
+            try leb.writeULEB128(writer, @bitCast(u64, pointer.dylib_ordinal orelse unreachable));
         }
 
         size += 1;
-        size += pointer.name.?.len;
+        size += pointer.name orelse unreachable.len;
         size += 1;
 
         size += 2;
@@ -118,17 +118,17 @@ pub fn writeLazyBindInfo(pointers: []const Pointer, writer: anytype) !void {
 
         try leb.writeILEB128(writer, pointer.offset);
 
-        if (pointer.dylib_ordinal.? > 15) {
+        if (pointer.dylib_ordinal orelse unreachable > 15) {
             try writer.writeByte(macho.BIND_OPCODE_SET_DYLIB_ORDINAL_ULEB);
-            try leb.writeULEB128(writer, @bitCast(u64, pointer.dylib_ordinal.?));
-        } else if (pointer.dylib_ordinal.? > 0) {
-            try writer.writeByte(macho.BIND_OPCODE_SET_DYLIB_ORDINAL_IMM | @truncate(u4, @bitCast(u64, pointer.dylib_ordinal.?)));
+            try leb.writeULEB128(writer, @bitCast(u64, pointer.dylib_ordinal orelse unreachable));
+        } else if (pointer.dylib_ordinal orelse unreachable > 0) {
+            try writer.writeByte(macho.BIND_OPCODE_SET_DYLIB_ORDINAL_IMM | @truncate(u4, @bitCast(u64, pointer.dylib_ordinal orelse unreachable)));
         } else {
-            try writer.writeByte(macho.BIND_OPCODE_SET_DYLIB_SPECIAL_IMM | @truncate(u4, @bitCast(u64, pointer.dylib_ordinal.?)));
+            try writer.writeByte(macho.BIND_OPCODE_SET_DYLIB_SPECIAL_IMM | @truncate(u4, @bitCast(u64, pointer.dylib_ordinal orelse unreachable)));
         }
 
         try writer.writeByte(macho.BIND_OPCODE_SET_SYMBOL_TRAILING_FLAGS_IMM); // TODO Sometimes we might want to add flags.
-        try writer.writeAll(pointer.name.?);
+        try writer.writeAll(pointer.name orelse unreachable);
         try writer.writeByte(0);
 
         try writer.writeByte(macho.BIND_OPCODE_DO_BIND);

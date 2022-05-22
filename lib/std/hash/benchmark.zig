@@ -228,7 +228,7 @@ pub fn main() !void {
     }
 
     inline for (hashes) |H| {
-        if (filter == null or std.mem.indexOf(u8, H.name, filter.?) != null) {
+        if (filter == null or std.mem.indexOf(u8, H.name, filter orelse unreachable) != null) {
             if (!test_iterative_only or H.has_iterative_api) {
                 try stdout.print("{s}\n", .{H.name});
 

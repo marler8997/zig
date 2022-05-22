@@ -2,7 +2,7 @@ pub fn main() void {
     var x: u32 = undefined;
     const maybe_x = byPtr(&x);
     assert(maybe_x != null);
-    maybe_x.?.* = 123;
+    maybe_x orelse unreachable.* = 123;
     assert(x == 123);
 }
 

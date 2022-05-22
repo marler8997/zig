@@ -83,7 +83,7 @@ pub const Base64Encoder = struct {
         var char_in_alphabet = [_]bool{false} ** 256;
         for (alphabet_chars) |c| {
             assert(!char_in_alphabet[c]);
-            assert(pad_char == null or c != pad_char.?);
+            assert(pad_char == null or c != pad_char orelse unreachable);
             char_in_alphabet[c] = true;
         }
         return Base64Encoder{
@@ -149,7 +149,7 @@ pub const Base64Decoder = struct {
         var char_in_alphabet = [_]bool{false} ** 256;
         for (alphabet_chars) |c, i| {
             assert(!char_in_alphabet[c]);
-            assert(pad_char == null or c != pad_char.?);
+            assert(pad_char == null or c != pad_char orelse unreachable);
 
             result.char_to_index[c] = @intCast(u8, i);
             char_in_alphabet[c] = true;
@@ -195,7 +195,7 @@ pub const Base64Decoder = struct {
         for (source) |c, src_idx| {
             const d = decoder.char_to_index[c];
             if (d == invalid_char) {
-                if (decoder.pad_char == null or c != decoder.pad_char.?) return error.InvalidCharacter;
+                if (decoder.pad_char == null or c != decoder.pad_char orelse unreachable) return error.InvalidCharacter;
                 leftover_idx = src_idx;
                 break;
             }
@@ -211,7 +211,7 @@ pub const Base64Decoder = struct {
             return error.InvalidPadding;
         }
         if (leftover_idx == null) return;
-        var leftover = source[leftover_idx.?..];
+        var leftover = source[leftover_idx orelse unreachable..];
         if (decoder.pad_char) |pad_char| {
             const padding_len = acc_len / 2;
             var padding_chars: usize = 0;
@@ -269,7 +269,7 @@ pub const Base64DecoderWithIgnore = struct {
             if (decoder_with_ignore.char_is_ignored[c]) continue;
             const d = decoder.char_to_index[c];
             if (d == Base64Decoder.invalid_char) {
-                if (decoder.pad_char == null or c != decoder.pad_char.?) return error.InvalidCharacter;
+                if (decoder.pad_char == null or c != decoder.pad_char orelse unreachable) return error.InvalidCharacter;
                 leftover_idx = src_idx;
                 break;
             }
@@ -290,7 +290,7 @@ pub const Base64DecoderWithIgnore = struct {
             if (decoder.pad_char != null and padding_len != 0) return error.InvalidPadding;
             return dest_idx;
         }
-        var leftover = source[leftover_idx.?..];
+        var leftover = source[leftover_idx orelse unreachable..];
         if (decoder.pad_char) |pad_char| {
             var padding_chars: usize = 0;
             for (leftover) |c| {

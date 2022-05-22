@@ -96,8 +96,8 @@ test "std.meta.stringToEnum" {
         A,
         B,
     };
-    try testing.expect(E1.A == stringToEnum(E1, "A").?);
-    try testing.expect(E1.B == stringToEnum(E1, "B").?);
+    try testing.expect(E1.A == stringToEnum(E1, "A") orelse unreachable);
+    try testing.expect(E1.B == stringToEnum(E1, "B") orelse unreachable);
     try testing.expect(null == stringToEnum(E1, "C"));
 }
 
@@ -227,10 +227,10 @@ test "std.meta.sentinel" {
 }
 
 fn testSentinel() !void {
-    try testing.expectEqual(@as(u8, 0), sentinel([:0]u8).?);
-    try testing.expectEqual(@as(u8, 0), sentinel([*:0]u8).?);
-    try testing.expectEqual(@as(u8, 0), sentinel([5:0]u8).?);
-    try testing.expectEqual(@as(u8, 0), sentinel(*const [5:0]u8).?);
+    try testing.expectEqual(@as(u8, 0), sentinel([:0]u8) orelse unreachable);
+    try testing.expectEqual(@as(u8, 0), sentinel([*:0]u8) orelse unreachable);
+    try testing.expectEqual(@as(u8, 0), sentinel([5:0]u8) orelse unreachable);
+    try testing.expectEqual(@as(u8, 0), sentinel(*const [5:0]u8) orelse unreachable);
 
     try testing.expect(sentinel([]u8) == null);
     try testing.expect(sentinel([*]u8) == null);
@@ -466,7 +466,7 @@ pub fn fields(comptime T: type) switch (@typeInfo(T)) {
         .Struct => |info| info.fields,
         .Union => |info| info.fields,
         .Enum => |info| info.fields,
-        .ErrorSet => |errors| errors.?, // must be non global error set
+        .ErrorSet => |errors| errors orelse unreachable, // must be non global error set
         else => @compileError("Expected struct, union, error set or enum type, found '" ++ @typeName(T) ++ "'"),
     };
 }
@@ -843,7 +843,7 @@ pub fn eql(a: anytype, b: @TypeOf(a)) bool {
         .Optional => {
             if (a == null and b == null) return true;
             if (a == null or b == null) return false;
-            return eql(a.?, b.?);
+            return eql(a orelse unreachable, b orelse unreachable);
         },
         else => return a == b,
     }
@@ -1023,7 +1023,7 @@ pub fn ArgsTuple(comptime Function: type) type {
 
     var argument_field_list: [function_info.args.len]std.builtin.Type.StructField = undefined;
     inline for (function_info.args) |arg, i| {
-        const T = arg.arg_type.?;
+        const T = arg.arg_type orelse unreachable;
         @setEvalBranchQuota(10_000);
         var num_buf: [128]u8 = undefined;
         argument_field_list[i] = .{

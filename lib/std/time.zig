@@ -11,7 +11,7 @@ pub const epoch = @import("time/epoch.zig");
 pub fn sleep(nanoseconds: u64) void {
     // TODO: opting out of async sleeping?
     if (std.io.is_async) {
-        return std.event.Loop.instance.?.sleep(nanoseconds);
+        return std.event.Loop.instance orelse unreachable.sleep(nanoseconds);
     }
 
     if (builtin.os.tag == .windows) {

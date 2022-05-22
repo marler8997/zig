@@ -138,7 +138,7 @@ pub const Socket = struct {
 
     /// POSIX `msghdr`. Denotes a destination address, set of buffers, control data, and flags. Ported
     /// directly from musl.
-    pub const Message = if (native_os.isAtLeast(.windows, .vista) != null and native_os.isAtLeast(.windows, .vista).?)
+    pub const Message = if (native_os.isAtLeast(.windows, .vista) != null and native_os.isAtLeast(.windows, .vista) orelse unreachable)
         extern struct {
             name: usize = @ptrToInt(@as(?[*]u8, null)),
             name_len: c_int = 0,

@@ -152,7 +152,7 @@ fn renderOpcodes(
 
         const existing = instructions[result.value_ptr.*];
 
-        const tag_index = std.mem.indexOfDiff(u8, inst.opname, existing.opname).?;
+        const tag_index = std.mem.indexOfDiff(u8, inst.opname, existing.opname) orelse unreachable;
         const inst_priority = tagPriorityScore(inst.opname[tag_index..]);
         const existing_priority = tagPriorityScore(existing.opname[tag_index..]);
 
@@ -234,7 +234,7 @@ fn renderValueEnum(
 
         const existing = enumerants[result.value_ptr.*];
 
-        const tag_index = std.mem.indexOfDiff(u8, enumerant.enumerant, existing.enumerant).?;
+        const tag_index = std.mem.indexOfDiff(u8, enumerant.enumerant, existing.enumerant) orelse unreachable;
         const enum_priority = tagPriorityScore(enumerant.enumerant[tag_index..]);
         const existing_priority = tagPriorityScore(existing.enumerant[tag_index..]);
 
@@ -307,7 +307,7 @@ fn renderBitEnum(
 
         var bitpos = std.math.log2_int(u32, value);
         if (flags_by_bitpos[bitpos]) |*existing| {
-            const tag_index = std.mem.indexOfDiff(u8, enumerant.enumerant, enumerants[existing.*].enumerant).?;
+            const tag_index = std.mem.indexOfDiff(u8, enumerant.enumerant, enumerants[existing.*].enumerant) orelse unreachable;
             const enum_priority = tagPriorityScore(enumerant.enumerant[tag_index..]);
             const existing_priority = tagPriorityScore(enumerants[existing.*].enumerant[tag_index..]);
 
@@ -338,7 +338,7 @@ fn renderBitEnum(
         try writer.print("pub const {}: {} = .{{.{} = true}};\n", .{
             std.zig.fmtId(enumerants[alias.flag].enumerant),
             std.zig.fmtId(enumeration.kind),
-            std.zig.fmtId(enumerants[flags_by_bitpos[alias.alias].?].enumerant),
+            std.zig.fmtId(enumerants[flags_by_bitpos[alias.alias] orelse unreachable].enumerant),
         });
     }
 

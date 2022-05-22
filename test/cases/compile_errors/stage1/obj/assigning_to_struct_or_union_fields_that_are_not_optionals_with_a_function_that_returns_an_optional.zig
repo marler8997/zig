@@ -18,4 +18,4 @@ export fn entry() void {
 // backend=stage1
 // target=native
 //
-// tmp.zig:11:27: error: cannot convert optional to payload type. consider using `.?`, `orelse`, or `if`. expected type 'u8', found '?u8'
+// tmp.zig:11:27: error: cannot convert optional to payload type. consider using ` orelse unreachable`, `orelse`, or `if`. expected type 'u8', found '?u8'

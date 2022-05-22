@@ -84,9 +84,9 @@ pub fn SinglyLinkedList(comptime T: type) type {
             if (list.first == node) {
                 list.first = node.next;
             } else {
-                var current_elm = list.first.?;
+                var current_elm = list.first orelse unreachable;
                 while (current_elm.next != node) {
-                    current_elm = current_elm.next.?;
+                    current_elm = current_elm.next orelse unreachable;
                 }
                 current_elm.next = node.next;
             }
@@ -148,9 +148,9 @@ test "basic SinglyLinkedList test" {
     _ = list.remove(&five); // {2, 3, 4}
     _ = two.removeNext(); // {2, 4}
 
-    try testing.expect(list.first.?.data == 2);
-    try testing.expect(list.first.?.next.?.data == 4);
-    try testing.expect(list.first.?.next.?.next == null);
+    try testing.expect(list.first orelse unreachable.data == 2);
+    try testing.expect(list.first orelse unreachable.next orelse unreachable.data == 4);
+    try testing.expect(list.first orelse unreachable.next orelse unreachable.next == null);
 }
 
 /// A tail queue is headed by a pair of pointers, one to the head of the
@@ -358,8 +358,8 @@ test "basic TailQueue test" {
     _ = list.pop(); // {2, 3, 4}
     list.remove(&three); // {2, 4}
 
-    try testing.expect(list.first.?.data == 2);
-    try testing.expect(list.last.?.data == 4);
+    try testing.expect(list.first orelse unreachable.data == 2);
+    try testing.expect(list.last orelse unreachable.data == 4);
     try testing.expect(list.len == 2);
 }
 

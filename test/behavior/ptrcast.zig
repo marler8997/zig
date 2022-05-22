@@ -32,7 +32,7 @@ test "reinterpret an array over multiple elements, with no well-defined layout" 
 
 fn testReinterpretWithOffsetAndNoWellDefinedLayout() !void {
     const bytes: ?[5]?u8 = [5]?u8{ 0x12, 0x34, 0x56, 0x78, 0x9a };
-    const ptr = &bytes.?[1];
+    const ptr = &bytes orelse unreachable[1];
     const copy: [4]?u8 = @ptrCast(*const [4]?u8, ptr).*;
     _ = copy;
     //try expect(@ptrCast(*align(1)?u8, bytes[1..5]).* == );

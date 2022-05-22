@@ -716,22 +716,22 @@ pub const Decl = struct {
         const ty = (decl.val.castTag(.ty) orelse return null).data;
         switch (ty.tag()) {
             .@"struct" => {
-                const struct_obj = ty.castTag(.@"struct").?.data;
+                const struct_obj = ty.castTag(.@"struct") orelse unreachable.data;
                 return &struct_obj.namespace;
             },
             .enum_full, .enum_nonexhaustive => {
-                const enum_obj = ty.cast(Type.Payload.EnumFull).?.data;
+                const enum_obj = ty.cast(Type.Payload.EnumFull) orelse unreachable.data;
                 return &enum_obj.namespace;
             },
             .empty_struct => {
-                return ty.castTag(.empty_struct).?.data;
+                return ty.castTag(.empty_struct) orelse unreachable.data;
             },
             .@"opaque" => {
-                const opaque_obj = ty.cast(Type.Payload.Opaque).?.data;
+                const opaque_obj = ty.cast(Type.Payload.Opaque) orelse unreachable.data;
                 return &opaque_obj.namespace;
             },
             .@"union", .union_tagged => {
-                const union_obj = ty.cast(Type.Payload.Union).?.data;
+                const union_obj = ty.cast(Type.Payload.Union) orelse unreachable.data;
                 return &union_obj.namespace;
             },
 
@@ -770,7 +770,7 @@ pub const Decl = struct {
         assert(decl.has_tv);
         return switch (decl.val.tag()) {
             .extern_fn => true,
-            .variable => decl.val.castTag(.variable).?.data.init.tag() == .unreachable_value,
+            .variable => decl.val.castTag(.variable) orelse unreachable.data.init.tag() == .unreachable_value,
             else => false,
         };
     }
@@ -1479,21 +1479,21 @@ pub const Fn = struct {
         pub fn addErrorSet(self: *InferredErrorSet, gpa: Allocator, err_set_ty: Type) !void {
             switch (err_set_ty.tag()) {
                 .error_set => {
-                    const names = err_set_ty.castTag(.error_set).?.data.names.keys();
+                    const names = err_set_ty.castTag(.error_set) orelse unreachable.data.names.keys();
                     for (names) |name| {
                         try self.errors.put(gpa, name, {});
                     }
                 },
                 .error_set_single => {
-                    const name = err_set_ty.castTag(.error_set_single).?.data;
+                    const name = err_set_ty.castTag(.error_set_single) orelse unreachable.data;
                     try self.errors.put(gpa, name, {});
                 },
                 .error_set_inferred => {
-                    const ies = err_set_ty.castTag(.error_set_inferred).?.data;
+                    const ies = err_set_ty.castTag(.error_set_inferred) orelse unreachable.data;
                     try self.inferred_error_sets.put(gpa, ies, {});
                 },
                 .error_set_merged => {
-                    const names = err_set_ty.castTag(.error_set_merged).?.data.keys();
+                    const names = err_set_ty.castTag(.error_set_merged) orelse unreachable.data.keys();
                     for (names) |name| {
                         try self.errors.put(gpa, name, {});
                     }
@@ -2377,7 +2377,7 @@ pub const SrcLoc = struct {
                     },
                     else => unreachable,
                 };
-                const tok_index = full.lib_name.?;
+                const tok_index = full.lib_name orelse unreachable;
                 const token_starts = tree.tokens.items(.start);
                 return token_starts[tok_index];
             },
@@ -2970,7 +2970,7 @@ pub fn astGenFile(mod: *Module, file: *File) !void {
             };
 
             // First we read the header to determine the lengths of arrays.
-            const header = cache_file.?.reader().readStruct(Zir.Header) catch |err| switch (err) {
+            const header = cache_file orelse unreachable.reader().readStruct(Zir.Header) catch |err| switch (err) {
                 // This can happen if Zig bails out of this function between creating
                 // the cached file and writing it.
                 error.EndOfStream => break :cached,
@@ -3035,7 +3035,7 @@ pub fn astGenFile(mod: *Module, file: *File) !void {
                     .iov_len = header.extra_len * 4,
                 },
             };
-            const amt_read = try cache_file.?.readvAll(&iovecs);
+            const amt_read = try cache_file orelse unreachable.readvAll(&iovecs);
             const amt_expected = zir.instructions.len * 9 +
                 zir.string_bytes.len +
                 zir.extra.len * 4;
@@ -3261,7 +3261,7 @@ pub fn astGenFile(mod: *Module, file: *File) !void {
             .iov_len = file.zir.extra.len * 4,
         },
     };
-    cache_file.?.writevAll(&iovecs) catch |err| {
+    cache_file orelse unreachable.writevAll(&iovecs) catch |err| {
         const pkg_path = file.pkg.root_src_directory.path orelse ".";
         const cache_path = cache_directory.path orelse ".";
         log.warn("unable to write cached ZIR code for {s}/{s} to {s}/{s}: {s}", .{
@@ -3330,7 +3330,7 @@ fn updateZirRefs(mod: *Module, file: *File, old_zir: Zir) !void {
     var decl_stack: std.ArrayListUnmanaged(Decl.Index) = .{};
     defer decl_stack.deinit(gpa);
 
-    const root_decl = file.root_decl.unwrap().?;
+    const root_decl = file.root_decl.unwrap() orelse unreachable;
     try decl_stack.append(gpa, root_decl);
 
     file.deleted_decls.clearRetainingCapacity();
@@ -3413,7 +3413,7 @@ pub fn populateBuiltinFile(mod: *Module) !void {
         comp.mutex.lock();
         defer comp.mutex.unlock();
 
-        const builtin_pkg = mod.main_pkg.table.get("builtin").?;
+        const builtin_pkg = mod.main_pkg.table.get("builtin") orelse unreachable;
         const result = try mod.importPkg(builtin_pkg);
         break :blk .{
             .file = result.file,
@@ -3920,7 +3920,7 @@ fn semaDecl(mod: *Module, decl_index: Decl.Index) !bool {
     if (mod.declIsRoot(decl_index)) {
         log.debug("semaDecl root {*} ({s})", .{ decl, decl.name });
         const main_struct_inst = Zir.main_struct_inst;
-        const struct_obj = decl.getStruct().?;
+        const struct_obj = decl.getStruct() orelse unreachable;
         // This might not have gotten set in `semaFile` if the first time had
         // a ZIR failure, so we set it here in case.
         struct_obj.zir_index = main_struct_inst;
@@ -3953,7 +3953,7 @@ fn semaDecl(mod: *Module, decl_index: Decl.Index) !bool {
     const inst_data = zir_datas[zir_block_index].pl_node;
     const extra = zir.extraData(Zir.Inst.Block, inst_data.payload_index);
     const body = zir.extra[extra.end..][0..extra.data.body_len];
-    const result_ref = (try sema.analyzeBodyBreak(&block_scope, body)).?.operand;
+    const result_ref = (try sema.analyzeBodyBreak(&block_scope, body)) orelse unreachable.operand;
     try wip_captures.finalize();
     const src: LazySrcLoc = .{ .node_offset = 0 };
     const decl_tv = try sema.resolveInstValue(&block_scope, src, result_ref);
@@ -4088,7 +4088,7 @@ fn semaDecl(mod: *Module, decl_index: Decl.Index) !bool {
     var is_extern = false;
     switch (decl_tv.val.tag()) {
         .variable => {
-            const variable = decl_tv.val.castTag(.variable).?.data;
+            const variable = decl_tv.val.castTag(.variable) orelse unreachable.data;
             if (variable.owner_decl == decl_index) {
                 decl.owns_tv = true;
                 queue_linker_work = true;
@@ -4098,7 +4098,7 @@ fn semaDecl(mod: *Module, decl_index: Decl.Index) !bool {
             }
         },
         .extern_fn => {
-            const extern_fn = decl_tv.val.castTag(.extern_fn).?.data;
+            const extern_fn = decl_tv.val.castTag(.extern_fn) orelse unreachable.data;
             if (extern_fn.owner_decl == decl_index) {
                 decl.owns_tv = true;
                 queue_linker_work = true;
@@ -4535,7 +4535,7 @@ fn scanDecl(iter: *ScanDeclIter, decl_sub_index: usize, flags: u4) SemaError!voi
                 if (!mod.comp.bin_file.options.is_test) break :blk false;
                 if (decl_pkg != mod.main_pkg) {
                     if (!mod.main_pkg_in_std) break :blk false;
-                    const std_pkg = mod.main_pkg.table.get("std").?;
+                    const std_pkg = mod.main_pkg.table.get("std") orelse unreachable;
                     if (std_pkg != decl_pkg) break :blk false;
                 }
                 try mod.test_functions.put(gpa, new_decl_index, {});
@@ -4546,7 +4546,7 @@ fn scanDecl(iter: *ScanDeclIter, decl_sub_index: usize, flags: u4) SemaError!voi
                 if (!mod.comp.bin_file.options.is_test) break :blk false;
                 if (decl_pkg != mod.main_pkg) {
                     if (!mod.main_pkg_in_std) break :blk false;
-                    const std_pkg = mod.main_pkg.table.get("std").?;
+                    const std_pkg = mod.main_pkg.table.get("std") orelse unreachable;
                     if (std_pkg != decl_pkg) break :blk false;
                 }
                 // TODO check the name against --test-filter
@@ -4821,8 +4821,8 @@ pub fn analyzeFnBody(mod: *Module, func: *Fn, arena: Allocator) SemaError!Air {
     const decl = mod.declPtr(decl_index);
 
     // Use the Decl's arena for captured values.
-    var decl_arena = decl.value_arena.?.promote(gpa);
-    defer decl.value_arena.?.* = decl_arena.state;
+    var decl_arena = decl.value_arena orelse unreachable.promote(gpa);
+    defer decl.value_arena orelse unreachable.* = decl_arena.state;
     const decl_arena_allocator = decl_arena.allocator();
 
     var sema: Sema = .{
@@ -5545,11 +5545,11 @@ pub fn processExports(mod: *Module) !void {
 
 pub fn populateTestFunctions(mod: *Module) !void {
     const gpa = mod.gpa;
-    const builtin_pkg = mod.main_pkg.table.get("builtin").?;
+    const builtin_pkg = mod.main_pkg.table.get("builtin") orelse unreachable;
     const builtin_file = (mod.importPkg(builtin_pkg) catch unreachable).file;
-    const root_decl = mod.declPtr(builtin_file.root_decl.unwrap().?);
+    const root_decl = mod.declPtr(builtin_file.root_decl.unwrap() orelse unreachable);
     const builtin_namespace = root_decl.src_namespace;
-    const decl_index = builtin_namespace.decls.getKeyAdapted(@as([]const u8, "test_functions"), DeclAdapter{ .mod = mod }).?;
+    const decl_index = builtin_namespace.decls.getKeyAdapted(@as([]const u8, "test_functions"), DeclAdapter{ .mod = mod }) orelse unreachable;
     const decl = mod.declPtr(decl_index);
     var buf: Type.SlicePtrFieldTypeBuffer = undefined;
     const tmp_test_fn_ty = decl.ty.slicePtrFieldType(&buf).elemType();
@@ -5695,43 +5695,43 @@ fn reportRetryableFileError(
 
 pub fn markReferencedDeclsAlive(mod: *Module, val: Value) void {
     switch (val.tag()) {
-        .decl_ref_mut => return mod.markDeclIndexAlive(val.castTag(.decl_ref_mut).?.data.decl_index),
-        .extern_fn => return mod.markDeclIndexAlive(val.castTag(.extern_fn).?.data.owner_decl),
-        .function => return mod.markDeclIndexAlive(val.castTag(.function).?.data.owner_decl),
-        .variable => return mod.markDeclIndexAlive(val.castTag(.variable).?.data.owner_decl),
-        .decl_ref => return mod.markDeclIndexAlive(val.cast(Value.Payload.Decl).?.data),
+        .decl_ref_mut => return mod.markDeclIndexAlive(val.castTag(.decl_ref_mut) orelse unreachable.data.decl_index),
+        .extern_fn => return mod.markDeclIndexAlive(val.castTag(.extern_fn) orelse unreachable.data.owner_decl),
+        .function => return mod.markDeclIndexAlive(val.castTag(.function) orelse unreachable.data.owner_decl),
+        .variable => return mod.markDeclIndexAlive(val.castTag(.variable) orelse unreachable.data.owner_decl),
+        .decl_ref => return mod.markDeclIndexAlive(val.cast(Value.Payload.Decl) orelse unreachable.data),
 
         .repeated,
         .eu_payload,
         .opt_payload,
         .empty_array_sentinel,
-        => return mod.markReferencedDeclsAlive(val.cast(Value.Payload.SubValue).?.data),
+        => return mod.markReferencedDeclsAlive(val.cast(Value.Payload.SubValue) orelse unreachable.data),
 
         .eu_payload_ptr,
         .opt_payload_ptr,
-        => return mod.markReferencedDeclsAlive(val.cast(Value.Payload.PayloadPtr).?.data.container_ptr),
+        => return mod.markReferencedDeclsAlive(val.cast(Value.Payload.PayloadPtr) orelse unreachable.data.container_ptr),
 
         .slice => {
-            const slice = val.cast(Value.Payload.Slice).?.data;
+            const slice = val.cast(Value.Payload.Slice) orelse unreachable.data;
             mod.markReferencedDeclsAlive(slice.ptr);
             mod.markReferencedDeclsAlive(slice.len);
         },
 
         .elem_ptr => {
-            const elem_ptr = val.cast(Value.Payload.ElemPtr).?.data;
+            const elem_ptr = val.cast(Value.Payload.ElemPtr) orelse unreachable.data;
             return mod.markReferencedDeclsAlive(elem_ptr.array_ptr);
         },
         .field_ptr => {
-            const field_ptr = val.cast(Value.Payload.FieldPtr).?.data;
+            const field_ptr = val.cast(Value.Payload.FieldPtr) orelse unreachable.data;
             return mod.markReferencedDeclsAlive(field_ptr.container_ptr);
         },
         .aggregate => {
-            for (val.castTag(.aggregate).?.data) |field_val| {
+            for (val.castTag(.aggregate) orelse unreachable.data) |field_val| {
                 mod.markReferencedDeclsAlive(field_val);
             }
         },
         .@"union" => {
-            const data = val.cast(Value.Payload.Union).?.data;
+            const data = val.cast(Value.Payload.Union) orelse unreachable.data;
             mod.markReferencedDeclsAlive(data.tag);
             mod.markReferencedDeclsAlive(data.val);
         },

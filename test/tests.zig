@@ -736,7 +736,7 @@ pub const StackTracesContext = struct {
         const b = self.b;
         const src_basename = "source.zig";
         const write_src = b.addWriteFile(src_basename, source);
-        const exe = b.addExecutableSource("test", write_src.getFileSource(src_basename).?);
+        const exe = b.addExecutableSource("test", write_src.getFileSource(src_basename) orelse unreachable);
         exe.setBuildMode(mode);
 
         const run_and_compare = RunAndCompareStep.create(
@@ -813,9 +813,9 @@ pub const StackTracesContext = struct {
             }
             child.spawn() catch |err| debug.panic("Unable to spawn {s}: {s}\n", .{ full_exe_path, @errorName(err) });
 
-            const stdout = child.stdout.?.reader().readAllAlloc(b.allocator, max_stdout_size) catch unreachable;
+            const stdout = child.stdout orelse unreachable.reader().readAllAlloc(b.allocator, max_stdout_size) catch unreachable;
             defer b.allocator.free(stdout);
-            const stderrFull = child.stderr.?.reader().readAllAlloc(b.allocator, max_stdout_size) catch unreachable;
+            const stderrFull = child.stderr orelse unreachable.reader().readAllAlloc(b.allocator, max_stdout_size) catch unreachable;
             defer b.allocator.free(stderrFull);
             var stderr = stderrFull;
 

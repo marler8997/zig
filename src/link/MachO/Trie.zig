@@ -226,7 +226,7 @@ pub const Node = struct {
             // Write edge label and offset to next node in trie.
             try writer.writeAll(edge.label);
             try writer.writeByte(0);
-            try leb.writeULEB128(writer, edge.to.trie_offset.?);
+            try leb.writeULEB128(writer, edge.to.trie_offset orelse unreachable);
         }
     }
 
@@ -310,7 +310,7 @@ pub const ExportSymbol = struct {
 /// certain circumstances.
 pub fn put(self: *Trie, allocator: Allocator, symbol: ExportSymbol) !void {
     try self.createRoot(allocator);
-    const node = try self.root.?.put(allocator, symbol.name);
+    const node = try self.root orelse unreachable.put(allocator, symbol.name);
     node.terminal_info = .{
         .vmaddr_offset = symbol.vmaddr_offset,
         .export_flags = symbol.export_flags,
@@ -331,7 +331,7 @@ pub fn finalize(self: *Trie, allocator: Allocator) !void {
     var fifo = std.fifo.LinearFifo(*Node, .Dynamic).init(allocator);
     defer fifo.deinit();
 
-    try fifo.writeItem(self.root.?);
+    try fifo.writeItem(self.root orelse unreachable);
 
     while (fifo.readItem()) |next| {
         for (next.edges.items) |*edge| {
@@ -363,7 +363,7 @@ const ReadError = error{
 /// Parse the trie from a byte stream.
 pub fn read(self: *Trie, allocator: Allocator, reader: anytype) ReadError!usize {
     try self.createRoot(allocator);
-    return self.root.?.read(allocator, reader);
+    return self.root orelse unreachable.read(allocator, reader);
 }
 
 /// Write the trie to a byte stream.
@@ -450,8 +450,8 @@ test "Trie basic" {
         .vmaddr_offset = 0,
         .export_flags = 0,
     });
-    try testing.expect(trie.root.?.edges.items.len == 1);
-    try testing.expect(mem.eql(u8, trie.root.?.edges.items[0].label, "_st"));
+    try testing.expect(trie.root orelse unreachable.edges.items.len == 1);
+    try testing.expect(mem.eql(u8, trie.root orelse unreachable.edges.items[0].label, "_st"));
 
     {
         // root --- _st ---> node --- art ---> node
@@ -460,9 +460,9 @@ test "Trie basic" {
             .vmaddr_offset = 0,
             .export_flags = 0,
         });
-        try testing.expect(trie.root.?.edges.items.len == 1);
+        try testing.expect(trie.root orelse unreachable.edges.items.len == 1);
 
-        const nextEdge = &trie.root.?.edges.items[0];
+        const nextEdge = &trie.root orelse unreachable.edges.items[0];
         try testing.expect(mem.eql(u8, nextEdge.label, "_st"));
         try testing.expect(nextEdge.to.edges.items.len == 1);
         try testing.expect(mem.eql(u8, nextEdge.to.edges.items[0].label, "art"));
@@ -476,9 +476,9 @@ test "Trie basic" {
             .vmaddr_offset = 0,
             .export_flags = 0,
         });
-        try testing.expect(trie.root.?.edges.items.len == 1);
+        try testing.expect(trie.root orelse unreachable.edges.items.len == 1);
 
-        const nextEdge = &trie.root.?.edges.items[0];
+        const nextEdge = &trie.root orelse unreachable.edges.items[0];
         try testing.expect(mem.eql(u8, nextEdge.label, "_"));
         try testing.expect(nextEdge.to.edges.items.len == 2);
         try testing.expect(mem.eql(u8, nextEdge.to.edges.items[0].label, "st"));

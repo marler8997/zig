@@ -787,8 +787,8 @@ test "sliceTo" {
         try testing.expectEqualSlices(u16, array[0..4], sliceTo(sentinel_ptr, 99));
 
         const optional_sentinel_ptr = @ptrCast(?[*:5]u16, &array);
-        try testing.expectEqualSlices(u16, array[0..2], sliceTo(optional_sentinel_ptr, 3).?);
-        try testing.expectEqualSlices(u16, array[0..4], sliceTo(optional_sentinel_ptr, 99).?);
+        try testing.expectEqualSlices(u16, array[0..2], sliceTo(optional_sentinel_ptr, 3) orelse unreachable);
+        try testing.expectEqualSlices(u16, array[0..4], sliceTo(optional_sentinel_ptr, 99) orelse unreachable);
 
         const c_ptr = @as([*c]u16, &array);
         try testing.expectEqualSlices(u16, array[0..2], sliceTo(c_ptr, 3));
@@ -1155,28 +1155,28 @@ pub fn indexOfPos(comptime T: type, haystack: []const T, start_index: usize, nee
 }
 
 test "indexOf" {
-    try testing.expect(indexOf(u8, "one two three four five six seven eight nine ten eleven", "three four").? == 8);
-    try testing.expect(lastIndexOf(u8, "one two three four five six seven eight nine ten eleven", "three four").? == 8);
+    try testing.expect(indexOf(u8, "one two three four five six seven eight nine ten eleven", "three four") orelse unreachable == 8);
+    try testing.expect(lastIndexOf(u8, "one two three four five six seven eight nine ten eleven", "three four") orelse unreachable == 8);
     try testing.expect(indexOf(u8, "one two three four five six seven eight nine ten eleven", "two two") == null);
     try testing.expect(lastIndexOf(u8, "one two three four five six seven eight nine ten eleven", "two two") == null);
 
-    try testing.expect(indexOf(u8, "one two three four five six seven eight nine ten", "").? == 0);
-    try testing.expect(lastIndexOf(u8, "one two three four five six seven eight nine ten", "").? == 48);
+    try testing.expect(indexOf(u8, "one two three four five six seven eight nine ten", "") orelse unreachable == 0);
+    try testing.expect(lastIndexOf(u8, "one two three four five six seven eight nine ten", "") orelse unreachable == 48);
 
-    try testing.expect(indexOf(u8, "one two three four", "four").? == 14);
-    try testing.expect(lastIndexOf(u8, "one two three two four", "two").? == 14);
+    try testing.expect(indexOf(u8, "one two three four", "four") orelse unreachable == 14);
+    try testing.expect(lastIndexOf(u8, "one two three two four", "two") orelse unreachable == 14);
     try testing.expect(indexOf(u8, "one two three four", "gour") == null);
     try testing.expect(lastIndexOf(u8, "one two three four", "gour") == null);
-    try testing.expect(indexOf(u8, "foo", "foo").? == 0);
-    try testing.expect(lastIndexOf(u8, "foo", "foo").? == 0);
+    try testing.expect(indexOf(u8, "foo", "foo") orelse unreachable == 0);
+    try testing.expect(lastIndexOf(u8, "foo", "foo") orelse unreachable == 0);
     try testing.expect(indexOf(u8, "foo", "fool") == null);
     try testing.expect(lastIndexOf(u8, "foo", "lfoo") == null);
     try testing.expect(lastIndexOf(u8, "foo", "fool") == null);
 
-    try testing.expect(indexOf(u8, "foo foo", "foo").? == 0);
-    try testing.expect(lastIndexOf(u8, "foo foo", "foo").? == 4);
-    try testing.expect(lastIndexOfAny(u8, "boo, cat", "abo").? == 6);
-    try testing.expect(lastIndexOfScalar(u8, "boo", 'o').? == 2);
+    try testing.expect(indexOf(u8, "foo foo", "foo") orelse unreachable == 0);
+    try testing.expect(lastIndexOf(u8, "foo foo", "foo") orelse unreachable == 4);
+    try testing.expect(lastIndexOfAny(u8, "boo, cat", "abo") orelse unreachable == 6);
+    try testing.expect(lastIndexOfScalar(u8, "boo", 'o') orelse unreachable == 2);
 }
 
 test "indexOf multibyte" {
@@ -1607,20 +1607,20 @@ pub fn tokenize(comptime T: type, buffer: []const T, delimiter_bytes: []const T)
 
 test "tokenize" {
     var it = tokenize(u8, "   abc def   ghi  ", " ");
-    try testing.expect(eql(u8, it.next().?, "abc"));
-    try testing.expect(eql(u8, it.next().?, "def"));
-    try testing.expect(eql(u8, it.next().?, "ghi"));
+    try testing.expect(eql(u8, it.next() orelse unreachable, "abc"));
+    try testing.expect(eql(u8, it.next() orelse unreachable, "def"));
+    try testing.expect(eql(u8, it.next() orelse unreachable, "ghi"));
     try testing.expect(it.next() == null);
 
     it = tokenize(u8, "..\\bob", "\\");
-    try testing.expect(eql(u8, it.next().?, ".."));
+    try testing.expect(eql(u8, it.next() orelse unreachable, ".."));
     try testing.expect(eql(u8, "..", "..\\bob"[0..it.index]));
-    try testing.expect(eql(u8, it.next().?, "bob"));
+    try testing.expect(eql(u8, it.next() orelse unreachable, "bob"));
     try testing.expect(it.next() == null);
 
     it = tokenize(u8, "//a/b", "/");
-    try testing.expect(eql(u8, it.next().?, "a"));
-    try testing.expect(eql(u8, it.next().?, "b"));
+    try testing.expect(eql(u8, it.next() orelse unreachable, "a"));
+    try testing.expect(eql(u8, it.next() orelse unreachable, "b"));
     try testing.expect(eql(u8, "//a/b", "//a/b"[0..it.index]));
     try testing.expect(it.next() == null);
 
@@ -1631,11 +1631,11 @@ test "tokenize" {
     try testing.expect(it.next() == null);
 
     it = tokenize(u8, "hello", "");
-    try testing.expect(eql(u8, it.next().?, "hello"));
+    try testing.expect(eql(u8, it.next() orelse unreachable, "hello"));
     try testing.expect(it.next() == null);
 
     it = tokenize(u8, "hello", " ");
-    try testing.expect(eql(u8, it.next().?, "hello"));
+    try testing.expect(eql(u8, it.next() orelse unreachable, "hello"));
     try testing.expect(it.next() == null);
 
     var it16 = tokenize(
@@ -1643,17 +1643,17 @@ test "tokenize" {
         std.unicode.utf8ToUtf16LeStringLiteral("hello"),
         std.unicode.utf8ToUtf16LeStringLiteral(" "),
     );
-    try testing.expect(eql(u16, it16.next().?, std.unicode.utf8ToUtf16LeStringLiteral("hello")));
+    try testing.expect(eql(u16, it16.next() orelse unreachable, std.unicode.utf8ToUtf16LeStringLiteral("hello")));
     try testing.expect(it16.next() == null);
 }
 
 test "tokenize (multibyte)" {
     var it = tokenize(u8, "a|b,c/d e", " /,|");
-    try testing.expect(eql(u8, it.next().?, "a"));
-    try testing.expect(eql(u8, it.next().?, "b"));
-    try testing.expect(eql(u8, it.next().?, "c"));
-    try testing.expect(eql(u8, it.next().?, "d"));
-    try testing.expect(eql(u8, it.next().?, "e"));
+    try testing.expect(eql(u8, it.next() orelse unreachable, "a"));
+    try testing.expect(eql(u8, it.next() orelse unreachable, "b"));
+    try testing.expect(eql(u8, it.next() orelse unreachable, "c"));
+    try testing.expect(eql(u8, it.next() orelse unreachable, "d"));
+    try testing.expect(eql(u8, it.next() orelse unreachable, "e"));
     try testing.expect(it.next() == null);
 
     var it16 = tokenize(
@@ -1661,25 +1661,25 @@ test "tokenize (multibyte)" {
         std.unicode.utf8ToUtf16LeStringLiteral("a|b,c/d e"),
         std.unicode.utf8ToUtf16LeStringLiteral(" /,|"),
     );
-    try testing.expect(eql(u16, it16.next().?, std.unicode.utf8ToUtf16LeStringLiteral("a")));
-    try testing.expect(eql(u16, it16.next().?, std.unicode.utf8ToUtf16LeStringLiteral("b")));
-    try testing.expect(eql(u16, it16.next().?, std.unicode.utf8ToUtf16LeStringLiteral("c")));
-    try testing.expect(eql(u16, it16.next().?, std.unicode.utf8ToUtf16LeStringLiteral("d")));
-    try testing.expect(eql(u16, it16.next().?, std.unicode.utf8ToUtf16LeStringLiteral("e")));
+    try testing.expect(eql(u16, it16.next() orelse unreachable, std.unicode.utf8ToUtf16LeStringLiteral("a")));
+    try testing.expect(eql(u16, it16.next() orelse unreachable, std.unicode.utf8ToUtf16LeStringLiteral("b")));
+    try testing.expect(eql(u16, it16.next() orelse unreachable, std.unicode.utf8ToUtf16LeStringLiteral("c")));
+    try testing.expect(eql(u16, it16.next() orelse unreachable, std.unicode.utf8ToUtf16LeStringLiteral("d")));
+    try testing.expect(eql(u16, it16.next() orelse unreachable, std.unicode.utf8ToUtf16LeStringLiteral("e")));
     try testing.expect(it16.next() == null);
 }
 
 test "tokenize (reset)" {
     var it = tokenize(u8, "   abc def   ghi  ", " ");
-    try testing.expect(eql(u8, it.next().?, "abc"));
-    try testing.expect(eql(u8, it.next().?, "def"));
-    try testing.expect(eql(u8, it.next().?, "ghi"));
+    try testing.expect(eql(u8, it.next() orelse unreachable, "abc"));
+    try testing.expect(eql(u8, it.next() orelse unreachable, "def"));
+    try testing.expect(eql(u8, it.next() orelse unreachable, "ghi"));
 
     it.reset();
 
-    try testing.expect(eql(u8, it.next().?, "abc"));
-    try testing.expect(eql(u8, it.next().?, "def"));
-    try testing.expect(eql(u8, it.next().?, "ghi"));
+    try testing.expect(eql(u8, it.next() orelse unreachable, "abc"));
+    try testing.expect(eql(u8, it.next() orelse unreachable, "def"));
+    try testing.expect(eql(u8, it.next() orelse unreachable, "ghi"));
     try testing.expect(it.next() == null);
 }
 
@@ -1702,23 +1702,23 @@ pub fn split(comptime T: type, buffer: []const T, delimiter: []const T) SplitIte
 
 test "split" {
     var it = split(u8, "abc|def||ghi", "|");
-    try testing.expect(eql(u8, it.next().?, "abc"));
-    try testing.expect(eql(u8, it.next().?, "def"));
-    try testing.expect(eql(u8, it.next().?, ""));
-    try testing.expect(eql(u8, it.next().?, "ghi"));
+    try testing.expect(eql(u8, it.next() orelse unreachable, "abc"));
+    try testing.expect(eql(u8, it.next() orelse unreachable, "def"));
+    try testing.expect(eql(u8, it.next() orelse unreachable, ""));
+    try testing.expect(eql(u8, it.next() orelse unreachable, "ghi"));
     try testing.expect(it.next() == null);
 
     it = split(u8, "", "|");
-    try testing.expect(eql(u8, it.next().?, ""));
+    try testing.expect(eql(u8, it.next() orelse unreachable, ""));
     try testing.expect(it.next() == null);
 
     it = split(u8, "|", "|");
-    try testing.expect(eql(u8, it.next().?, ""));
-    try testing.expect(eql(u8, it.next().?, ""));
+    try testing.expect(eql(u8, it.next() orelse unreachable, ""));
+    try testing.expect(eql(u8, it.next() orelse unreachable, ""));
     try testing.expect(it.next() == null);
 
     it = split(u8, "hello", " ");
-    try testing.expect(eql(u8, it.next().?, "hello"));
+    try testing.expect(eql(u8, it.next() orelse unreachable, "hello"));
     try testing.expect(it.next() == null);
 
     var it16 = split(
@@ -1726,17 +1726,17 @@ test "split" {
         std.unicode.utf8ToUtf16LeStringLiteral("hello"),
         std.unicode.utf8ToUtf16LeStringLiteral(" "),
     );
-    try testing.expect(eql(u16, it16.next().?, std.unicode.utf8ToUtf16LeStringLiteral("hello")));
+    try testing.expect(eql(u16, it16.next() orelse unreachable, std.unicode.utf8ToUtf16LeStringLiteral("hello")));
     try testing.expect(it16.next() == null);
 }
 
 test "split (multibyte)" {
     var it = split(u8, "a, b ,, c, d, e", ", ");
-    try testing.expect(eql(u8, it.next().?, "a"));
-    try testing.expect(eql(u8, it.next().?, "b ,"));
-    try testing.expect(eql(u8, it.next().?, "c"));
-    try testing.expect(eql(u8, it.next().?, "d"));
-    try testing.expect(eql(u8, it.next().?, "e"));
+    try testing.expect(eql(u8, it.next() orelse unreachable, "a"));
+    try testing.expect(eql(u8, it.next() orelse unreachable, "b ,"));
+    try testing.expect(eql(u8, it.next() orelse unreachable, "c"));
+    try testing.expect(eql(u8, it.next() orelse unreachable, "d"));
+    try testing.expect(eql(u8, it.next() orelse unreachable, "e"));
     try testing.expect(it.next() == null);
 
     var it16 = split(
@@ -1744,11 +1744,11 @@ test "split (multibyte)" {
         std.unicode.utf8ToUtf16LeStringLiteral("a, b ,, c, d, e"),
         std.unicode.utf8ToUtf16LeStringLiteral(", "),
     );
-    try testing.expect(eql(u16, it16.next().?, std.unicode.utf8ToUtf16LeStringLiteral("a")));
-    try testing.expect(eql(u16, it16.next().?, std.unicode.utf8ToUtf16LeStringLiteral("b ,")));
-    try testing.expect(eql(u16, it16.next().?, std.unicode.utf8ToUtf16LeStringLiteral("c")));
-    try testing.expect(eql(u16, it16.next().?, std.unicode.utf8ToUtf16LeStringLiteral("d")));
-    try testing.expect(eql(u16, it16.next().?, std.unicode.utf8ToUtf16LeStringLiteral("e")));
+    try testing.expect(eql(u16, it16.next() orelse unreachable, std.unicode.utf8ToUtf16LeStringLiteral("a")));
+    try testing.expect(eql(u16, it16.next() orelse unreachable, std.unicode.utf8ToUtf16LeStringLiteral("b ,")));
+    try testing.expect(eql(u16, it16.next() orelse unreachable, std.unicode.utf8ToUtf16LeStringLiteral("c")));
+    try testing.expect(eql(u16, it16.next() orelse unreachable, std.unicode.utf8ToUtf16LeStringLiteral("d")));
+    try testing.expect(eql(u16, it16.next() orelse unreachable, std.unicode.utf8ToUtf16LeStringLiteral("e")));
     try testing.expect(it16.next() == null);
 }
 

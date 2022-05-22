@@ -106,15 +106,15 @@ test "BufMap" {
     defer bufmap.deinit();
 
     try bufmap.put("x", "1");
-    try testing.expect(mem.eql(u8, bufmap.get("x").?, "1"));
+    try testing.expect(mem.eql(u8, bufmap.get("x") orelse unreachable, "1"));
     try testing.expect(1 == bufmap.count());
 
     try bufmap.put("x", "2");
-    try testing.expect(mem.eql(u8, bufmap.get("x").?, "2"));
+    try testing.expect(mem.eql(u8, bufmap.get("x") orelse unreachable, "2"));
     try testing.expect(1 == bufmap.count());
 
     try bufmap.put("x", "3");
-    try testing.expect(mem.eql(u8, bufmap.get("x").?, "3"));
+    try testing.expect(mem.eql(u8, bufmap.get("x") orelse unreachable, "3"));
     try testing.expect(1 == bufmap.count());
 
     bufmap.remove("x");

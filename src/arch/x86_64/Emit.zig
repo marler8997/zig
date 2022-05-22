@@ -955,7 +955,7 @@ fn mirLeaPie(emit: *Emit, inst: Mir.Inst.Index) InnerError!void {
             0b01 => @enumToInt(std.macho.reloc_type_x86_64.X86_64_RELOC_SIGNED),
             else => return emit.fail("TODO unused LEA PIE variants 0b10 and 0b11", .{}),
         };
-        const atom = macho_file.atom_by_index_table.get(load_reloc.atom_index).?;
+        const atom = macho_file.atom_by_index_table.get(load_reloc.atom_index) orelse unreachable;
         log.debug("adding reloc of type {} to local @{d}", .{ reloc_type, load_reloc.sym_index });
         try atom.relocs.append(emit.bin_file.allocator, .{
             .offset = @intCast(u32, end_offset - 4),
@@ -1080,7 +1080,7 @@ fn mirCallExtern(emit: *Emit, inst: Mir.Inst.Index) InnerError!void {
 
     if (emit.bin_file.cast(link.File.MachO)) |macho_file| {
         // Add relocation to the decl.
-        const atom = macho_file.atom_by_index_table.get(extern_fn.atom_index).?;
+        const atom = macho_file.atom_by_index_table.get(extern_fn.atom_index) orelse unreachable;
         try atom.relocs.append(emit.bin_file.allocator, .{
             .offset = offset,
             .target = .{ .global = extern_fn.sym_name },
@@ -2500,7 +2500,7 @@ fn expectEqualHexStrings(expected: []const u8, given: []const u8, assembly: []co
     defer testing.allocator.free(expected_fmt);
     const given_fmt = try std.fmt.allocPrint(testing.allocator, "{x}", .{std.fmt.fmtSliceHexLower(given)});
     defer testing.allocator.free(given_fmt);
-    const idx = mem.indexOfDiff(u8, expected_fmt, given_fmt).?;
+    const idx = mem.indexOfDiff(u8, expected_fmt, given_fmt) orelse unreachable;
     var padding = try testing.allocator.alloc(u8, idx + 5);
     defer testing.allocator.free(padding);
     mem.set(u8, padding, ' ');

@@ -188,8 +188,8 @@ pub const Node = struct {
         ) !void {
             _ = fmt;
             _ = options;
-            const start = self.base.tree.tokens[self.start.?];
-            const end = self.base.tree.tokens[self.end.?];
+            const start = self.base.tree.tokens[self.start orelse unreachable];
+            const end = self.base.tree.tokens[self.end orelse unreachable];
             return std.fmt.format(writer, "{s}", .{
                 self.base.tree.source[start.start..end.end],
             });
@@ -338,7 +338,7 @@ const Parser = struct {
 
         node.end = self.token_it.pos - 1;
 
-        log.debug("Doc end: {}, {}", .{ node.end.?, self.tree.tokens[node.end.?] });
+        log.debug("Doc end: {}, {}", .{ node.end orelse unreachable, self.tree.tokens[node.end orelse unreachable] });
 
         return node;
     }
@@ -433,7 +433,7 @@ const Parser = struct {
 
         node.end = self.token_it.pos - 1;
 
-        log.debug("Map end: {}, {}", .{ node.end.?, self.tree.tokens[node.end.?] });
+        log.debug("Map end: {}, {}", .{ node.end orelse unreachable, self.tree.tokens[node.end orelse unreachable] });
 
         return node;
     }
@@ -493,7 +493,7 @@ const Parser = struct {
 
         node.end = self.token_it.pos - 1;
 
-        log.debug("List end: {}, {}", .{ node.end.?, self.tree.tokens[node.end.?] });
+        log.debug("List end: {}, {}", .{ node.end orelse unreachable, self.tree.tokens[node.end orelse unreachable] });
 
         return node;
     }
@@ -548,7 +548,7 @@ const Parser = struct {
 
         node.end = self.token_it.pos - 1;
 
-        log.debug("List end: {}, {}", .{ node.end.?, self.tree.tokens[node.end.?] });
+        log.debug("List end: {}, {}", .{ node.end orelse unreachable, self.tree.tokens[node.end orelse unreachable] });
 
         return node;
     }
@@ -563,11 +563,11 @@ const Parser = struct {
 
         self.token_it.seekTo(start);
 
-        log.debug("Leaf start: {}, {}", .{ node.start.?, self.tree.tokens[node.start.?] });
+        log.debug("Leaf start: {}, {}", .{ node.start orelse unreachable, self.tree.tokens[node.start orelse unreachable] });
 
         parse: {
             if (self.eatToken(.SingleQuote)) |_| {
-                node.start = node.start.? + 1;
+                node.start = node.start orelse unreachable + 1;
                 while (true) {
                     const tok = self.token_it.next();
                     switch (tok.id) {
@@ -582,7 +582,7 @@ const Parser = struct {
             }
 
             if (self.eatToken(.DoubleQuote)) |_| {
-                node.start = node.start.? + 1;
+                node.start = node.start orelse unreachable + 1;
                 while (true) {
                     const tok = self.token_it.next();
                     switch (tok.id) {
@@ -620,7 +620,7 @@ const Parser = struct {
             }
         }
 
-        log.debug("Leaf end: {}, {}", .{ node.end.?, self.tree.tokens[node.end.?] });
+        log.debug("Leaf end: {}, {}", .{ node.end orelse unreachable, self.tree.tokens[node.end orelse unreachable] });
 
         return node;
     }
@@ -631,7 +631,7 @@ const Parser = struct {
             // No need to open scope.
             return;
         }
-        const indent = self.token_it.next().count.?;
+        const indent = self.token_it.next().count orelse unreachable;
         const prev_scope = self.scopes.items[self.scopes.items.len - 1];
         if (indent < prev_scope.indent) {
             return error.MalformedYaml;
@@ -649,7 +649,7 @@ const Parser = struct {
             const peek = self.token_it.peek() orelse return error.UnexpectedEof;
             switch (peek.id) {
                 .Space, .Tab => {
-                    break :indent self.token_it.next().count.?;
+                    break :indent self.token_it.next().count orelse unreachable;
                 },
                 else => {
                     break :indent 0;

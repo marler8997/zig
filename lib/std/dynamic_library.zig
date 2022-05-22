@@ -281,7 +281,7 @@ pub const ElfDynLib = struct {
             if (0 == self.syms[i].st_shndx) continue;
             if (!mem.eql(u8, name, mem.sliceTo(self.strings + self.syms[i].st_name, 0))) continue;
             if (maybe_versym) |versym| {
-                if (!checkver(self.verdef.?, versym[i], vername, self.strings))
+                if (!checkver(self.verdef orelse unreachable, versym[i], vername, self.strings))
                     continue;
             }
             return @ptrToInt(self.memory.ptr) + self.syms[i].st_value;

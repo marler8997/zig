@@ -63,7 +63,7 @@ pub const DevicePathProtocol = packed struct {
 
         ptr[path.len] = 0;
 
-        var end = @ptrCast(*EndDevicePath.EndEntireDevicePath, @ptrCast(*DevicePathProtocol, new).next().?);
+        var end = @ptrCast(*EndDevicePath.EndEntireDevicePath, @ptrCast(*DevicePathProtocol, new).next() orelse unreachable);
         end.type = .End;
         end.subtype = .EndEntire;
         end.length = @sizeOf(EndDevicePath.EndEntireDevicePath);
@@ -92,7 +92,7 @@ pub const DevicePathProtocol = packed struct {
 
     pub fn initSubtype(self: *const DevicePathProtocol, comptime TUnion: type) ?TUnion {
         const type_info = @typeInfo(TUnion).Union;
-        const TTag = type_info.tag_type.?;
+        const TTag = type_info.tag_type orelse unreachable;
 
         inline for (type_info.fields) |subtype| {
             // The tag names match the union names, so just grab that off the enum

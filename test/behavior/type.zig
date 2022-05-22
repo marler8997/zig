@@ -302,7 +302,7 @@ test "Type.Struct" {
     try testing.expectEqual(@as(?*const anyopaque, null), infoB.fields[0].default_value);
     try testing.expectEqualSlices(u8, "y", infoB.fields[1].name);
     try testing.expectEqual(u32, infoB.fields[1].field_type);
-    try testing.expectEqual(@as(u32, 5), @ptrCast(*const u32, infoB.fields[1].default_value.?).*);
+    try testing.expectEqual(@as(u32, 5), @ptrCast(*const u32, infoB.fields[1].default_value orelse unreachable).*);
     try testing.expectEqual(@as(usize, 0), infoB.decls.len);
     try testing.expectEqual(@as(bool, false), infoB.is_tuple);
 
@@ -311,10 +311,10 @@ test "Type.Struct" {
     try testing.expectEqual(Type.ContainerLayout.Packed, infoC.layout);
     try testing.expectEqualSlices(u8, "x", infoC.fields[0].name);
     try testing.expectEqual(u8, infoC.fields[0].field_type);
-    try testing.expectEqual(@as(u8, 3), @ptrCast(*const u8, infoC.fields[0].default_value.?).*);
+    try testing.expectEqual(@as(u8, 3), @ptrCast(*const u8, infoC.fields[0].default_value orelse unreachable).*);
     try testing.expectEqualSlices(u8, "y", infoC.fields[1].name);
     try testing.expectEqual(u32, infoC.fields[1].field_type);
-    try testing.expectEqual(@as(u32, 5), @ptrCast(*const u32, infoC.fields[1].default_value.?).*);
+    try testing.expectEqual(@as(u32, 5), @ptrCast(*const u32, infoC.fields[1].default_value orelse unreachable).*);
     try testing.expectEqual(@as(usize, 0), infoC.decls.len);
     try testing.expectEqual(@as(bool, false), infoC.is_tuple);
 
@@ -324,10 +324,10 @@ test "Type.Struct" {
     try testing.expectEqual(Type.ContainerLayout.Auto, infoD.layout);
     try testing.expectEqualSlices(u8, "x", infoD.fields[0].name);
     try testing.expectEqual(comptime_int, infoD.fields[0].field_type);
-    try testing.expectEqual(@as(comptime_int, 3), @ptrCast(*const comptime_int, infoD.fields[0].default_value.?).*);
+    try testing.expectEqual(@as(comptime_int, 3), @ptrCast(*const comptime_int, infoD.fields[0].default_value orelse unreachable).*);
     try testing.expectEqualSlices(u8, "y", infoD.fields[1].name);
     try testing.expectEqual(comptime_int, infoD.fields[1].field_type);
-    try testing.expectEqual(@as(comptime_int, 5), @ptrCast(*const comptime_int, infoD.fields[1].default_value.?).*);
+    try testing.expectEqual(@as(comptime_int, 5), @ptrCast(*const comptime_int, infoD.fields[1].default_value orelse unreachable).*);
     try testing.expectEqual(@as(usize, 0), infoD.decls.len);
     try testing.expectEqual(@as(bool, false), infoD.is_tuple);
 
@@ -337,10 +337,10 @@ test "Type.Struct" {
     try testing.expectEqual(Type.ContainerLayout.Auto, infoE.layout);
     try testing.expectEqualSlices(u8, "0", infoE.fields[0].name);
     try testing.expectEqual(comptime_int, infoE.fields[0].field_type);
-    try testing.expectEqual(@as(comptime_int, 1), @ptrCast(*const comptime_int, infoE.fields[0].default_value.?).*);
+    try testing.expectEqual(@as(comptime_int, 1), @ptrCast(*const comptime_int, infoE.fields[0].default_value orelse unreachable).*);
     try testing.expectEqualSlices(u8, "1", infoE.fields[1].name);
     try testing.expectEqual(comptime_int, infoE.fields[1].field_type);
-    try testing.expectEqual(@as(comptime_int, 2), @ptrCast(*const comptime_int, infoE.fields[1].default_value.?).*);
+    try testing.expectEqual(@as(comptime_int, 2), @ptrCast(*const comptime_int, infoE.fields[1].default_value orelse unreachable).*);
     try testing.expectEqual(@as(usize, 0), infoE.decls.len);
     try testing.expectEqual(@as(bool, true), infoE.is_tuple);
 

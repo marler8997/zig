@@ -760,8 +760,8 @@ pub const Pdb = struct {
                                 const subsect_index = checksum_offset + block_hdr.NameIndex;
                                 const chksum_hdr = @ptrCast(*align(1) FileChecksumEntryHeader, &module.subsect_info[subsect_index]);
                                 const strtab_offset = @sizeOf(PDBStringTableHeader) + chksum_hdr.FileNameOffset;
-                                try self.string_table.?.seekTo(strtab_offset);
-                                const source_file_name = try self.string_table.?.reader().readUntilDelimiterAlloc(self.allocator, 0, 1024);
+                                try self.string_table orelse unreachable.seekTo(strtab_offset);
+                                const source_file_name = try self.string_table orelse unreachable.reader().readUntilDelimiterAlloc(self.allocator, 0, 1024);
 
                                 const line_entry_idx = line_i - 1;
 
@@ -1021,7 +1021,7 @@ const MsfStream = struct {
     blocks: []u32 = undefined,
     block_size: u32 = undefined,
 
-    pub const Error = @typeInfo(@typeInfo(@TypeOf(read)).Fn.return_type.?).ErrorUnion.error_set;
+    pub const Error = @typeInfo(@typeInfo(@TypeOf(read)).Fn.return_type orelse unreachable).ErrorUnion.error_set;
 
     fn init(block_size: u32, file: File, blocks: []u32) MsfStream {
         const stream = MsfStream{

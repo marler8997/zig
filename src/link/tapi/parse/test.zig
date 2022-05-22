@@ -18,20 +18,20 @@ test "explicit doc" {
 
     try testing.expectEqual(tree.docs.items.len, 1);
 
-    const doc = tree.docs.items[0].cast(Node.Doc).?;
-    try testing.expectEqual(doc.start.?, 0);
-    try testing.expectEqual(doc.end.?, tree.tokens.len - 2);
+    const doc = tree.docs.items[0].cast(Node.Doc) orelse unreachable;
+    try testing.expectEqual(doc.start orelse unreachable, 0);
+    try testing.expectEqual(doc.end orelse unreachable, tree.tokens.len - 2);
 
-    const directive = tree.tokens[doc.directive.?];
+    const directive = tree.tokens[doc.directive orelse unreachable];
     try testing.expectEqual(directive.id, .Literal);
     try testing.expect(mem.eql(u8, "tapi-tbd", tree.source[directive.start..directive.end]));
 
     try testing.expect(doc.value != null);
-    try testing.expectEqual(doc.value.?.tag, .map);
+    try testing.expectEqual(doc.value orelse unreachable.tag, .map);
 
-    const map = doc.value.?.cast(Node.Map).?;
-    try testing.expectEqual(map.start.?, 5);
-    try testing.expectEqual(map.end.?, 14);
+    const map = doc.value orelse unreachable.cast(Node.Map) orelse unreachable;
+    try testing.expectEqual(map.start orelse unreachable, 5);
+    try testing.expectEqual(map.end orelse unreachable, 14);
     try testing.expectEqual(map.values.items.len, 2);
 
     {
@@ -41,8 +41,8 @@ test "explicit doc" {
         try testing.expectEqual(key.id, .Literal);
         try testing.expect(mem.eql(u8, "tbd-version", tree.source[key.start..key.end]));
 
-        const value = entry.value.cast(Node.Value).?;
-        const value_tok = tree.tokens[value.start.?];
+        const value = entry.value.cast(Node.Value) orelse unreachable;
+        const value_tok = tree.tokens[value.start orelse unreachable];
         try testing.expectEqual(value_tok.id, .Literal);
         try testing.expect(mem.eql(u8, "4", tree.source[value_tok.start..value_tok.end]));
     }
@@ -54,8 +54,8 @@ test "explicit doc" {
         try testing.expectEqual(key.id, .Literal);
         try testing.expect(mem.eql(u8, "abc-version", tree.source[key.start..key.end]));
 
-        const value = entry.value.cast(Node.Value).?;
-        const value_tok = tree.tokens[value.start.?];
+        const value = entry.value.cast(Node.Value) orelse unreachable;
+        const value_tok = tree.tokens[value.start orelse unreachable];
         try testing.expectEqual(value_tok.id, .Literal);
         try testing.expect(mem.eql(u8, "5", tree.source[value_tok.start..value_tok.end]));
     }
@@ -74,17 +74,17 @@ test "leaf in quotes" {
 
     try testing.expectEqual(tree.docs.items.len, 1);
 
-    const doc = tree.docs.items[0].cast(Node.Doc).?;
-    try testing.expectEqual(doc.start.?, 0);
-    try testing.expectEqual(doc.end.?, tree.tokens.len - 2);
+    const doc = tree.docs.items[0].cast(Node.Doc) orelse unreachable;
+    try testing.expectEqual(doc.start orelse unreachable, 0);
+    try testing.expectEqual(doc.end orelse unreachable, tree.tokens.len - 2);
     try testing.expect(doc.directive == null);
 
     try testing.expect(doc.value != null);
-    try testing.expectEqual(doc.value.?.tag, .map);
+    try testing.expectEqual(doc.value orelse unreachable.tag, .map);
 
-    const map = doc.value.?.cast(Node.Map).?;
-    try testing.expectEqual(map.start.?, 0);
-    try testing.expectEqual(map.end.?, tree.tokens.len - 2);
+    const map = doc.value orelse unreachable.cast(Node.Map) orelse unreachable;
+    try testing.expectEqual(map.start orelse unreachable, 0);
+    try testing.expectEqual(map.end orelse unreachable, tree.tokens.len - 2);
     try testing.expectEqual(map.values.items.len, 3);
 
     {
@@ -98,9 +98,9 @@ test "leaf in quotes" {
             tree.source[key.start..key.end],
         ));
 
-        const value = entry.value.cast(Node.Value).?;
-        const start = tree.tokens[value.start.?];
-        const end = tree.tokens[value.end.?];
+        const value = entry.value.cast(Node.Value) orelse unreachable;
+        const start = tree.tokens[value.start orelse unreachable];
+        const end = tree.tokens[value.end orelse unreachable];
         try testing.expectEqual(start.id, .Literal);
         try testing.expectEqual(end.id, .Literal);
         try testing.expect(mem.eql(
@@ -125,17 +125,17 @@ test "nested maps" {
 
     try testing.expectEqual(tree.docs.items.len, 1);
 
-    const doc = tree.docs.items[0].cast(Node.Doc).?;
-    try testing.expectEqual(doc.start.?, 0);
-    try testing.expectEqual(doc.end.?, tree.tokens.len - 2);
+    const doc = tree.docs.items[0].cast(Node.Doc) orelse unreachable;
+    try testing.expectEqual(doc.start orelse unreachable, 0);
+    try testing.expectEqual(doc.end orelse unreachable, tree.tokens.len - 2);
     try testing.expect(doc.directive == null);
 
     try testing.expect(doc.value != null);
-    try testing.expectEqual(doc.value.?.tag, .map);
+    try testing.expectEqual(doc.value orelse unreachable.tag, .map);
 
-    const map = doc.value.?.cast(Node.Map).?;
-    try testing.expectEqual(map.start.?, 0);
-    try testing.expectEqual(map.end.?, tree.tokens.len - 2);
+    const map = doc.value orelse unreachable.cast(Node.Map) orelse unreachable;
+    try testing.expectEqual(map.start orelse unreachable, 0);
+    try testing.expectEqual(map.end orelse unreachable, tree.tokens.len - 2);
     try testing.expectEqual(map.values.items.len, 2);
 
     {
@@ -145,9 +145,9 @@ test "nested maps" {
         try testing.expectEqual(key.id, .Literal);
         try testing.expect(mem.eql(u8, "key1", tree.source[key.start..key.end]));
 
-        const nested_map = entry.value.cast(Node.Map).?;
-        try testing.expectEqual(nested_map.start.?, 4);
-        try testing.expectEqual(nested_map.end.?, 16);
+        const nested_map = entry.value.cast(Node.Map) orelse unreachable;
+        try testing.expectEqual(nested_map.start orelse unreachable, 4);
+        try testing.expectEqual(nested_map.end orelse unreachable, 16);
         try testing.expectEqual(nested_map.values.items.len, 2);
 
         {
@@ -161,8 +161,8 @@ test "nested maps" {
                 tree.source[nested_key.start..nested_key.end],
             ));
 
-            const nested_value = nested_entry.value.cast(Node.Value).?;
-            const nested_value_tok = tree.tokens[nested_value.start.?];
+            const nested_value = nested_entry.value.cast(Node.Value) orelse unreachable;
+            const nested_value_tok = tree.tokens[nested_value.start orelse unreachable];
             try testing.expectEqual(nested_value_tok.id, .Literal);
             try testing.expect(mem.eql(
                 u8,
@@ -182,8 +182,8 @@ test "nested maps" {
                 tree.source[nested_key.start..nested_key.end],
             ));
 
-            const nested_value = nested_entry.value.cast(Node.Value).?;
-            const nested_value_tok = tree.tokens[nested_value.start.?];
+            const nested_value = nested_entry.value.cast(Node.Value) orelse unreachable;
+            const nested_value_tok = tree.tokens[nested_value.start orelse unreachable];
             try testing.expectEqual(nested_value_tok.id, .Literal);
             try testing.expect(mem.eql(
                 u8,
@@ -200,8 +200,8 @@ test "nested maps" {
         try testing.expectEqual(key.id, .Literal);
         try testing.expect(mem.eql(u8, "key2", tree.source[key.start..key.end]));
 
-        const value = entry.value.cast(Node.Value).?;
-        const value_tok = tree.tokens[value.start.?];
+        const value = entry.value.cast(Node.Value) orelse unreachable;
+        const value_tok = tree.tokens[value.start orelse unreachable];
         try testing.expectEqual(value_tok.id, .Literal);
         try testing.expect(mem.eql(
             u8,
@@ -224,16 +224,16 @@ test "map of list of values" {
 
     try testing.expectEqual(tree.docs.items.len, 1);
 
-    const doc = tree.docs.items[0].cast(Node.Doc).?;
-    try testing.expectEqual(doc.start.?, 0);
-    try testing.expectEqual(doc.end.?, tree.tokens.len - 2);
+    const doc = tree.docs.items[0].cast(Node.Doc) orelse unreachable;
+    try testing.expectEqual(doc.start orelse unreachable, 0);
+    try testing.expectEqual(doc.end orelse unreachable, tree.tokens.len - 2);
 
     try testing.expect(doc.value != null);
-    try testing.expectEqual(doc.value.?.tag, .map);
+    try testing.expectEqual(doc.value orelse unreachable.tag, .map);
 
-    const map = doc.value.?.cast(Node.Map).?;
-    try testing.expectEqual(map.start.?, 0);
-    try testing.expectEqual(map.end.?, tree.tokens.len - 2);
+    const map = doc.value orelse unreachable.cast(Node.Map) orelse unreachable;
+    try testing.expectEqual(map.start orelse unreachable, 0);
+    try testing.expectEqual(map.end orelse unreachable, tree.tokens.len - 2);
     try testing.expectEqual(map.values.items.len, 1);
 
     const entry = map.values.items[0];
@@ -241,28 +241,28 @@ test "map of list of values" {
     try testing.expectEqual(key.id, .Literal);
     try testing.expect(mem.eql(u8, "ints", tree.source[key.start..key.end]));
 
-    const value = entry.value.cast(Node.List).?;
-    try testing.expectEqual(value.start.?, 4);
-    try testing.expectEqual(value.end.?, tree.tokens.len - 2);
+    const value = entry.value.cast(Node.List) orelse unreachable;
+    try testing.expectEqual(value.start orelse unreachable, 4);
+    try testing.expectEqual(value.end orelse unreachable, tree.tokens.len - 2);
     try testing.expectEqual(value.values.items.len, 3);
 
     {
-        const elem = value.values.items[0].cast(Node.Value).?;
-        const leaf = tree.tokens[elem.start.?];
+        const elem = value.values.items[0].cast(Node.Value) orelse unreachable;
+        const leaf = tree.tokens[elem.start orelse unreachable];
         try testing.expectEqual(leaf.id, .Literal);
         try testing.expect(mem.eql(u8, "0", tree.source[leaf.start..leaf.end]));
     }
 
     {
-        const elem = value.values.items[1].cast(Node.Value).?;
-        const leaf = tree.tokens[elem.start.?];
+        const elem = value.values.items[1].cast(Node.Value) orelse unreachable;
+        const leaf = tree.tokens[elem.start orelse unreachable];
         try testing.expectEqual(leaf.id, .Literal);
         try testing.expect(mem.eql(u8, "1", tree.source[leaf.start..leaf.end]));
     }
 
     {
-        const elem = value.values.items[2].cast(Node.Value).?;
-        const leaf = tree.tokens[elem.start.?];
+        const elem = value.values.items[2].cast(Node.Value) orelse unreachable;
+        const leaf = tree.tokens[elem.start orelse unreachable];
         try testing.expectEqual(leaf.id, .Literal);
         try testing.expect(mem.eql(u8, "2", tree.source[leaf.start..leaf.end]));
     }
@@ -282,16 +282,16 @@ test "map of list of maps" {
 
     try testing.expectEqual(tree.docs.items.len, 1);
 
-    const doc = tree.docs.items[0].cast(Node.Doc).?;
-    try testing.expectEqual(doc.start.?, 0);
-    try testing.expectEqual(doc.end.?, tree.tokens.len - 2);
+    const doc = tree.docs.items[0].cast(Node.Doc) orelse unreachable;
+    try testing.expectEqual(doc.start orelse unreachable, 0);
+    try testing.expectEqual(doc.end orelse unreachable, tree.tokens.len - 2);
 
     try testing.expect(doc.value != null);
-    try testing.expectEqual(doc.value.?.tag, .map);
+    try testing.expectEqual(doc.value orelse unreachable.tag, .map);
 
-    const map = doc.value.?.cast(Node.Map).?;
-    try testing.expectEqual(map.start.?, 0);
-    try testing.expectEqual(map.end.?, tree.tokens.len - 2);
+    const map = doc.value orelse unreachable.cast(Node.Map) orelse unreachable;
+    try testing.expectEqual(map.start orelse unreachable, 0);
+    try testing.expectEqual(map.end orelse unreachable, tree.tokens.len - 2);
     try testing.expectEqual(map.values.items.len, 1);
 
     const entry = map.values.items[0];
@@ -299,46 +299,46 @@ test "map of list of maps" {
     try testing.expectEqual(key.id, .Literal);
     try testing.expect(mem.eql(u8, "key1", tree.source[key.start..key.end]));
 
-    const value = entry.value.cast(Node.List).?;
-    try testing.expectEqual(value.start.?, 3);
-    try testing.expectEqual(value.end.?, tree.tokens.len - 2);
+    const value = entry.value.cast(Node.List) orelse unreachable;
+    try testing.expectEqual(value.start orelse unreachable, 3);
+    try testing.expectEqual(value.end orelse unreachable, tree.tokens.len - 2);
     try testing.expectEqual(value.values.items.len, 3);
 
     {
-        const elem = value.values.items[0].cast(Node.Map).?;
+        const elem = value.values.items[0].cast(Node.Map) orelse unreachable;
         const nested = elem.values.items[0];
         const nested_key = tree.tokens[nested.key];
         try testing.expectEqual(nested_key.id, .Literal);
         try testing.expect(mem.eql(u8, "key2", tree.source[nested_key.start..nested_key.end]));
 
-        const nested_v = nested.value.cast(Node.Value).?;
-        const leaf = tree.tokens[nested_v.start.?];
+        const nested_v = nested.value.cast(Node.Value) orelse unreachable;
+        const leaf = tree.tokens[nested_v.start orelse unreachable];
         try testing.expectEqual(leaf.id, .Literal);
         try testing.expect(mem.eql(u8, "value2", tree.source[leaf.start..leaf.end]));
     }
 
     {
-        const elem = value.values.items[1].cast(Node.Map).?;
+        const elem = value.values.items[1].cast(Node.Map) orelse unreachable;
         const nested = elem.values.items[0];
         const nested_key = tree.tokens[nested.key];
         try testing.expectEqual(nested_key.id, .Literal);
         try testing.expect(mem.eql(u8, "key3", tree.source[nested_key.start..nested_key.end]));
 
-        const nested_v = nested.value.cast(Node.Value).?;
-        const leaf = tree.tokens[nested_v.start.?];
+        const nested_v = nested.value.cast(Node.Value) orelse unreachable;
+        const leaf = tree.tokens[nested_v.start orelse unreachable];
         try testing.expectEqual(leaf.id, .Literal);
         try testing.expect(mem.eql(u8, "value3", tree.source[leaf.start..leaf.end]));
     }
 
     {
-        const elem = value.values.items[2].cast(Node.Map).?;
+        const elem = value.values.items[2].cast(Node.Map) orelse unreachable;
         const nested = elem.values.items[0];
         const nested_key = tree.tokens[nested.key];
         try testing.expectEqual(nested_key.id, .Literal);
         try testing.expect(mem.eql(u8, "key4", tree.source[nested_key.start..nested_key.end]));
 
-        const nested_v = nested.value.cast(Node.Value).?;
-        const leaf = tree.tokens[nested_v.start.?];
+        const nested_v = nested.value.cast(Node.Value) orelse unreachable;
+        const leaf = tree.tokens[nested_v.start orelse unreachable];
         try testing.expectEqual(leaf.id, .Literal);
         try testing.expect(mem.eql(u8, "value4", tree.source[leaf.start..leaf.end]));
     }
@@ -357,97 +357,97 @@ test "list of lists" {
 
     try testing.expectEqual(tree.docs.items.len, 1);
 
-    const doc = tree.docs.items[0].cast(Node.Doc).?;
-    try testing.expectEqual(doc.start.?, 0);
-    try testing.expectEqual(doc.end.?, tree.tokens.len - 2);
+    const doc = tree.docs.items[0].cast(Node.Doc) orelse unreachable;
+    try testing.expectEqual(doc.start orelse unreachable, 0);
+    try testing.expectEqual(doc.end orelse unreachable, tree.tokens.len - 2);
 
     try testing.expect(doc.value != null);
-    try testing.expectEqual(doc.value.?.tag, .list);
+    try testing.expectEqual(doc.value orelse unreachable.tag, .list);
 
-    const list = doc.value.?.cast(Node.List).?;
-    try testing.expectEqual(list.start.?, 0);
-    try testing.expectEqual(list.end.?, tree.tokens.len - 2);
+    const list = doc.value orelse unreachable.cast(Node.List) orelse unreachable;
+    try testing.expectEqual(list.start orelse unreachable, 0);
+    try testing.expectEqual(list.end orelse unreachable, tree.tokens.len - 2);
     try testing.expectEqual(list.values.items.len, 3);
 
     {
         try testing.expectEqual(list.values.items[0].tag, .list);
-        const nested = list.values.items[0].cast(Node.List).?;
+        const nested = list.values.items[0].cast(Node.List) orelse unreachable;
         try testing.expectEqual(nested.values.items.len, 3);
 
         {
             try testing.expectEqual(nested.values.items[0].tag, .value);
-            const value = nested.values.items[0].cast(Node.Value).?;
-            const leaf = tree.tokens[value.start.?];
+            const value = nested.values.items[0].cast(Node.Value) orelse unreachable;
+            const leaf = tree.tokens[value.start orelse unreachable];
             try testing.expect(mem.eql(u8, "name", tree.source[leaf.start..leaf.end]));
         }
 
         {
             try testing.expectEqual(nested.values.items[1].tag, .value);
-            const value = nested.values.items[1].cast(Node.Value).?;
-            const leaf = tree.tokens[value.start.?];
+            const value = nested.values.items[1].cast(Node.Value) orelse unreachable;
+            const leaf = tree.tokens[value.start orelse unreachable];
             try testing.expect(mem.eql(u8, "hr", tree.source[leaf.start..leaf.end]));
         }
 
         {
             try testing.expectEqual(nested.values.items[2].tag, .value);
-            const value = nested.values.items[2].cast(Node.Value).?;
-            const leaf = tree.tokens[value.start.?];
+            const value = nested.values.items[2].cast(Node.Value) orelse unreachable;
+            const leaf = tree.tokens[value.start orelse unreachable];
             try testing.expect(mem.eql(u8, "avg", tree.source[leaf.start..leaf.end]));
         }
     }
 
     {
         try testing.expectEqual(list.values.items[1].tag, .list);
-        const nested = list.values.items[1].cast(Node.List).?;
+        const nested = list.values.items[1].cast(Node.List) orelse unreachable;
         try testing.expectEqual(nested.values.items.len, 3);
 
         {
             try testing.expectEqual(nested.values.items[0].tag, .value);
-            const value = nested.values.items[0].cast(Node.Value).?;
-            const start = tree.tokens[value.start.?];
-            const end = tree.tokens[value.end.?];
+            const value = nested.values.items[0].cast(Node.Value) orelse unreachable;
+            const start = tree.tokens[value.start orelse unreachable];
+            const end = tree.tokens[value.end orelse unreachable];
             try testing.expect(mem.eql(u8, "Mark McGwire", tree.source[start.start..end.end]));
         }
 
         {
             try testing.expectEqual(nested.values.items[1].tag, .value);
-            const value = nested.values.items[1].cast(Node.Value).?;
-            const leaf = tree.tokens[value.start.?];
+            const value = nested.values.items[1].cast(Node.Value) orelse unreachable;
+            const leaf = tree.tokens[value.start orelse unreachable];
             try testing.expect(mem.eql(u8, "65", tree.source[leaf.start..leaf.end]));
         }
 
         {
             try testing.expectEqual(nested.values.items[2].tag, .value);
-            const value = nested.values.items[2].cast(Node.Value).?;
-            const leaf = tree.tokens[value.start.?];
+            const value = nested.values.items[2].cast(Node.Value) orelse unreachable;
+            const leaf = tree.tokens[value.start orelse unreachable];
             try testing.expect(mem.eql(u8, "0.278", tree.source[leaf.start..leaf.end]));
         }
     }
 
     {
         try testing.expectEqual(list.values.items[2].tag, .list);
-        const nested = list.values.items[2].cast(Node.List).?;
+        const nested = list.values.items[2].cast(Node.List) orelse unreachable;
         try testing.expectEqual(nested.values.items.len, 3);
 
         {
             try testing.expectEqual(nested.values.items[0].tag, .value);
-            const value = nested.values.items[0].cast(Node.Value).?;
-            const start = tree.tokens[value.start.?];
-            const end = tree.tokens[value.end.?];
+            const value = nested.values.items[0].cast(Node.Value) orelse unreachable;
+            const start = tree.tokens[value.start orelse unreachable];
+            const end = tree.tokens[value.end orelse unreachable];
             try testing.expect(mem.eql(u8, "Sammy Sosa", tree.source[start.start..end.end]));
         }
 
         {
             try testing.expectEqual(nested.values.items[1].tag, .value);
-            const value = nested.values.items[1].cast(Node.Value).?;
-            const leaf = tree.tokens[value.start.?];
+            const value = nested.values.items[1].cast(Node.Value) orelse unreachable;
+            const leaf = tree.tokens[value.start orelse unreachable];
             try testing.expect(mem.eql(u8, "63", tree.source[leaf.start..leaf.end]));
         }
 
         {
             try testing.expectEqual(nested.values.items[2].tag, .value);
-            const value = nested.values.items[2].cast(Node.Value).?;
-            const leaf = tree.tokens[value.start.?];
+            const value = nested.values.items[2].cast(Node.Value) orelse unreachable;
+            const leaf = tree.tokens[value.start orelse unreachable];
             try testing.expect(mem.eql(u8, "0.288", tree.source[leaf.start..leaf.end]));
         }
     }
@@ -464,36 +464,36 @@ test "inline list" {
 
     try testing.expectEqual(tree.docs.items.len, 1);
 
-    const doc = tree.docs.items[0].cast(Node.Doc).?;
-    try testing.expectEqual(doc.start.?, 0);
-    try testing.expectEqual(doc.end.?, tree.tokens.len - 2);
+    const doc = tree.docs.items[0].cast(Node.Doc) orelse unreachable;
+    try testing.expectEqual(doc.start orelse unreachable, 0);
+    try testing.expectEqual(doc.end orelse unreachable, tree.tokens.len - 2);
 
     try testing.expect(doc.value != null);
-    try testing.expectEqual(doc.value.?.tag, .list);
+    try testing.expectEqual(doc.value orelse unreachable.tag, .list);
 
-    const list = doc.value.?.cast(Node.List).?;
-    try testing.expectEqual(list.start.?, 0);
-    try testing.expectEqual(list.end.?, tree.tokens.len - 2);
+    const list = doc.value orelse unreachable.cast(Node.List) orelse unreachable;
+    try testing.expectEqual(list.start orelse unreachable, 0);
+    try testing.expectEqual(list.end orelse unreachable, tree.tokens.len - 2);
     try testing.expectEqual(list.values.items.len, 3);
 
     {
         try testing.expectEqual(list.values.items[0].tag, .value);
-        const value = list.values.items[0].cast(Node.Value).?;
-        const leaf = tree.tokens[value.start.?];
+        const value = list.values.items[0].cast(Node.Value) orelse unreachable;
+        const leaf = tree.tokens[value.start orelse unreachable];
         try testing.expect(mem.eql(u8, "name", tree.source[leaf.start..leaf.end]));
     }
 
     {
         try testing.expectEqual(list.values.items[1].tag, .value);
-        const value = list.values.items[1].cast(Node.Value).?;
-        const leaf = tree.tokens[value.start.?];
+        const value = list.values.items[1].cast(Node.Value) orelse unreachable;
+        const leaf = tree.tokens[value.start orelse unreachable];
         try testing.expect(mem.eql(u8, "hr", tree.source[leaf.start..leaf.end]));
     }
 
     {
         try testing.expectEqual(list.values.items[2].tag, .value);
-        const value = list.values.items[2].cast(Node.Value).?;
-        const leaf = tree.tokens[value.start.?];
+        const value = list.values.items[2].cast(Node.Value) orelse unreachable;
+        const leaf = tree.tokens[value.start orelse unreachable];
         try testing.expect(mem.eql(u8, "avg", tree.source[leaf.start..leaf.end]));
     }
 }
@@ -511,16 +511,16 @@ test "inline list as mapping value" {
 
     try testing.expectEqual(tree.docs.items.len, 1);
 
-    const doc = tree.docs.items[0].cast(Node.Doc).?;
-    try testing.expectEqual(doc.start.?, 0);
-    try testing.expectEqual(doc.end.?, tree.tokens.len - 2);
+    const doc = tree.docs.items[0].cast(Node.Doc) orelse unreachable;
+    try testing.expectEqual(doc.start orelse unreachable, 0);
+    try testing.expectEqual(doc.end orelse unreachable, tree.tokens.len - 2);
 
     try testing.expect(doc.value != null);
-    try testing.expectEqual(doc.value.?.tag, .map);
+    try testing.expectEqual(doc.value orelse unreachable.tag, .map);
 
-    const map = doc.value.?.cast(Node.Map).?;
-    try testing.expectEqual(map.start.?, 0);
-    try testing.expectEqual(map.end.?, tree.tokens.len - 2);
+    const map = doc.value orelse unreachable.cast(Node.Map) orelse unreachable;
+    try testing.expectEqual(map.start orelse unreachable, 0);
+    try testing.expectEqual(map.end orelse unreachable, tree.tokens.len - 2);
     try testing.expectEqual(map.values.items.len, 1);
 
     const entry = map.values.items[0];
@@ -528,29 +528,29 @@ test "inline list as mapping value" {
     try testing.expectEqual(key.id, .Literal);
     try testing.expect(mem.eql(u8, "key", tree.source[key.start..key.end]));
 
-    const list = entry.value.cast(Node.List).?;
-    try testing.expectEqual(list.start.?, 4);
-    try testing.expectEqual(list.end.?, tree.tokens.len - 2);
+    const list = entry.value.cast(Node.List) orelse unreachable;
+    try testing.expectEqual(list.start orelse unreachable, 4);
+    try testing.expectEqual(list.end orelse unreachable, tree.tokens.len - 2);
     try testing.expectEqual(list.values.items.len, 3);
 
     {
         try testing.expectEqual(list.values.items[0].tag, .value);
-        const value = list.values.items[0].cast(Node.Value).?;
-        const leaf = tree.tokens[value.start.?];
+        const value = list.values.items[0].cast(Node.Value) orelse unreachable;
+        const leaf = tree.tokens[value.start orelse unreachable];
         try testing.expect(mem.eql(u8, "name", tree.source[leaf.start..leaf.end]));
     }
 
     {
         try testing.expectEqual(list.values.items[1].tag, .value);
-        const value = list.values.items[1].cast(Node.Value).?;
-        const leaf = tree.tokens[value.start.?];
+        const value = list.values.items[1].cast(Node.Value) orelse unreachable;
+        const leaf = tree.tokens[value.start orelse unreachable];
         try testing.expect(mem.eql(u8, "hr", tree.source[leaf.start..leaf.end]));
     }
 
     {
         try testing.expectEqual(list.values.items[2].tag, .value);
-        const value = list.values.items[2].cast(Node.Value).?;
-        const leaf = tree.tokens[value.start.?];
+        const value = list.values.items[2].cast(Node.Value) orelse unreachable;
+        const leaf = tree.tokens[value.start orelse unreachable];
         try testing.expect(mem.eql(u8, "avg", tree.source[leaf.start..leaf.end]));
     }
 }

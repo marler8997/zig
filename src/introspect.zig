@@ -92,7 +92,7 @@ pub fn findZigLibDirFromSelfExe(
         const sub_directory = testZigInstallPrefix(base_dir) orelse continue;
         return Compilation.Directory{
             .handle = sub_directory.handle,
-            .path = try fs.path.join(allocator, &[_][]const u8{ dirname, sub_directory.path.? }),
+            .path = try fs.path.join(allocator, &[_][]const u8{ dirname, sub_directory.path orelse unreachable }),
         };
     }
     return error.FileNotFound;

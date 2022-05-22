@@ -257,7 +257,7 @@ var fixed_huffman_decoder: ?HuffmanDecoder = null;
 
 fn fixedHuffmanDecoderInit(allocator: Allocator) !HuffmanDecoder {
     if (fixed_huffman_decoder != null) {
-        return fixed_huffman_decoder.?;
+        return fixed_huffman_decoder orelse unreachable;
     }
 
     // These come from the RFC section 3.2.6.
@@ -277,8 +277,8 @@ fn fixedHuffmanDecoderInit(allocator: Allocator) !HuffmanDecoder {
     }
 
     fixed_huffman_decoder = HuffmanDecoder{};
-    _ = try fixed_huffman_decoder.?.init(allocator, &bits);
-    return fixed_huffman_decoder.?;
+    _ = try fixed_huffman_decoder orelse unreachable.init(allocator, &bits);
+    return fixed_huffman_decoder orelse unreachable;
 }
 
 const DecompressorState = enum {
@@ -424,7 +424,7 @@ pub fn Decompressor(comptime ReaderType: type) type {
                 0 => try self.dataBlock(),
                 1 => {
                     // compressed, fixed Huffman tables
-                    self.hl = &fixed_huffman_decoder.?;
+                    self.hl = &fixed_huffman_decoder orelse unreachable;
                     self.hd = null;
                     try self.huffmanBlock();
                 },
@@ -456,18 +456,18 @@ pub fn Decompressor(comptime ReaderType: type) type {
                     if (self.to_read.len == 0 and
                         self.err != null)
                     {
-                        if (self.err.? == InflateError.EndOfStreamWithNoError) {
+                        if (self.err orelse unreachable == InflateError.EndOfStreamWithNoError) {
                             return n;
                         }
-                        return self.err.?;
+                        return self.err orelse unreachable;
                     }
                     return n;
                 }
                 if (self.err != null) {
-                    if (self.err.? == InflateError.EndOfStreamWithNoError) {
+                    if (self.err orelse unreachable == InflateError.EndOfStreamWithNoError) {
                         return 0;
                     }
-                    return self.err.?;
+                    return self.err orelse unreachable;
                 }
                 self.step(self) catch |e| {
                     self.err = e;
@@ -619,7 +619,7 @@ pub fn Decompressor(comptime ReaderType: type) type {
                 switch (self.step_state) {
                     .init => {
                         // Read literal and/or (length, distance) according to RFC section 3.2.3.
-                        var v = try self.huffSym(self.hl.?);
+                        var v = try self.huffSym(self.hl orelse unreachable);
                         var n: u32 = 0; // number of bits extra
                         var length: u32 = 0;
                         switch (v) {
@@ -694,7 +694,7 @@ pub fn Decompressor(comptime ReaderType: type) type {
                             self.b >>= 5;
                             self.nb -= 5;
                         } else {
-                            dist = try self.huffSym(self.hd.?);
+                            dist = try self.huffSym(self.hd orelse unreachable);
                         }
 
                         switch (dist) {
@@ -965,7 +965,7 @@ test "Go non-regression test for 9842" {
 
         var output: [10]u8 = undefined;
         if (t.err != null) {
-            try expectError(t.err.?, decomp.reader().read(&output));
+            try expectError(t.err orelse unreachable, decomp.reader().read(&output));
         } else {
             _ = try decomp.reader().read(&output);
         }

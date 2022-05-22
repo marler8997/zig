@@ -258,7 +258,7 @@ pub fn openPath(allocator: Allocator, sub_path: []const u8, options: link.Option
     const self = try createEmpty(allocator, options);
     errdefer self.base.destroy();
 
-    const file = try options.emit.?.directory.handle.createFile(sub_path, .{
+    const file = try options.emit orelse unreachable.directory.handle.createFile(sub_path, .{
         .truncate = false,
         .read = true,
         .mode = link.determineMode(options),
@@ -390,7 +390,7 @@ pub fn deinit(self: *Elf) void {
 }
 
 pub fn getDeclVAddr(self: *Elf, decl_index: Module.Decl.Index, reloc_info: File.RelocInfo) !u64 {
-    const mod = self.base.options.module.?;
+    const mod = self.base.options.module orelse unreachable;
     const decl = mod.declPtr(decl_index);
 
     assert(self.llvm_object == null);
@@ -398,7 +398,7 @@ pub fn getDeclVAddr(self: *Elf, decl_index: Module.Decl.Index, reloc_info: File.
 
     const target = decl.link.elf.local_sym_index;
     const vaddr = self.local_symbols.items[target].st_value;
-    const atom = self.atom_by_index_table.get(reloc_info.parent_atom_index).?;
+    const atom = self.atom_by_index_table.get(reloc_info.parent_atom_index) orelse unreachable;
     const gop = try self.relocs.getOrPut(self.base.allocator, atom);
     if (!gop.found_existing) {
         gop.value_ptr.* = .{};
@@ -536,7 +536,7 @@ pub fn populateMissingMetadata(self: *Elf) !void {
             .p_align = p_align,
             .p_flags = elf.PF_X | elf.PF_R,
         });
-        try self.atom_free_lists.putNoClobber(self.base.allocator, self.phdr_load_re_index.?, .{});
+        try self.atom_free_lists.putNoClobber(self.base.allocator, self.phdr_load_re_index orelse unreachable, .{});
         self.entry_addr = null;
         self.phdr_table_dirty = true;
     }
@@ -586,7 +586,7 @@ pub fn populateMissingMetadata(self: *Elf) !void {
             .p_align = p_align,
             .p_flags = elf.PF_R,
         });
-        try self.atom_free_lists.putNoClobber(self.base.allocator, self.phdr_load_ro_index.?, .{});
+        try self.atom_free_lists.putNoClobber(self.base.allocator, self.phdr_load_ro_index orelse unreachable, .{});
         self.phdr_table_dirty = true;
     }
 
@@ -610,7 +610,7 @@ pub fn populateMissingMetadata(self: *Elf) !void {
             .p_align = p_align,
             .p_flags = elf.PF_R | elf.PF_W,
         });
-        try self.atom_free_lists.putNoClobber(self.base.allocator, self.phdr_load_rw_index.?, .{});
+        try self.atom_free_lists.putNoClobber(self.base.allocator, self.phdr_load_rw_index orelse unreachable, .{});
         self.phdr_table_dirty = true;
     }
 
@@ -638,7 +638,7 @@ pub fn populateMissingMetadata(self: *Elf) !void {
 
     if (self.text_section_index == null) {
         self.text_section_index = @intCast(u16, self.sections.items.len);
-        const phdr = &self.program_headers.items[self.phdr_load_re_index.?];
+        const phdr = &self.program_headers.items[self.phdr_load_re_index orelse unreachable];
 
         try self.sections.append(self.base.allocator, .{
             .sh_name = try self.makeString(".text"),
@@ -654,15 +654,15 @@ pub fn populateMissingMetadata(self: *Elf) !void {
         });
         try self.phdr_shdr_table.putNoClobber(
             self.base.allocator,
-            self.phdr_load_re_index.?,
-            self.text_section_index.?,
+            self.phdr_load_re_index orelse unreachable,
+            self.text_section_index orelse unreachable,
         );
         self.shdr_table_dirty = true;
     }
 
     if (self.got_section_index == null) {
         self.got_section_index = @intCast(u16, self.sections.items.len);
-        const phdr = &self.program_headers.items[self.phdr_got_index.?];
+        const phdr = &self.program_headers.items[self.phdr_got_index orelse unreachable];
 
         try self.sections.append(self.base.allocator, .{
             .sh_name = try self.makeString(".got"),
@@ -678,15 +678,15 @@ pub fn populateMissingMetadata(self: *Elf) !void {
         });
         try self.phdr_shdr_table.putNoClobber(
             self.base.allocator,
-            self.phdr_got_index.?,
-            self.got_section_index.?,
+            self.phdr_got_index orelse unreachable,
+            self.got_section_index orelse unreachable,
         );
         self.shdr_table_dirty = true;
     }
 
     if (self.rodata_section_index == null) {
         self.rodata_section_index = @intCast(u16, self.sections.items.len);
-        const phdr = &self.program_headers.items[self.phdr_load_ro_index.?];
+        const phdr = &self.program_headers.items[self.phdr_load_ro_index orelse unreachable];
 
         try self.sections.append(self.base.allocator, .{
             .sh_name = try self.makeString(".rodata"),
@@ -702,15 +702,15 @@ pub fn populateMissingMetadata(self: *Elf) !void {
         });
         try self.phdr_shdr_table.putNoClobber(
             self.base.allocator,
-            self.phdr_load_ro_index.?,
-            self.rodata_section_index.?,
+            self.phdr_load_ro_index orelse unreachable,
+            self.rodata_section_index orelse unreachable,
         );
         self.shdr_table_dirty = true;
     }
 
     if (self.data_section_index == null) {
         self.data_section_index = @intCast(u16, self.sections.items.len);
-        const phdr = &self.program_headers.items[self.phdr_load_rw_index.?];
+        const phdr = &self.program_headers.items[self.phdr_load_rw_index orelse unreachable];
 
         try self.sections.append(self.base.allocator, .{
             .sh_name = try self.makeString(".data"),
@@ -726,8 +726,8 @@ pub fn populateMissingMetadata(self: *Elf) !void {
         });
         try self.phdr_shdr_table.putNoClobber(
             self.base.allocator,
-            self.phdr_load_rw_index.?,
-            self.data_section_index.?,
+            self.phdr_load_rw_index orelse unreachable,
+            self.data_section_index orelse unreachable,
         );
         self.shdr_table_dirty = true;
     }
@@ -748,7 +748,7 @@ pub fn populateMissingMetadata(self: *Elf) !void {
             .sh_offset = off,
             .sh_size = file_size,
             // The section header index of the associated string table.
-            .sh_link = self.shstrtab_index.?,
+            .sh_link = self.shstrtab_index orelse unreachable,
             .sh_info = @intCast(u32, self.local_symbols.items.len),
             .sh_addralign = min_align,
             .sh_entsize = each_size,
@@ -928,7 +928,7 @@ pub fn populateMissingMetadata(self: *Elf) !void {
             }
         }
 
-        try self.base.file.?.pwriteAll(&[_]u8{0}, max_file_offset);
+        try self.base.file orelse unreachable.pwriteAll(&[_]u8{0}, max_file_offset);
     }
 }
 
@@ -1002,8 +1002,8 @@ pub fn flushModule(self: *Elf, comp: *Compilation, prog_node: *std.Progress.Node
                 });
 
                 switch (self.ptr_width) {
-                    .p32 => try self.base.file.?.pwriteAll(mem.asBytes(&@intCast(u32, target_vaddr)), file_offset),
-                    .p64 => try self.base.file.?.pwriteAll(mem.asBytes(&target_vaddr), file_offset),
+                    .p32 => try self.base.file orelse unreachable.pwriteAll(mem.asBytes(&@intCast(u32, target_vaddr)), file_offset),
+                    .p64 => try self.base.file orelse unreachable.pwriteAll(mem.asBytes(&target_vaddr), file_offset),
                 }
 
                 reloc.prev_vaddr = target_vaddr;
@@ -1020,7 +1020,7 @@ pub fn flushModule(self: *Elf, comp: *Compilation, prog_node: *std.Progress.Node
             try dw.writeDbgAbbrev(&self.base);
             if (!self.shdr_table_dirty) {
                 // Then it won't get written with the others and we need to do it.
-                try self.writeSectHeader(self.debug_abbrev_section_index.?);
+                try self.writeSectHeader(self.debug_abbrev_section_index orelse unreachable);
             }
             self.debug_abbrev_section_dirty = false;
         }
@@ -1028,7 +1028,7 @@ pub fn flushModule(self: *Elf, comp: *Compilation, prog_node: *std.Progress.Node
         if (self.debug_info_header_dirty) {
             // Currently only one compilation unit is supported, so the address range is simply
             // identical to the main program header virtual address and memory size.
-            const text_phdr = &self.program_headers.items[self.phdr_load_re_index.?];
+            const text_phdr = &self.program_headers.items[self.phdr_load_re_index orelse unreachable];
             const low_pc = text_phdr.p_vaddr;
             const high_pc = text_phdr.p_vaddr + text_phdr.p_memsz;
             try dw.writeDbgInfoHeader(&self.base, module, low_pc, high_pc);
@@ -1038,11 +1038,11 @@ pub fn flushModule(self: *Elf, comp: *Compilation, prog_node: *std.Progress.Node
         if (self.debug_aranges_section_dirty) {
             // Currently only one compilation unit is supported, so the address range is simply
             // identical to the main program header virtual address and memory size.
-            const text_phdr = &self.program_headers.items[self.phdr_load_re_index.?];
+            const text_phdr = &self.program_headers.items[self.phdr_load_re_index orelse unreachable];
             try dw.writeDbgAranges(&self.base, text_phdr.p_vaddr, text_phdr.p_memsz);
             if (!self.shdr_table_dirty) {
                 // Then it won't get written with the others and we need to do it.
-                try self.writeSectHeader(self.debug_aranges_section_index.?);
+                try self.writeSectHeader(self.debug_aranges_section_index orelse unreachable);
             }
             self.debug_aranges_section_dirty = false;
         }
@@ -1062,7 +1062,7 @@ pub fn flushModule(self: *Elf, comp: *Compilation, prog_node: *std.Progress.Node
             .p32 => @alignOf(elf.Elf32_Phdr),
             .p64 => @alignOf(elf.Elf64_Phdr),
         };
-        const allocated_size = self.allocatedSize(self.phdr_table_offset.?);
+        const allocated_size = self.allocatedSize(self.phdr_table_offset orelse unreachable);
         const needed_size = self.program_headers.items.len * phsize;
 
         if (needed_size > allocated_size) {
@@ -1081,7 +1081,7 @@ pub fn flushModule(self: *Elf, comp: *Compilation, prog_node: *std.Progress.Node
                         mem.byteSwapAllFields(elf.Elf32_Phdr, phdr);
                     }
                 }
-                try self.base.file.?.pwriteAll(mem.sliceAsBytes(buf), self.phdr_table_offset.?);
+                try self.base.file orelse unreachable.pwriteAll(mem.sliceAsBytes(buf), self.phdr_table_offset orelse unreachable);
             },
             .p64 => {
                 const buf = try self.base.allocator.alloc(elf.Elf64_Phdr, self.program_headers.items.len);
@@ -1093,14 +1093,14 @@ pub fn flushModule(self: *Elf, comp: *Compilation, prog_node: *std.Progress.Node
                         mem.byteSwapAllFields(elf.Elf64_Phdr, phdr);
                     }
                 }
-                try self.base.file.?.pwriteAll(mem.sliceAsBytes(buf), self.phdr_table_offset.?);
+                try self.base.file orelse unreachable.pwriteAll(mem.sliceAsBytes(buf), self.phdr_table_offset orelse unreachable);
             },
         }
         self.phdr_table_dirty = false;
     }
 
     {
-        const shstrtab_sect = &self.sections.items[self.shstrtab_index.?];
+        const shstrtab_sect = &self.sections.items[self.shstrtab_index orelse unreachable];
         if (self.shstrtab_dirty or self.shstrtab.items.len != shstrtab_sect.sh_size) {
             const allocated_size = self.allocatedSize(shstrtab_sect.sh_offset);
             const needed_size = self.shstrtab.items.len;
@@ -1112,17 +1112,17 @@ pub fn flushModule(self: *Elf, comp: *Compilation, prog_node: *std.Progress.Node
             shstrtab_sect.sh_size = needed_size;
             log.debug("writing shstrtab start=0x{x} end=0x{x}", .{ shstrtab_sect.sh_offset, shstrtab_sect.sh_offset + needed_size });
 
-            try self.base.file.?.pwriteAll(self.shstrtab.items, shstrtab_sect.sh_offset);
+            try self.base.file orelse unreachable.pwriteAll(self.shstrtab.items, shstrtab_sect.sh_offset);
             if (!self.shdr_table_dirty) {
                 // Then it won't get written with the others and we need to do it.
-                try self.writeSectHeader(self.shstrtab_index.?);
+                try self.writeSectHeader(self.shstrtab_index orelse unreachable);
             }
             self.shstrtab_dirty = false;
         }
     }
 
     if (self.dwarf) |dwarf| {
-        const debug_strtab_sect = &self.sections.items[self.debug_str_section_index.?];
+        const debug_strtab_sect = &self.sections.items[self.debug_str_section_index orelse unreachable];
         if (self.debug_strtab_dirty or dwarf.strtab.items.len != debug_strtab_sect.sh_size) {
             const allocated_size = self.allocatedSize(debug_strtab_sect.sh_offset);
             const needed_size = dwarf.strtab.items.len;
@@ -1134,10 +1134,10 @@ pub fn flushModule(self: *Elf, comp: *Compilation, prog_node: *std.Progress.Node
             debug_strtab_sect.sh_size = needed_size;
             log.debug("debug_strtab start=0x{x} end=0x{x}", .{ debug_strtab_sect.sh_offset, debug_strtab_sect.sh_offset + needed_size });
 
-            try self.base.file.?.pwriteAll(dwarf.strtab.items, debug_strtab_sect.sh_offset);
+            try self.base.file orelse unreachable.pwriteAll(dwarf.strtab.items, debug_strtab_sect.sh_offset);
             if (!self.shdr_table_dirty) {
                 // Then it won't get written with the others and we need to do it.
-                try self.writeSectHeader(self.debug_str_section_index.?);
+                try self.writeSectHeader(self.debug_str_section_index orelse unreachable);
             }
             self.debug_strtab_dirty = false;
         }
@@ -1152,7 +1152,7 @@ pub fn flushModule(self: *Elf, comp: *Compilation, prog_node: *std.Progress.Node
             .p32 => @alignOf(elf.Elf32_Shdr),
             .p64 => @alignOf(elf.Elf64_Shdr),
         };
-        const allocated_size = self.allocatedSize(self.shdr_table_offset.?);
+        const allocated_size = self.allocatedSize(self.shdr_table_offset orelse unreachable);
         const needed_size = self.sections.items.len * shsize;
 
         if (needed_size > allocated_size) {
@@ -1172,7 +1172,7 @@ pub fn flushModule(self: *Elf, comp: *Compilation, prog_node: *std.Progress.Node
                         mem.byteSwapAllFields(elf.Elf32_Shdr, shdr);
                     }
                 }
-                try self.base.file.?.pwriteAll(mem.sliceAsBytes(buf), self.shdr_table_offset.?);
+                try self.base.file orelse unreachable.pwriteAll(mem.sliceAsBytes(buf), self.shdr_table_offset orelse unreachable);
             },
             .p64 => {
                 const buf = try self.base.allocator.alloc(elf.Elf64_Shdr, self.sections.items.len);
@@ -1185,7 +1185,7 @@ pub fn flushModule(self: *Elf, comp: *Compilation, prog_node: *std.Progress.Node
                         mem.byteSwapAllFields(elf.Elf64_Shdr, shdr);
                     }
                 }
-                try self.base.file.?.pwriteAll(mem.sliceAsBytes(buf), self.shdr_table_offset.?);
+                try self.base.file orelse unreachable.pwriteAll(mem.sliceAsBytes(buf), self.shdr_table_offset orelse unreachable);
             },
         }
         self.shdr_table_dirty = false;
@@ -1219,8 +1219,8 @@ fn linkWithLLD(self: *Elf, comp: *Compilation, prog_node: *std.Progress.Node) !v
     defer arena_allocator.deinit();
     const arena = arena_allocator.allocator();
 
-    const directory = self.base.options.emit.?.directory; // Just an alias to make it shorter to type.
-    const full_out_path = try directory.join(arena, &[_][]const u8{self.base.options.emit.?.sub_path});
+    const directory = self.base.options.emit orelse unreachable.directory; // Just an alias to make it shorter to type.
+    const full_out_path = try directory.join(arena, &[_][]const u8{self.base.options.emit orelse unreachable.sub_path});
 
     // If there is no Zig code to compile, then we should skip flushing the output file because it
     // will not be part of the linker line anyway.
@@ -1238,7 +1238,7 @@ fn linkWithLLD(self: *Elf, comp: *Compilation, prog_node: *std.Progress.Node) !v
                     &[_][]const u8{obj_basename},
                 ),
                 .whole => break :blk try fs.path.join(arena, &.{
-                    fs.path.dirname(full_out_path).?, obj_basename,
+                    fs.path.dirname(full_out_path) orelse unreachable, obj_basename,
                 }),
             }
         }
@@ -1246,9 +1246,9 @@ fn linkWithLLD(self: *Elf, comp: *Compilation, prog_node: *std.Progress.Node) !v
         try self.flushModule(comp, prog_node);
 
         if (fs.path.dirname(full_out_path)) |dirname| {
-            break :blk try fs.path.join(arena, &.{ dirname, self.base.intermediary_basename.? });
+            break :blk try fs.path.join(arena, &.{ dirname, self.base.intermediary_basename orelse unreachable });
         } else {
-            break :blk self.base.intermediary_basename.?;
+            break :blk self.base.intermediary_basename orelse unreachable;
         }
     } else null;
 
@@ -1334,7 +1334,7 @@ fn linkWithLLD(self: *Elf, comp: *Compilation, prog_node: *std.Progress.Node) !v
         if (self.base.options.link_libc) {
             man.hash.add(self.base.options.libc_installation != null);
             if (self.base.options.libc_installation) |libc_installation| {
-                man.hash.addBytes(libc_installation.crt_dir.?);
+                man.hash.addBytes(libc_installation.crt_dir orelse unreachable);
             }
             if (have_dynamic_linker) {
                 man.hash.addOptionalBytes(self.base.options.dynamic_linker);
@@ -1414,7 +1414,7 @@ fn linkWithLLD(self: *Elf, comp: *Compilation, prog_node: *std.Progress.Node) !v
         // We will invoke ourselves as a child process to gain access to LLD.
         // This is necessary because LLD does not behave properly as a library -
         // it calls exit() and does not reset all global data between invocations.
-        try argv.appendSlice(&[_][]const u8{ comp.self_exe_path.?, "ld.lld" });
+        try argv.appendSlice(&[_][]const u8{ comp.self_exe_path orelse unreachable, "ld.lld" });
         if (is_obj) {
             try argv.append("-r");
         }
@@ -1595,7 +1595,7 @@ fn linkWithLLD(self: *Elf, comp: *Compilation, prog_node: *std.Progress.Node) !v
         if (self.base.options.link_libc) {
             if (self.base.options.libc_installation) |libc_installation| {
                 try argv.append("-L");
-                try argv.append(libc_installation.crt_dir.?);
+                try argv.append(libc_installation.crt_dir orelse unreachable);
             }
 
             if (have_dynamic_linker) {
@@ -1644,7 +1644,7 @@ fn linkWithLLD(self: *Elf, comp: *Compilation, prog_node: *std.Progress.Node) !v
 
         // TSAN
         if (self.base.options.tsan) {
-            try argv.append(comp.tsan_static_lib.?.full_object_path);
+            try argv.append(comp.tsan_static_lib orelse unreachable.full_object_path);
         }
 
         // libc
@@ -1703,13 +1703,13 @@ fn linkWithLLD(self: *Elf, comp: *Compilation, prog_node: *std.Progress.Node) !v
 
             // libc++ dep
             if (self.base.options.link_libcpp) {
-                try argv.append(comp.libcxxabi_static_lib.?.full_object_path);
-                try argv.append(comp.libcxx_static_lib.?.full_object_path);
+                try argv.append(comp.libcxxabi_static_lib orelse unreachable.full_object_path);
+                try argv.append(comp.libcxx_static_lib orelse unreachable.full_object_path);
             }
 
             // libunwind dep
             if (self.base.options.link_libunwind) {
-                try argv.append(comp.libunwind_static_lib.?.full_object_path);
+                try argv.append(comp.libunwind_static_lib orelse unreachable.full_object_path);
             }
 
             // libc dep
@@ -1722,7 +1722,7 @@ fn linkWithLLD(self: *Elf, comp: *Compilation, prog_node: *std.Progress.Node) !v
                 } else if (target.isGnuLibC()) {
                     for (glibc.libs) |lib| {
                         const lib_path = try std.fmt.allocPrint(arena, "{s}{c}lib{s}.so.{d}", .{
-                            comp.glibc_so_files.?.dir_path, fs.path.sep, lib.name, lib.sover,
+                            comp.glibc_so_files orelse unreachable.dir_path, fs.path.sep, lib.name, lib.sover,
                         });
                         try argv.append(lib_path);
                     }
@@ -1784,7 +1784,7 @@ fn linkWithLLD(self: *Elf, comp: *Compilation, prog_node: *std.Progress.Node) !v
 
                 try child.spawn();
 
-                const stderr = try child.stderr.?.reader().readAllAlloc(arena, 10 * 1024 * 1024);
+                const stderr = try child.stderr orelse unreachable.reader().readAllAlloc(arena, 10 * 1024 * 1024);
 
                 const term = child.wait() catch |err| {
                     log.err("unable to spawn {s}: {s}", .{ argv.items[0], @errorName(err) });
@@ -1896,7 +1896,7 @@ fn writeElfHeader(self: *Elf) !void {
     mem.writeInt(u32, hdr_buf[index..][0..4], 1, endian);
     index += 4;
 
-    const e_entry = if (elf_type == .REL) 0 else self.entry_addr.?;
+    const e_entry = if (elf_type == .REL) 0 else self.entry_addr orelse unreachable;
 
     switch (self.ptr_width) {
         .p32 => {
@@ -1904,11 +1904,11 @@ fn writeElfHeader(self: *Elf) !void {
             index += 4;
 
             // e_phoff
-            mem.writeInt(u32, hdr_buf[index..][0..4], @intCast(u32, self.phdr_table_offset.?), endian);
+            mem.writeInt(u32, hdr_buf[index..][0..4], @intCast(u32, self.phdr_table_offset orelse unreachable), endian);
             index += 4;
 
             // e_shoff
-            mem.writeInt(u32, hdr_buf[index..][0..4], @intCast(u32, self.shdr_table_offset.?), endian);
+            mem.writeInt(u32, hdr_buf[index..][0..4], @intCast(u32, self.shdr_table_offset orelse unreachable), endian);
             index += 4;
         },
         .p64 => {
@@ -1917,11 +1917,11 @@ fn writeElfHeader(self: *Elf) !void {
             index += 8;
 
             // e_phoff
-            mem.writeInt(u64, hdr_buf[index..][0..8], self.phdr_table_offset.?, endian);
+            mem.writeInt(u64, hdr_buf[index..][0..8], self.phdr_table_offset orelse unreachable, endian);
             index += 8;
 
             // e_shoff
-            mem.writeInt(u64, hdr_buf[index..][0..8], self.shdr_table_offset.?, endian);
+            mem.writeInt(u64, hdr_buf[index..][0..8], self.shdr_table_offset orelse unreachable, endian);
             index += 8;
         },
     }
@@ -1959,12 +1959,12 @@ fn writeElfHeader(self: *Elf) !void {
     mem.writeInt(u16, hdr_buf[index..][0..2], e_shnum, endian);
     index += 2;
 
-    mem.writeInt(u16, hdr_buf[index..][0..2], self.shstrtab_index.?, endian);
+    mem.writeInt(u16, hdr_buf[index..][0..2], self.shstrtab_index orelse unreachable, endian);
     index += 2;
 
     assert(index == e_ehsize);
 
-    try self.base.file.?.pwriteAll(hdr_buf[0..index], 0);
+    try self.base.file orelse unreachable.pwriteAll(hdr_buf[0..index], 0);
 }
 
 fn freeTextBlock(self: *Elf, text_block: *TextBlock, phdr_index: u16) void {
@@ -1973,7 +1973,7 @@ fn freeTextBlock(self: *Elf, text_block: *TextBlock, phdr_index: u16) void {
     const name = self.getString(name_str_index);
     log.debug("freeTextBlock {*} ({s})", .{ text_block, name });
 
-    const free_list = self.atom_free_lists.getPtr(phdr_index).?;
+    const free_list = self.atom_free_lists.getPtr(phdr_index) orelse unreachable;
     var already_have_free_list_node = false;
     {
         var i: usize = 0;
@@ -2040,7 +2040,7 @@ fn growTextBlock(self: *Elf, text_block: *TextBlock, new_block_size: u64, alignm
 }
 
 fn allocateTextBlock(self: *Elf, text_block: *TextBlock, new_block_size: u64, alignment: u64, phdr_index: u16) !u64 {
-    const shdr_index = self.phdr_shdr_table.get(phdr_index).?;
+    const shdr_index = self.phdr_shdr_table.get(phdr_index) orelse unreachable;
     const phdr = &self.program_headers.items[phdr_index];
     const shdr = &self.sections.items[shdr_index];
     const new_block_ideal_capacity = padToIdeal(new_block_size);
@@ -2052,7 +2052,7 @@ fn allocateTextBlock(self: *Elf, text_block: *TextBlock, new_block_size: u64, al
     // is actually carried out at the end of the function, when errors are no longer possible.
     var block_placement: ?*TextBlock = null;
     var free_list_removal: ?usize = null;
-    var free_list = self.atom_free_lists.get(phdr_index).?;
+    var free_list = self.atom_free_lists.get(phdr_index) orelse unreachable;
 
     // First we look for an appropriately sized free list node.
     // The list is unordered. We'll just take the first thing that works.
@@ -2105,7 +2105,7 @@ fn allocateTextBlock(self: *Elf, text_block: *TextBlock, new_block_size: u64, al
         }
     };
 
-    const expand_text_section = block_placement == null or block_placement.?.next == null;
+    const expand_text_section = block_placement == null or block_placement orelse unreachable.next == null;
     if (expand_text_section) {
         const text_capacity = self.allocatedSize(shdr.sh_offset);
         const needed_size = (vaddr + new_block_size) - phdr.p_vaddr;
@@ -2117,7 +2117,7 @@ fn allocateTextBlock(self: *Elf, text_block: *TextBlock, new_block_size: u64, al
                 break :blk (sym.st_value + sym.st_size) - phdr.p_vaddr;
             } else 0;
             log.debug("new PT_LOAD file offset 0x{x} to 0x{x}", .{ new_offset, new_offset + text_size });
-            const amt = try self.base.file.?.copyRangeAll(shdr.sh_offset, self.base.file.?, new_offset, text_size);
+            const amt = try self.base.file orelse unreachable.copyRangeAll(shdr.sh_offset, self.base.file orelse unreachable, new_offset, text_size);
             if (amt != text_size) return error.InputOutput;
             shdr.sh_offset = new_offset;
             phdr.p_offset = new_offset;
@@ -2198,7 +2198,7 @@ fn allocateLocalSymbol(self: *Elf) !u32 {
 pub fn allocateDeclIndexes(self: *Elf, decl_index: Module.Decl.Index) !void {
     if (self.llvm_object) |_| return;
 
-    const mod = self.base.options.module.?;
+    const mod = self.base.options.module orelse unreachable;
     const decl = mod.declPtr(decl_index);
     if (decl.link.elf.local_sym_index != 0) return;
 
@@ -2225,7 +2225,7 @@ pub fn allocateDeclIndexes(self: *Elf, decl_index: Module.Decl.Index) !void {
 fn freeUnnamedConsts(self: *Elf, decl_index: Module.Decl.Index) void {
     const unnamed_consts = self.unnamed_const_atoms.getPtr(decl_index) orelse return;
     for (unnamed_consts.items) |atom| {
-        self.freeTextBlock(atom, self.phdr_load_ro_index.?);
+        self.freeTextBlock(atom, self.phdr_load_ro_index orelse unreachable);
         self.local_symbol_free_list.append(self.base.allocator, atom.local_sym_index) catch {};
         self.local_symbols.items[atom.local_sym_index].st_info = 0;
         _ = self.atom_by_index_table.remove(atom.local_sym_index);
@@ -2238,11 +2238,11 @@ pub fn freeDecl(self: *Elf, decl_index: Module.Decl.Index) void {
         if (self.llvm_object) |llvm_object| return llvm_object.freeDecl(decl_index);
     }
 
-    const mod = self.base.options.module.?;
+    const mod = self.base.options.module orelse unreachable;
     const decl = mod.declPtr(decl_index);
 
     const kv = self.decls.fetchRemove(decl_index);
-    if (kv.?.value) |index| {
+    if (kv orelse unreachable.value) |index| {
         self.freeTextBlock(&decl.link.elf, index);
         self.freeUnnamedConsts(decl_index);
     }
@@ -2269,16 +2269,16 @@ fn getDeclPhdrIndex(self: *Elf, decl: *Module.Decl) !u16 {
     const phdr_index: u16 = blk: {
         if (val.isUndefDeep()) {
             // TODO in release-fast and release-small, we should put undef in .bss
-            break :blk self.phdr_load_rw_index.?;
+            break :blk self.phdr_load_rw_index orelse unreachable;
         }
 
         switch (zig_ty) {
-            .Fn => break :blk self.phdr_load_re_index.?,
+            .Fn => break :blk self.phdr_load_re_index orelse unreachable,
             else => {
                 if (val.castTag(.variable)) |_| {
-                    break :blk self.phdr_load_rw_index.?;
+                    break :blk self.phdr_load_rw_index orelse unreachable;
                 }
-                break :blk self.phdr_load_ro_index.?;
+                break :blk self.phdr_load_ro_index orelse unreachable;
             },
         }
     };
@@ -2286,7 +2286,7 @@ fn getDeclPhdrIndex(self: *Elf, decl: *Module.Decl) !u16 {
 }
 
 fn updateDeclCode(self: *Elf, decl_index: Module.Decl.Index, code: []const u8, stt_bits: u8) !*elf.Elf64_Sym {
-    const mod = self.base.options.module.?;
+    const mod = self.base.options.module orelse unreachable;
     const decl = mod.declPtr(decl_index);
 
     const decl_name = try decl.getFullyQualifiedName(mod);
@@ -2295,12 +2295,12 @@ fn updateDeclCode(self: *Elf, decl_index: Module.Decl.Index, code: []const u8, s
     log.debug("updateDeclCode {s}{*}", .{ decl_name, decl });
     const required_alignment = decl.ty.abiAlignment(self.base.options.target);
 
-    const decl_ptr = self.decls.getPtr(decl_index).?;
+    const decl_ptr = self.decls.getPtr(decl_index) orelse unreachable;
     if (decl_ptr.* == null) {
         decl_ptr.* = try self.getDeclPhdrIndex(decl);
     }
-    const phdr_index = decl_ptr.*.?;
-    const shdr_index = self.phdr_shdr_table.get(phdr_index).?;
+    const phdr_index = decl_ptr.* orelse unreachable;
+    const shdr_index = self.phdr_shdr_table.get(phdr_index) orelse unreachable;
 
     assert(decl.link.elf.local_sym_index != 0); // Caller forgot to allocateDeclIndexes()
     const local_sym = &self.local_symbols.items[decl.link.elf.local_sym_index];
@@ -2350,7 +2350,7 @@ fn updateDeclCode(self: *Elf, decl_index: Module.Decl.Index, code: []const u8, s
 
     const section_offset = local_sym.st_value - self.program_headers.items[phdr_index].p_vaddr;
     const file_offset = self.sections.items[shdr_index].sh_offset + section_offset;
-    try self.base.file.?.pwriteAll(code, file_offset);
+    try self.base.file orelse unreachable.pwriteAll(code, file_offset);
 
     return local_sym;
 }
@@ -2393,7 +2393,7 @@ pub fn updateFunc(self: *Elf, module: *Module, func: *Module.Fn, air: Air, liven
     };
     const local_sym = try self.updateDeclCode(decl_index, code, elf.STT_FUNC);
     if (decl_state) |*ds| {
-        try self.dwarf.?.commitDeclState(
+        try self.dwarf orelse unreachable.commitDeclState(
             &self.base,
             module,
             decl,
@@ -2470,7 +2470,7 @@ pub fn updateDecl(self: *Elf, module: *Module, decl_index: Module.Decl.Index) !v
 
     const local_sym = try self.updateDeclCode(decl_index, code, elf.STT_OBJECT);
     if (decl_state) |*ds| {
-        try self.dwarf.?.commitDeclState(
+        try self.dwarf orelse unreachable.commitDeclState(
             &self.base,
             module,
             decl,
@@ -2489,7 +2489,7 @@ pub fn lowerUnnamedConst(self: *Elf, typed_value: TypedValue, decl_index: Module
     var code_buffer = std.ArrayList(u8).init(self.base.allocator);
     defer code_buffer.deinit();
 
-    const mod = self.base.options.module.?;
+    const mod = self.base.options.module orelse unreachable;
     const decl = mod.declPtr(decl_index);
 
     const gop = try self.unnamed_const_atoms.getOrPut(self.base.allocator, decl_index);
@@ -2536,8 +2536,8 @@ pub fn lowerUnnamedConst(self: *Elf, typed_value: TypedValue, decl_index: Module
     };
 
     const required_alignment = typed_value.ty.abiAlignment(self.base.options.target);
-    const phdr_index = self.phdr_load_ro_index.?;
-    const shdr_index = self.phdr_shdr_table.get(phdr_index).?;
+    const phdr_index = self.phdr_load_ro_index orelse unreachable;
+    const shdr_index = self.phdr_shdr_table.get(phdr_index) orelse unreachable;
     const vaddr = try self.allocateTextBlock(atom, code.len, required_alignment, phdr_index);
     errdefer self.freeTextBlock(atom, phdr_index);
 
@@ -2558,7 +2558,7 @@ pub fn lowerUnnamedConst(self: *Elf, typed_value: TypedValue, decl_index: Module
 
     const section_offset = local_sym.st_value - self.program_headers.items[phdr_index].p_vaddr;
     const file_offset = self.sections.items[shdr_index].sh_offset + section_offset;
-    try self.base.file.?.pwriteAll(code, file_offset);
+    try self.base.file orelse unreachable.pwriteAll(code, file_offset);
 
     return atom.local_sym_index;
 }
@@ -2584,12 +2584,12 @@ pub fn updateDeclExports(
     if (decl.link.elf.local_sym_index == 0) return;
     const decl_sym = self.local_symbols.items[decl.link.elf.local_sym_index];
 
-    const decl_ptr = self.decls.getPtr(decl_index).?;
+    const decl_ptr = self.decls.getPtr(decl_index) orelse unreachable;
     if (decl_ptr.* == null) {
         decl_ptr.* = try self.getDeclPhdrIndex(decl);
     }
-    const phdr_index = decl_ptr.*.?;
-    const shdr_index = self.phdr_shdr_table.get(phdr_index).?;
+    const phdr_index = decl_ptr.* orelse unreachable;
+    const shdr_index = self.phdr_shdr_table.get(phdr_index) orelse unreachable;
 
     for (exports) |exp| {
         if (exp.options.section) |section_name| {
@@ -2685,14 +2685,14 @@ fn writeProgHeader(self: *Elf, index: usize) !void {
             if (foreign_endian) {
                 mem.byteSwapAllFields(elf.Elf32_Phdr, &phdr[0]);
             }
-            return self.base.file.?.pwriteAll(mem.sliceAsBytes(&phdr), offset);
+            return self.base.file orelse unreachable.pwriteAll(mem.sliceAsBytes(&phdr), offset);
         },
         .p64 => {
             var phdr = [1]elf.Elf64_Phdr{self.program_headers.items[index]};
             if (foreign_endian) {
                 mem.byteSwapAllFields(elf.Elf64_Phdr, &phdr[0]);
             }
-            return self.base.file.?.pwriteAll(mem.sliceAsBytes(&phdr), offset);
+            return self.base.file orelse unreachable.pwriteAll(mem.sliceAsBytes(&phdr), offset);
         },
     }
 }
@@ -2706,23 +2706,23 @@ fn writeSectHeader(self: *Elf, index: usize) !void {
             if (foreign_endian) {
                 mem.byteSwapAllFields(elf.Elf32_Shdr, &shdr[0]);
             }
-            const offset = self.shdr_table_offset.? + index * @sizeOf(elf.Elf32_Shdr);
-            return self.base.file.?.pwriteAll(mem.sliceAsBytes(&shdr), offset);
+            const offset = self.shdr_table_offset orelse unreachable + index * @sizeOf(elf.Elf32_Shdr);
+            return self.base.file orelse unreachable.pwriteAll(mem.sliceAsBytes(&shdr), offset);
         },
         .p64 => {
             var shdr = [1]elf.Elf64_Shdr{self.sections.items[index]};
             if (foreign_endian) {
                 mem.byteSwapAllFields(elf.Elf64_Shdr, &shdr[0]);
             }
-            const offset = self.shdr_table_offset.? + index * @sizeOf(elf.Elf64_Shdr);
-            return self.base.file.?.pwriteAll(mem.sliceAsBytes(&shdr), offset);
+            const offset = self.shdr_table_offset orelse unreachable + index * @sizeOf(elf.Elf64_Shdr);
+            return self.base.file orelse unreachable.pwriteAll(mem.sliceAsBytes(&shdr), offset);
         },
     }
 }
 
 fn writeOffsetTableEntry(self: *Elf, index: usize) !void {
-    const shdr = &self.sections.items[self.got_section_index.?];
-    const phdr = &self.program_headers.items[self.phdr_got_index.?];
+    const shdr = &self.sections.items[self.got_section_index orelse unreachable];
+    const phdr = &self.program_headers.items[self.phdr_got_index orelse unreachable];
     const entry_size: u16 = self.archPtrWidthBytes();
     if (self.offset_table_count_dirty) {
         // TODO Also detect virtual address collisions.
@@ -2731,7 +2731,7 @@ fn writeOffsetTableEntry(self: *Elf, index: usize) !void {
         if (needed_size > allocated_size) {
             // Must move the entire got section.
             const new_offset = self.findFreeSpace(needed_size, self.page_size);
-            const amt = try self.base.file.?.copyRangeAll(shdr.sh_offset, self.base.file.?, new_offset, shdr.sh_size);
+            const amt = try self.base.file orelse unreachable.copyRangeAll(shdr.sh_offset, self.base.file orelse unreachable, new_offset, shdr.sh_size);
             if (amt != shdr.sh_size) return error.InputOutput;
             shdr.sh_offset = new_offset;
             phdr.p_offset = new_offset;
@@ -2751,17 +2751,17 @@ fn writeOffsetTableEntry(self: *Elf, index: usize) !void {
         2 => {
             var buf: [2]u8 = undefined;
             mem.writeInt(u16, &buf, @intCast(u16, self.offset_table.items[index]), endian);
-            try self.base.file.?.pwriteAll(&buf, off);
+            try self.base.file orelse unreachable.pwriteAll(&buf, off);
         },
         4 => {
             var buf: [4]u8 = undefined;
             mem.writeInt(u32, &buf, @intCast(u32, self.offset_table.items[index]), endian);
-            try self.base.file.?.pwriteAll(&buf, off);
+            try self.base.file orelse unreachable.pwriteAll(&buf, off);
         },
         8 => {
             var buf: [8]u8 = undefined;
             mem.writeInt(u64, &buf, self.offset_table.items[index], endian);
-            try self.base.file.?.pwriteAll(&buf, off);
+            try self.base.file orelse unreachable.pwriteAll(&buf, off);
         },
         else => unreachable,
     }
@@ -2771,7 +2771,7 @@ fn writeSymbol(self: *Elf, index: usize) !void {
     const tracy = trace(@src());
     defer tracy.end();
 
-    const syms_sect = &self.sections.items[self.symtab_section_index.?];
+    const syms_sect = &self.sections.items[self.symtab_section_index orelse unreachable];
     // Make sure we are not pointlessly writing symbol data that will have to get relocated
     // due to running out of space.
     if (self.local_symbols.items.len != syms_sect.sh_info) {
@@ -2788,7 +2788,7 @@ fn writeSymbol(self: *Elf, index: usize) !void {
             // Move all the symbols to a new file location.
             const new_offset = self.findFreeSpace(needed_size, sym_align);
             const existing_size = @as(u64, syms_sect.sh_info) * sym_size;
-            const amt = try self.base.file.?.copyRangeAll(syms_sect.sh_offset, self.base.file.?, new_offset, existing_size);
+            const amt = try self.base.file orelse unreachable.copyRangeAll(syms_sect.sh_offset, self.base.file orelse unreachable, new_offset, existing_size);
             if (amt != existing_size) return error.InputOutput;
             syms_sect.sh_offset = new_offset;
         }
@@ -2813,7 +2813,7 @@ fn writeSymbol(self: *Elf, index: usize) !void {
                 mem.byteSwapAllFields(elf.Elf32_Sym, &sym[0]);
             }
             const off = syms_sect.sh_offset + @sizeOf(elf.Elf32_Sym) * index;
-            try self.base.file.?.pwriteAll(mem.sliceAsBytes(sym[0..1]), off);
+            try self.base.file orelse unreachable.pwriteAll(mem.sliceAsBytes(sym[0..1]), off);
         },
         .p64 => {
             var sym = [1]elf.Elf64_Sym{self.local_symbols.items[index]};
@@ -2821,13 +2821,13 @@ fn writeSymbol(self: *Elf, index: usize) !void {
                 mem.byteSwapAllFields(elf.Elf64_Sym, &sym[0]);
             }
             const off = syms_sect.sh_offset + @sizeOf(elf.Elf64_Sym) * index;
-            try self.base.file.?.pwriteAll(mem.sliceAsBytes(sym[0..1]), off);
+            try self.base.file orelse unreachable.pwriteAll(mem.sliceAsBytes(sym[0..1]), off);
         },
     }
 }
 
 fn writeAllGlobalSymbols(self: *Elf) !void {
-    const syms_sect = &self.sections.items[self.symtab_section_index.?];
+    const syms_sect = &self.sections.items[self.symtab_section_index orelse unreachable];
     const sym_size: u64 = switch (self.ptr_width) {
         .p32 => @sizeOf(elf.Elf32_Sym),
         .p64 => @sizeOf(elf.Elf64_Sym),
@@ -2841,7 +2841,7 @@ fn writeAllGlobalSymbols(self: *Elf) !void {
         // Move all the symbols to a new file location.
         const new_offset = self.findFreeSpace(needed_size, sym_align);
         const existing_size = @as(u64, syms_sect.sh_info) * sym_size;
-        const amt = try self.base.file.?.copyRangeAll(syms_sect.sh_offset, self.base.file.?, new_offset, existing_size);
+        const amt = try self.base.file orelse unreachable.copyRangeAll(syms_sect.sh_offset, self.base.file orelse unreachable, new_offset, existing_size);
         if (amt != existing_size) return error.InputOutput;
         syms_sect.sh_offset = new_offset;
     }
@@ -2868,7 +2868,7 @@ fn writeAllGlobalSymbols(self: *Elf) !void {
                     mem.byteSwapAllFields(elf.Elf32_Sym, sym);
                 }
             }
-            try self.base.file.?.pwriteAll(mem.sliceAsBytes(buf), global_syms_off);
+            try self.base.file orelse unreachable.pwriteAll(mem.sliceAsBytes(buf), global_syms_off);
         },
         .p64 => {
             const buf = try self.base.allocator.alloc(elf.Elf64_Sym, self.global_symbols.items.len);
@@ -2887,7 +2887,7 @@ fn writeAllGlobalSymbols(self: *Elf) !void {
                     mem.byteSwapAllFields(elf.Elf64_Sym, sym);
                 }
             }
-            try self.base.file.?.pwriteAll(mem.sliceAsBytes(buf), global_syms_off);
+            try self.base.file orelse unreachable.pwriteAll(mem.sliceAsBytes(buf), global_syms_off);
         },
     }
 }

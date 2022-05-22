@@ -79,7 +79,7 @@ fn memset(dest: ?[*]u8, c: u8, len: usize) callconv(.C) ?[*]u8 {
     @setRuntimeSafety(false);
 
     if (len != 0) {
-        var d = dest.?;
+        var d = dest orelse unreachable;
         var n = len;
         while (true) {
             d.* = c;
@@ -102,8 +102,8 @@ fn memcpy(noalias dest: ?[*]u8, noalias src: ?[*]const u8, len: usize) callconv(
     @setRuntimeSafety(false);
 
     if (len != 0) {
-        var d = dest.?;
-        var s = src.?;
+        var d = dest orelse unreachable;
+        var s = src orelse unreachable;
         var n = len;
         while (true) {
             d[0] = s[0];
@@ -123,13 +123,13 @@ fn memmove(dest: ?[*]u8, src: ?[*]const u8, n: usize) callconv(.C) ?[*]u8 {
     if (@ptrToInt(dest) < @ptrToInt(src)) {
         var index: usize = 0;
         while (index != n) : (index += 1) {
-            dest.?[index] = src.?[index];
+            dest orelse unreachable[index] = src orelse unreachable[index];
         }
     } else {
         var index = n;
         while (index != 0) {
             index -= 1;
-            dest.?[index] = src.?[index];
+            dest orelse unreachable[index] = src orelse unreachable[index];
         }
     }
 
@@ -141,7 +141,7 @@ fn memcmp(vl: ?[*]const u8, vr: ?[*]const u8, n: usize) callconv(.C) c_int {
 
     var index: usize = 0;
     while (index != n) : (index += 1) {
-        const compare_val = @bitCast(i8, vl.?[index] -% vr.?[index]);
+        const compare_val = @bitCast(i8, vl orelse unreachable[index] -% vr orelse unreachable[index]);
         if (compare_val != 0) {
             return compare_val;
         }

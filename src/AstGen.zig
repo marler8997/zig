@@ -142,7 +142,7 @@ pub fn generate(gpa: Allocator, tree: Ast) Allocator.Error!Zir {
         tree.containerDeclRoot(),
         .Auto,
     )) |struct_decl_ref| {
-        assert(refToIndex(struct_decl_ref).? == 0);
+        assert(refToIndex(struct_decl_ref) orelse unreachable == 0);
     } else |err| switch (err) {
         error.OutOfMemory => return error.OutOfMemory,
         error.AnalysisFail => {}, // Handled via compile_errors below.
@@ -862,10 +862,10 @@ fn expr(gz: *GenZir, scope: *Scope, rl: ResultLoc, node: Ast.Node.Index) InnerEr
             while (true) switch (node_tags[rhs]) {
                 .grouped_expression => rhs = node_datas[rhs].lhs,
                 .unreachable_literal => {
-                    if (payload_token != null and mem.eql(u8, tree.tokenSlice(payload_token.?), "_")) {
-                        return astgen.failTok(payload_token.?, "discard of error capture; omit it instead", .{});
+                    if (payload_token != null and mem.eql(u8, tree.tokenSlice(payload_token orelse unreachable), "_")) {
+                        return astgen.failTok(payload_token orelse unreachable, "discard of error capture; omit it instead", .{});
                     } else if (payload_token != null) {
-                        return astgen.failTok(payload_token.?, "unused capture", .{});
+                        return astgen.failTok(payload_token orelse unreachable, "unused capture", .{});
                     }
                     const lhs = node_datas[node].lhs;
 
@@ -1180,7 +1180,7 @@ fn fnProtoExpr(
             } else 0;
 
             if (is_anytype) {
-                const name_token = param.name_token orelse param.anytype_ellipsis3.?;
+                const name_token = param.name_token orelse param.anytype_ellipsis3 orelse unreachable;
 
                 const tag: Zir.Inst.Tag = if (is_comptime)
                     .param_anytype_comptime
@@ -1498,7 +1498,7 @@ fn arrayInitExprRlPtrInner(
             .ptr = result_ptr,
             .index = @intCast(u32, i),
         });
-        astgen.extra.items[extra_index] = refToIndex(elem_ptr).?;
+        astgen.extra.items[extra_index] = refToIndex(elem_ptr) orelse unreachable;
         extra_index += 1;
         _ = try expr(gz, scope, .{ .ptr = elem_ptr }, elem_init);
     }
@@ -1722,7 +1722,7 @@ fn structInitExprRlPtrInner(
             .lhs = result_ptr,
             .field_name_start = str_index,
         });
-        astgen.extra.items[extra_index] = refToIndex(field_ptr).?;
+        astgen.extra.items[extra_index] = refToIndex(field_ptr) orelse unreachable;
         extra_index += 1;
         _ = try expr(gz, scope, .{ .ptr = field_ptr }, field_init);
     }
@@ -1761,7 +1761,7 @@ fn structInitExprRlTy(
             .name_start = str_index,
         });
         setExtra(astgen, extra_index, Zir.Inst.StructInit.Item{
-            .field_type = refToIndex(field_ty_inst).?,
+            .field_type = refToIndex(field_ty_inst) orelse unreachable,
             .init = try expr(gz, scope, .{ .ty = field_ty_inst }, field_init),
         });
         extra_index += field_size;
@@ -1819,7 +1819,7 @@ fn breakExpr(parent_gz: *GenZir, parent_scope: *Scope, node: Ast.Node.Index) Inn
     while (true) {
         switch (scope.tag) {
             .gen_zir => {
-                const block_gz = scope.cast(GenZir).?;
+                const block_gz = scope.cast(GenZir) orelse unreachable;
 
                 const block_inst = blk: {
                     if (break_label != 0) {
@@ -1880,10 +1880,10 @@ fn breakExpr(parent_gz: *GenZir, parent_scope: *Scope, node: Ast.Node.Index) Inn
                 }
                 return Zir.Inst.Ref.unreachable_value;
             },
-            .local_val => scope = scope.cast(Scope.LocalVal).?.parent,
-            .local_ptr => scope = scope.cast(Scope.LocalPtr).?.parent,
+            .local_val => scope = scope.cast(Scope.LocalVal) orelse unreachable.parent,
+            .local_ptr => scope = scope.cast(Scope.LocalPtr) orelse unreachable.parent,
             .namespace => break,
-            .defer_normal, .defer_error => scope = scope.cast(Scope.Defer).?.parent,
+            .defer_normal, .defer_error => scope = scope.cast(Scope.Defer) orelse unreachable.parent,
             .top => unreachable,
         }
     }
@@ -1906,7 +1906,7 @@ fn continueExpr(parent_gz: *GenZir, parent_scope: *Scope, node: Ast.Node.Index) 
     while (true) {
         switch (scope.tag) {
             .gen_zir => {
-                const gen_zir = scope.cast(GenZir).?;
+                const gen_zir = scope.cast(GenZir) orelse unreachable;
                 const continue_block = gen_zir.continue_block;
                 if (continue_block == 0) {
                     scope = gen_zir.parent;
@@ -1931,15 +1931,15 @@ fn continueExpr(parent_gz: *GenZir, parent_scope: *Scope, node: Ast.Node.Index) 
                 _ = try parent_gz.addBreak(break_tag, continue_block, .void_value);
                 return Zir.Inst.Ref.unreachable_value;
             },
-            .local_val => scope = scope.cast(Scope.LocalVal).?.parent,
-            .local_ptr => scope = scope.cast(Scope.LocalPtr).?.parent,
+            .local_val => scope = scope.cast(Scope.LocalVal) orelse unreachable.parent,
+            .local_ptr => scope = scope.cast(Scope.LocalPtr) orelse unreachable.parent,
             .defer_normal => {
-                const defer_scope = scope.cast(Scope.Defer).?;
+                const defer_scope = scope.cast(Scope.Defer) orelse unreachable;
                 scope = defer_scope.parent;
                 const expr_node = node_datas[defer_scope.defer_node].rhs;
                 try unusedResultDeferExpr(parent_gz, defer_scope, defer_scope.parent, expr_node);
             },
-            .defer_error => scope = scope.cast(Scope.Defer).?.parent,
+            .defer_error => scope = scope.cast(Scope.Defer) orelse unreachable.parent,
             .namespace => break,
             .top => unreachable,
         }
@@ -1984,7 +1984,7 @@ fn checkLabelRedefinition(astgen: *AstGen, parent_scope: *Scope, label: Ast.Toke
     while (true) {
         switch (scope.tag) {
             .gen_zir => {
-                const gen_zir = scope.cast(GenZir).?;
+                const gen_zir = scope.cast(GenZir) orelse unreachable;
                 if (gen_zir.label) |prev_label| {
                     if (try astgen.tokenIdentEql(label, prev_label.token)) {
                         const label_name = try astgen.identifierTokenString(label);
@@ -2001,9 +2001,9 @@ fn checkLabelRedefinition(astgen: *AstGen, parent_scope: *Scope, label: Ast.Toke
                 }
                 scope = gen_zir.parent;
             },
-            .local_val => scope = scope.cast(Scope.LocalVal).?.parent,
-            .local_ptr => scope = scope.cast(Scope.LocalPtr).?.parent,
-            .defer_normal, .defer_error => scope = scope.cast(Scope.Defer).?.parent,
+            .local_val => scope = scope.cast(Scope.LocalVal) orelse unreachable.parent,
+            .local_ptr => scope = scope.cast(Scope.LocalPtr) orelse unreachable.parent,
+            .defer_normal, .defer_error => scope = scope.cast(Scope.Defer) orelse unreachable.parent,
             .namespace => break,
             .top => unreachable,
         }
@@ -2052,7 +2052,7 @@ fn labeledBlockExpr(
         _ = try block_scope.addBreak(break_tag, block_inst, .void_value);
     }
 
-    if (!block_scope.label.?.used) {
+    if (!block_scope.label orelse unreachable.used) {
         try astgen.appendErrorTok(label_token, "unused block label", .{});
     }
 
@@ -2529,17 +2529,17 @@ fn countDefers(astgen: *AstGen, outer_scope: *Scope, inner_scope: *Scope) struct
     var scope = inner_scope;
     while (scope != outer_scope) {
         switch (scope.tag) {
-            .gen_zir => scope = scope.cast(GenZir).?.parent,
-            .local_val => scope = scope.cast(Scope.LocalVal).?.parent,
-            .local_ptr => scope = scope.cast(Scope.LocalPtr).?.parent,
+            .gen_zir => scope = scope.cast(GenZir) orelse unreachable.parent,
+            .local_val => scope = scope.cast(Scope.LocalVal) orelse unreachable.parent,
+            .local_ptr => scope = scope.cast(Scope.LocalPtr) orelse unreachable.parent,
             .defer_normal => {
-                const defer_scope = scope.cast(Scope.Defer).?;
+                const defer_scope = scope.cast(Scope.Defer) orelse unreachable;
                 scope = defer_scope.parent;
 
                 have_normal = true;
             },
             .defer_error => {
-                const defer_scope = scope.cast(Scope.Defer).?;
+                const defer_scope = scope.cast(Scope.Defer) orelse unreachable;
                 scope = defer_scope.parent;
 
                 have_err = true;
@@ -2578,11 +2578,11 @@ fn genDefers(
     var scope = inner_scope;
     while (scope != outer_scope) {
         switch (scope.tag) {
-            .gen_zir => scope = scope.cast(GenZir).?.parent,
-            .local_val => scope = scope.cast(Scope.LocalVal).?.parent,
-            .local_ptr => scope = scope.cast(Scope.LocalPtr).?.parent,
+            .gen_zir => scope = scope.cast(GenZir) orelse unreachable.parent,
+            .local_val => scope = scope.cast(Scope.LocalVal) orelse unreachable.parent,
+            .local_ptr => scope = scope.cast(Scope.LocalPtr) orelse unreachable.parent,
             .defer_normal => {
-                const defer_scope = scope.cast(Scope.Defer).?;
+                const defer_scope = scope.cast(Scope.Defer) orelse unreachable;
                 scope = defer_scope.parent;
                 const expr_node = node_datas[defer_scope.defer_node].rhs;
                 const prev_in_defer = gz.in_defer;
@@ -2591,7 +2591,7 @@ fn genDefers(
                 try unusedResultDeferExpr(gz, defer_scope, defer_scope.parent, expr_node);
             },
             .defer_error => {
-                const defer_scope = scope.cast(Scope.Defer).?;
+                const defer_scope = scope.cast(Scope.Defer) orelse unreachable;
                 scope = defer_scope.parent;
                 switch (which_ones) {
                     .both_sans_err => {
@@ -2644,22 +2644,22 @@ fn checkUsed(
     var scope = inner_scope;
     while (scope != outer_scope) {
         switch (scope.tag) {
-            .gen_zir => scope = scope.cast(GenZir).?.parent,
+            .gen_zir => scope = scope.cast(GenZir) orelse unreachable.parent,
             .local_val => {
-                const s = scope.cast(Scope.LocalVal).?;
+                const s = scope.cast(Scope.LocalVal) orelse unreachable;
                 if (!s.used) {
                     try astgen.appendErrorTok(s.token_src, "unused {s}", .{@tagName(s.id_cat)});
                 }
                 scope = s.parent;
             },
             .local_ptr => {
-                const s = scope.cast(Scope.LocalPtr).?;
+                const s = scope.cast(Scope.LocalPtr) orelse unreachable;
                 if (!s.used) {
                     try astgen.appendErrorTok(s.token_src, "unused {s}", .{@tagName(s.id_cat)});
                 }
                 scope = s.parent;
             },
-            .defer_normal, .defer_error => scope = scope.cast(Scope.Defer).?.parent,
+            .defer_normal, .defer_error => scope = scope.cast(Scope.Defer) orelse unreachable.parent,
             .namespace => unreachable,
             .top => unreachable,
         }
@@ -3436,7 +3436,7 @@ fn fnDecl(
             } else 0;
 
             const param_inst = if (is_anytype) param: {
-                const name_token = param.name_token orelse param.anytype_ellipsis3.?;
+                const name_token = param.name_token orelse param.anytype_ellipsis3 orelse unreachable;
                 const tag: Zir.Inst.Tag = if (is_comptime)
                     .param_anytype_comptime
                 else
@@ -3467,7 +3467,7 @@ fn fnDecl(
                 .gen_zir = &decl_gz,
                 .name = param_name,
                 .inst = param_inst,
-                .token_src = param.name_token.?,
+                .token_src = param.name_token orelse unreachable,
                 .id_cat = .@"function parameter",
             };
             params_scope = &sub_scope.base;
@@ -3941,10 +3941,10 @@ fn testDecl(
             var capturing_namespace: ?*Scope.Namespace = null;
             while (true) switch (s.tag) {
                 .local_val, .local_ptr => unreachable, // a test cannot be in a local scope
-                .gen_zir => s = s.cast(GenZir).?.parent,
-                .defer_normal, .defer_error => s = s.cast(Scope.Defer).?.parent,
+                .gen_zir => s = s.cast(GenZir) orelse unreachable.parent,
+                .defer_normal, .defer_error => s = s.cast(Scope.Defer) orelse unreachable.parent,
                 .namespace => {
-                    const ns = s.cast(Scope.Namespace).?;
+                    const ns = s.cast(Scope.Namespace) orelse unreachable;
                     if (ns.decls.get(name_str_index)) |i| {
                         if (found_already) |f| {
                             return astgen.failTokNotes(test_name_token, "ambiguous reference", .{}, &.{
@@ -5807,7 +5807,7 @@ fn forExpr(
     var payload_val_scope: Scope.LocalVal = undefined;
     var index_scope: Scope.LocalPtr = undefined;
     const then_sub_scope = blk: {
-        const payload_token = for_full.payload_token.?;
+        const payload_token = for_full.payload_token orelse unreachable;
         const ident = if (token_tags[payload_token] == .asterisk)
             payload_token + 1
         else
@@ -6331,7 +6331,7 @@ fn ret(gz: *GenZir, scope: *Scope, node: Ast.Node.Index) InnerError!Zir.Inst.Ref
 
     if (gz.in_defer) return astgen.failNode(node, "cannot return from defer expression", .{});
 
-    const defer_outer = &astgen.fn_block.?.base;
+    const defer_outer = &astgen.fn_block orelse unreachable.base;
 
     const operand_node = node_datas[node].lhs;
     if (operand_node == 0) {
@@ -6514,7 +6514,7 @@ fn localVarRef(
     var capturing_namespace: ?*Scope.Namespace = null;
     while (true) switch (s.tag) {
         .local_val => {
-            const local_val = s.cast(Scope.LocalVal).?;
+            const local_val = s.cast(Scope.LocalVal) orelse unreachable;
 
             if (local_val.name == name_str_index) {
                 // Locals cannot shadow anything, so we do not need to look for ambiguous
@@ -6536,7 +6536,7 @@ fn localVarRef(
             s = local_val.parent;
         },
         .local_ptr => {
-            const local_ptr = s.cast(Scope.LocalPtr).?;
+            const local_ptr = s.cast(Scope.LocalPtr) orelse unreachable;
             if (local_ptr.name == name_str_index) {
                 local_ptr.used = true;
 
@@ -6545,7 +6545,7 @@ fn localVarRef(
                     const ident_name = try astgen.identifierTokenString(ident_token);
                     return astgen.failNodeNotes(ident, "mutable '{s}' not accessible from here", .{ident_name}, &.{
                         try astgen.errNoteTok(local_ptr.token_src, "declared mutable here", .{}),
-                        try astgen.errNoteNode(capturing_namespace.?.node, "crosses namespace boundary here", .{}),
+                        try astgen.errNoteNode(capturing_namespace orelse unreachable.node, "crosses namespace boundary here", .{}),
                     });
                 }
 
@@ -6569,10 +6569,10 @@ fn localVarRef(
             }
             s = local_ptr.parent;
         },
-        .gen_zir => s = s.cast(GenZir).?.parent,
-        .defer_normal, .defer_error => s = s.cast(Scope.Defer).?.parent,
+        .gen_zir => s = s.cast(GenZir) orelse unreachable.parent,
+        .defer_normal, .defer_error => s = s.cast(Scope.Defer) orelse unreachable.parent,
         .namespace => {
-            const ns = s.cast(Scope.Namespace).?;
+            const ns = s.cast(Scope.Namespace) orelse unreachable;
             if (ns.decls.get(name_str_index)) |i| {
                 if (found_already) |f| {
                     return astgen.failNodeNotes(ident, "ambiguous reference", .{}, &.{
@@ -6624,14 +6624,14 @@ fn tunnelThroughClosure(
 
     // Otherwise we need a tunnel.  Check if this namespace
     // already has one for this value.
-    const gop = try ns.?.captures.getOrPut(gpa, refToIndex(value).?);
+    const gop = try ns orelse unreachable.captures.getOrPut(gpa, refToIndex(value) orelse unreachable);
     if (!gop.found_existing) {
         // Make a new capture for this value but don't add it to the declaring_gz yet
         try gz.astgen.instructions.append(gz.astgen.gpa, .{
             .tag = .closure_capture,
             .data = .{ .un_tok = .{
                 .operand = value,
-                .src_tok = ns.?.declaring_gz.?.tokenIndexToRelative(token),
+                .src_tok = ns orelse unreachable.declaring_gz orelse unreachable.tokenIndexToRelative(token),
             } },
         });
         gop.value_ptr.* = @intCast(Zir.Inst.Index, gz.astgen.instructions.len - 1);
@@ -7036,7 +7036,7 @@ fn typeOf(
         const param_ref = try reachableExpr(&typeof_scope, &typeof_scope.base, .none, arg, node);
         gz.astgen.extra.items[args_index + i] = @enumToInt(param_ref);
     }
-    _ = try typeof_scope.addBreak(.break_inline, refToIndex(typeof_inst).?, .void_value);
+    _ = try typeof_scope.addBreak(.break_inline, refToIndex(typeof_inst) orelse unreachable, .void_value);
 
     const body = typeof_scope.instructionsSlice();
     gz.astgen.setExtra(payload_index, Zir.Inst.TypeOfPeer{
@@ -7152,7 +7152,7 @@ fn builtinCall(
                     var found_already: ?Ast.Node.Index = null; // we have found a decl with the same name already
                     while (true) switch (s.tag) {
                         .local_val => {
-                            const local_val = s.cast(Scope.LocalVal).?;
+                            const local_val = s.cast(Scope.LocalVal) orelse unreachable;
                             if (local_val.name == decl_name) {
                                 local_val.used = true;
                                 _ = try gz.addPlNode(.export_value, node, Zir.Inst.ExportValue{
@@ -7164,7 +7164,7 @@ fn builtinCall(
                             s = local_val.parent;
                         },
                         .local_ptr => {
-                            const local_ptr = s.cast(Scope.LocalPtr).?;
+                            const local_ptr = s.cast(Scope.LocalPtr) orelse unreachable;
                             if (local_ptr.name == decl_name) {
                                 if (!local_ptr.maybe_comptime)
                                     return astgen.failNode(params[0], "unable to export runtime-known value", .{});
@@ -7178,10 +7178,10 @@ fn builtinCall(
                             }
                             s = local_ptr.parent;
                         },
-                        .gen_zir => s = s.cast(GenZir).?.parent,
-                        .defer_normal, .defer_error => s = s.cast(Scope.Defer).?.parent,
+                        .gen_zir => s = s.cast(GenZir) orelse unreachable.parent,
+                        .defer_normal, .defer_error => s = s.cast(Scope.Defer) orelse unreachable.parent,
                         .namespace => {
-                            const ns = s.cast(Scope.Namespace).?;
+                            const ns = s.cast(Scope.Namespace) orelse unreachable;
                             if (ns.decls.get(decl_name)) |i| {
                                 if (found_already) |f| {
                                     return astgen.failNodeNotes(node, "ambiguous reference", .{}, &.{
@@ -9584,11 +9584,11 @@ const Scope = struct {
 
     fn parent(base: *Scope) ?*Scope {
         return switch (base.tag) {
-            .gen_zir => base.cast(GenZir).?.parent,
-            .local_val => base.cast(LocalVal).?.parent,
-            .local_ptr => base.cast(LocalPtr).?.parent,
-            .defer_normal, .defer_error => base.cast(Defer).?.parent,
-            .namespace => base.cast(Namespace).?.parent,
+            .gen_zir => base.cast(GenZir) orelse unreachable.parent,
+            .local_val => base.cast(LocalVal) orelse unreachable.parent,
+            .local_ptr => base.cast(LocalPtr) orelse unreachable.parent,
+            .defer_normal, .defer_error => base.cast(Defer) orelse unreachable.parent,
+            .namespace => base.cast(Namespace) orelse unreachable.parent,
             .top => null,
         };
     }
@@ -10997,7 +10997,7 @@ fn detectLocalShadowing(
     var s = scope;
     while (true) switch (s.tag) {
         .local_val => {
-            const local_val = s.cast(Scope.LocalVal).?;
+            const local_val = s.cast(Scope.LocalVal) orelse unreachable;
             if (local_val.name == ident_name) {
                 const name_slice = mem.span(astgen.nullTerminatedString(ident_name));
                 const name = try gpa.dupe(u8, name_slice);
@@ -11015,7 +11015,7 @@ fn detectLocalShadowing(
             s = local_val.parent;
         },
         .local_ptr => {
-            const local_ptr = s.cast(Scope.LocalPtr).?;
+            const local_ptr = s.cast(Scope.LocalPtr) orelse unreachable;
             if (local_ptr.name == ident_name) {
                 const name_slice = mem.span(astgen.nullTerminatedString(ident_name));
                 const name = try gpa.dupe(u8, name_slice);
@@ -11033,7 +11033,7 @@ fn detectLocalShadowing(
             s = local_ptr.parent;
         },
         .namespace => {
-            const ns = s.cast(Scope.Namespace).?;
+            const ns = s.cast(Scope.Namespace) orelse unreachable;
             const decl_node = ns.decls.get(ident_name) orelse {
                 s = ns.parent;
                 continue;
@@ -11047,8 +11047,8 @@ fn detectLocalShadowing(
                 try astgen.errNoteNode(decl_node, "declared here", .{}),
             });
         },
-        .gen_zir => s = s.cast(GenZir).?.parent,
-        .defer_normal, .defer_error => s = s.cast(Scope.Defer).?.parent,
+        .gen_zir => s = s.cast(GenZir) orelse unreachable.parent,
+        .defer_normal, .defer_error => s = s.cast(Scope.Defer) orelse unreachable.parent,
         .top => break,
     };
 }

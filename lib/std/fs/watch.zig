@@ -591,7 +591,7 @@ pub fn Watch(comptime V: type) type {
                         const basename_ptr = ptr + @sizeOf(os.linux.inotify_event);
                         const basename = std.mem.span(@ptrCast([*:0]u8, basename_ptr));
 
-                        const dir = &self.os_data.wd_table.get(ev.wd).?;
+                        const dir = &self.os_data.wd_table.get(ev.wd) orelse unreachable;
                         if (dir.file_table.getEntry(basename)) |file_value| {
                             self.channel.put(Event{
                                 .id = .CloseWrite,
@@ -617,7 +617,7 @@ pub fn Watch(comptime V: type) type {
                         const basename_ptr = ptr + @sizeOf(os.linux.inotify_event);
                         const basename = std.mem.span(@ptrCast([*:0]u8, basename_ptr));
 
-                        const dir = &self.os_data.wd_table.get(ev.wd).?;
+                        const dir = &self.os_data.wd_table.get(ev.wd) orelse unreachable;
                         if (dir.file_table.getEntry(basename)) |file_value| {
                             self.channel.put(Event{
                                 .id = .Delete,

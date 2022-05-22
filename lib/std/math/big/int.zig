@@ -1451,8 +1451,8 @@ pub const Mutable = struct {
         // Handle trailing zero-words of divisor/dividend. These are not handled in the following
         // algorithms.
         // Note, there must be a non-zero limb for either.
-        // const x_trailing = std.mem.indexOfScalar(Limb, x.limbs[0..x.len], 0).?;
-        // const y_trailing = std.mem.indexOfScalar(Limb, y.limbs[0..y.len], 0).?;
+        // const x_trailing = std.mem.indexOfScalar(Limb, x.limbs[0..x.len], 0) orelse unreachable;
+        // const y_trailing = std.mem.indexOfScalar(Limb, y.limbs[0..y.len], 0) orelse unreachable;
 
         const x_trailing = for (x.limbs[0..x.len]) |xi, i| {
             if (xi != 0) break i;

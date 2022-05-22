@@ -171,7 +171,7 @@ pub fn free(self: *Object, allocator: Allocator, macho_file: *MachO) void {
     var it = self.end_atoms.iterator();
     while (it.next()) |entry| {
         const match = entry.key_ptr.*;
-        const first_atom = self.start_atoms.get(match).?;
+        const first_atom = self.start_atoms.get(match) orelse unreachable;
         const last_atom = entry.value_ptr.*;
         var atom = first_atom;
 
@@ -204,7 +204,7 @@ fn freeAtoms(self: *Object, macho_file: *MachO) void {
     var it = self.end_atoms.iterator();
     while (it.next()) |entry| {
         const match = entry.key_ptr.*;
-        var first_atom: *Atom = self.start_atoms.get(match).?;
+        var first_atom: *Atom = self.start_atoms.get(match) orelse unreachable;
         var last_atom: *Atom = entry.value_ptr.*;
 
         if (macho_file.atoms.getPtr(match)) |atom_ptr| {
@@ -392,7 +392,7 @@ pub fn parseIntoAtoms(self: *Object, allocator: Allocator, macho_file: *MachO) !
     const tracy = trace(@src());
     defer tracy.end();
 
-    const seg = self.load_commands.items[self.segment_cmd_index.?].segment;
+    const seg = self.load_commands.items[self.segment_cmd_index orelse unreachable].segment;
 
     log.debug("analysing {s}", .{self.name});
 
@@ -471,7 +471,7 @@ pub fn parseIntoAtoms(self: *Object, allocator: Allocator, macho_file: *MachO) !
             try macho_file.locals.append(allocator, .{
                 .n_strx = 0,
                 .n_type = macho.N_SECT,
-                .n_sect = @intCast(u8, macho_file.section_ordinals.getIndex(match).? + 1),
+                .n_sect = @intCast(u8, macho_file.section_ordinals.getIndex(match) orelse unreachable + 1),
                 .n_desc = 0,
                 .n_value = 0,
             });
@@ -522,7 +522,7 @@ pub fn parseIntoAtoms(self: *Object, allocator: Allocator, macho_file: *MachO) !
             const nlist = nlist_with_index.nlist;
             const local_sym_index = self.symbol_mapping.get(nlist_with_index.index) orelse unreachable;
             const local = &macho_file.locals.items[local_sym_index];
-            local.n_sect = @intCast(u8, macho_file.section_ordinals.getIndex(match).? + 1);
+            local.n_sect = @intCast(u8, macho_file.section_ordinals.getIndex(match) orelse unreachable + 1);
 
             const stab: ?Atom.Stab = if (self.debug_info) |di| blk: {
                 // TODO there has to be a better to handle this.
@@ -630,7 +630,7 @@ pub fn parseDataInCode(self: *Object, allocator: Allocator) !void {
 }
 
 fn readSection(self: Object, allocator: Allocator, index: u16) ![]u8 {
-    const seg = self.load_commands.items[self.segment_cmd_index.?].segment;
+    const seg = self.load_commands.items[self.segment_cmd_index orelse unreachable].segment;
     const sect = seg.sections.items[index];
     var buffer = try allocator.alloc(u8, @intCast(usize, sect.size));
     _ = try self.file.preadAll(buffer, sect.offset);

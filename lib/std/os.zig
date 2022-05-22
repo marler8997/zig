@@ -1484,7 +1484,7 @@ pub fn resolvePathWasi(path: []const u8, out_buffer: *[MAX_PATH_BYTES]u8) !Relat
     var alloc = allocator.allocator();
 
     const abs_path = fs.path.resolve(alloc, &.{ wasi_cwd.cwd, path }) catch return error.NameTooLong;
-    const preopen_uri = wasi_cwd.preopens.?.findContaining(.{ .Dir = abs_path });
+    const preopen_uri = wasi_cwd.preopens orelse unreachable.findContaining(.{ .Dir = abs_path });
 
     if (preopen_uri) |po| {
         return RelativePathWasi{

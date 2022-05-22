@@ -221,7 +221,7 @@ fn parsePlaceholder(comptime str: anytype) Placeholder {
     // too
     const fill = comptime if (parser.peek(1)) |ch|
         switch (ch) {
-            '<', '^', '>' => parser.char().?,
+            '<', '^', '>' => parser.char() orelse unreachable,
             else => ' ',
         }
     else
@@ -301,8 +301,8 @@ const Parser = struct {
             switch (self.buf[self.pos]) {
                 '0'...'9' => {
                     if (r == null) r = 0;
-                    r.? *= 10;
-                    r.? += self.buf[self.pos] - '0';
+                    r orelse unreachable *= 10;
+                    r orelse unreachable += self.buf[self.pos] - '0';
                 },
                 else => break,
             }
@@ -1396,7 +1396,7 @@ pub fn formatInt(
             // Negative integer
             index -= 1;
             buf[index] = '-';
-        } else if (options.width == null or options.width.? == 0) {
+        } else if (options.width == null or options.width orelse unreachable == 0) {
             // Positive integer, omit the plus sign
         } else {
             // Positive integer
@@ -1646,7 +1646,7 @@ pub const ParseIntError = error{
 ///     ) !void;
 ///
 pub fn Formatter(comptime format_fn: anytype) type {
-    const Data = @typeInfo(@TypeOf(format_fn)).Fn.args[0].arg_type.?;
+    const Data = @typeInfo(@TypeOf(format_fn)).Fn.args[0].arg_type orelse unreachable;
     return struct {
         data: Data,
         pub fn format(

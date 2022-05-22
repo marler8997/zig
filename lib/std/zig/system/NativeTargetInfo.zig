@@ -249,7 +249,7 @@ fn detectAbiAndDynamicLinker(
     const native_target_has_ld = comptime builtin.target.hasDynamicLinker();
     const is_linux = builtin.target.os.tag == .linux;
     const have_all_info = cross_target.dynamic_linker.get() != null and
-        cross_target.abi != null and (!is_linux or cross_target.abi.?.isGnu());
+        cross_target.abi != null and (!is_linux or cross_target.abi orelse unreachable.isGnu());
     const os_is_non_native = cross_target.os_tag != null;
     if (!native_target_has_ld or have_all_info or os_is_non_native) {
         return defaultAbiAndDynamicLinker(cpu, os, cross_target);
@@ -314,7 +314,7 @@ fn detectAbiAndDynamicLinker(
         // This is O(N^M) but typical case here is N=2 and M=10.
         find_ld: for (lib_paths) |lib_path| {
             for (ld_info_list) |ld_info| {
-                const standard_ld_basename = fs.path.basename(ld_info.ld.get().?);
+                const standard_ld_basename = fs.path.basename(ld_info.ld.get() orelse unreachable);
                 if (std.mem.endsWith(u8, lib_path, standard_ld_basename)) {
                     found_ld_info = ld_info;
                     found_ld_path = lib_path;
@@ -536,7 +536,7 @@ pub fn abiAndDynamicLinkerFromFile(
                     // Use it to determine ABI.
                     const full_ld_path = result.dynamic_linker.buffer[0..len];
                     for (ld_info_list) |ld_info| {
-                        const standard_ld_basename = fs.path.basename(ld_info.ld.get().?);
+                        const standard_ld_basename = fs.path.basename(ld_info.ld.get() orelse unreachable);
                         if (std.mem.endsWith(u8, full_ld_path, standard_ld_basename)) {
                             result.target.abi = ld_info.abi;
                             break;

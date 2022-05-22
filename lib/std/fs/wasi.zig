@@ -227,7 +227,7 @@ pub const PreopenList = struct {
 
         for (self.buffer.items) |preopen| {
             if (preopen.@"type".getRelativePath(preopen_type)) |rel_path| {
-                if (best_match == null or rel_path.len <= best_match.?.relative_path.len) {
+                if (best_match == null or rel_path.len <= best_match orelse unreachable.relative_path.len) {
                     best_match = PreopenUri{
                         .base = preopen,
                         .relative_path = if (rel_path.len == 0) "." else rel_path,
@@ -283,14 +283,14 @@ test "extracting WASI preopens" {
     try std.testing.expect(preopen.@"type".eql(PreopenType{ .Dir = "." }));
 
     const po_type1 = PreopenType{ .Dir = "/" };
-    try std.testing.expect(std.mem.eql(u8, po_type1.getRelativePath(.{ .Dir = "/" }).?, ""));
-    try std.testing.expect(std.mem.eql(u8, po_type1.getRelativePath(.{ .Dir = "/test/foobar" }).?, "test/foobar"));
+    try std.testing.expect(std.mem.eql(u8, po_type1.getRelativePath(.{ .Dir = "/" }) orelse unreachable, ""));
+    try std.testing.expect(std.mem.eql(u8, po_type1.getRelativePath(.{ .Dir = "/test/foobar" }) orelse unreachable, "test/foobar"));
 
     const po_type2 = PreopenType{ .Dir = "/test/foo" };
     try std.testing.expect(po_type2.getRelativePath(.{ .Dir = "/test/foobar" }) == null);
 
     const po_type3 = PreopenType{ .Dir = "/test" };
-    try std.testing.expect(std.mem.eql(u8, po_type3.getRelativePath(.{ .Dir = "/test" }).?, ""));
-    try std.testing.expect(std.mem.eql(u8, po_type3.getRelativePath(.{ .Dir = "/test/" }).?, ""));
-    try std.testing.expect(std.mem.eql(u8, po_type3.getRelativePath(.{ .Dir = "/test/foo/bar" }).?, "foo/bar"));
+    try std.testing.expect(std.mem.eql(u8, po_type3.getRelativePath(.{ .Dir = "/test" }) orelse unreachable, ""));
+    try std.testing.expect(std.mem.eql(u8, po_type3.getRelativePath(.{ .Dir = "/test/" }) orelse unreachable, ""));
+    try std.testing.expect(std.mem.eql(u8, po_type3.getRelativePath(.{ .Dir = "/test/foo/bar" }) orelse unreachable, "foo/bar"));
 }

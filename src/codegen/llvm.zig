@@ -346,7 +346,7 @@ pub const Object = struct {
 
         return Object{
             .gpa = gpa,
-            .module = options.module.?,
+            .module = options.module orelse unreachable,
             .llvm_module = llvm_module,
             .di_map = .{},
             .di_builder = opt_di_builder,
@@ -576,11 +576,11 @@ pub const Object = struct {
         defer arena_allocator.deinit();
         const arena = arena_allocator.allocator();
 
-        const mod = comp.bin_file.options.module.?;
+        const mod = comp.bin_file.options.module orelse unreachable;
         const cache_dir = mod.zig_cache_artifact_directory;
 
         var emit_bin_path: ?[*:0]const u8 = if (comp.bin_file.options.emit) |emit|
-            try emit.basenamePath(arena, try arena.dupeZ(u8, comp.bin_file.intermediary_basename.?))
+            try emit.basenamePath(arena, try arena.dupeZ(u8, comp.bin_file.intermediary_basename orelse unreachable))
         else
             null;
 
@@ -790,7 +790,7 @@ pub const Object = struct {
                                         };
                                         const field_as_int = builder.buildTrunc(shifted, field_int_ty, "");
                                         var ty_buf: Type.Payload.Pointer = undefined;
-                                        const llvm_i = llvmFieldIndex(param_ty, field_i, target, &ty_buf).?;
+                                        const llvm_i = llvmFieldIndex(param_ty, field_i, target, &ty_buf) orelse unreachable;
                                         const field_ptr = builder.buildStructGEP(arg_ptr, llvm_i, "");
                                         const casted_ptr = builder.buildBitCast(field_ptr, field_int_ty.pointerType(0), "");
                                         const store_inst = builder.buildStore(field_as_int, casted_ptr);
@@ -833,10 +833,10 @@ pub const Object = struct {
             else
                 0;
             const subprogram = dib.createFunction(
-                di_file.?.toScope(),
+                di_file orelse unreachable.toScope(),
                 decl.name,
                 llvm_func.getValueName(),
-                di_file.?,
+                di_file orelse unreachable,
                 line_number,
                 try o.lowerDebugType(decl.ty, .full),
                 is_internal_linkage,
@@ -850,7 +850,7 @@ pub const Object = struct {
 
             llvm_func.fnSetSubprogram(subprogram);
 
-            const lexical_block = dib.createLexicalBlock(subprogram.toScope(), di_file.?, line_number, 1);
+            const lexical_block = dib.createLexicalBlock(subprogram.toScope(), di_file orelse unreachable, line_number, 1);
             di_scope = lexical_block.toScope();
         }
 
@@ -880,7 +880,7 @@ pub const Object = struct {
         fg.genBody(air.getMainBody()) catch |err| switch (err) {
             error.CodegenFail => {
                 decl.analysis = .codegen_failure;
-                try module.failed_decls.put(module.gpa, decl_index, dg.err_msg.?);
+                try module.failed_decls.put(module.gpa, decl_index, dg.err_msg orelse unreachable);
                 dg.err_msg = null;
                 return;
             },
@@ -905,7 +905,7 @@ pub const Object = struct {
         dg.genDecl() catch |err| switch (err) {
             error.CodegenFail => {
                 decl.analysis = .codegen_failure;
-                try module.failed_decls.put(module.gpa, decl_index, dg.err_msg.?);
+                try module.failed_decls.put(module.gpa, decl_index, dg.err_msg orelse unreachable);
                 dg.err_msg = null;
                 return;
             },
@@ -1043,7 +1043,7 @@ pub const Object = struct {
         defer gpa.free(sub_file_path_z);
         const dir_path_z = try gpa.dupeZ(u8, dir_path);
         defer gpa.free(dir_path_z);
-        const di_file = o.di_builder.?.createFile(sub_file_path_z, dir_path_z);
+        const di_file = o.di_builder orelse unreachable.createFile(sub_file_path_z, dir_path_z);
         gop.value_ptr.* = di_file.toNode();
         return di_file;
     }
@@ -1094,7 +1094,7 @@ pub const Object = struct {
         const ty = gop.key_ptr.*;
         const gpa = o.gpa;
         const target = o.target;
-        const dib = o.di_builder.?;
+        const dib = o.di_builder orelse unreachable;
         switch (ty.zigTypeTag()) {
             .Void, .NoReturn => {
                 const di_type = dib.createBasicType("void", 0, DW.ATE.signed);
@@ -1236,7 +1236,7 @@ pub const Object = struct {
                     defer gpa.free(name);
                     const di_file: ?*llvm.DIFile = null;
                     const line = 0;
-                    const compile_unit_scope = o.di_compile_unit.?.toScope();
+                    const compile_unit_scope = o.di_compile_unit orelse unreachable.toScope();
 
                     const fwd_decl = opt_fwd_decl orelse blk: {
                         const fwd_decl = dib.createReplaceableCompositeType(
@@ -1383,7 +1383,7 @@ pub const Object = struct {
 
                 const di_file: ?*llvm.DIFile = null;
                 const line = 0;
-                const compile_unit_scope = o.di_compile_unit.?.toScope();
+                const compile_unit_scope = o.di_compile_unit orelse unreachable.toScope();
                 const fwd_decl = opt_fwd_decl orelse blk: {
                     const fwd_decl = dib.createReplaceableCompositeType(
                         DW.TAG.structure_type,
@@ -1466,7 +1466,7 @@ pub const Object = struct {
                 defer gpa.free(name);
                 const di_file: ?*llvm.DIFile = null;
                 const line = 0;
-                const compile_unit_scope = o.di_compile_unit.?.toScope();
+                const compile_unit_scope = o.di_compile_unit orelse unreachable.toScope();
                 const fwd_decl = opt_fwd_decl orelse blk: {
                     const fwd_decl = dib.createReplaceableCompositeType(
                         DW.TAG.structure_type,
@@ -1558,7 +1558,7 @@ pub const Object = struct {
                 return di_ty;
             },
             .Struct => {
-                const compile_unit_scope = o.di_compile_unit.?.toScope();
+                const compile_unit_scope = o.di_compile_unit orelse unreachable.toScope();
                 const name = try ty.nameAlloc(gpa, o.module);
                 defer gpa.free(name);
 
@@ -1735,7 +1735,7 @@ pub const Object = struct {
                 return full_di_ty;
             },
             .Union => {
-                const compile_unit_scope = o.di_compile_unit.?.toScope();
+                const compile_unit_scope = o.di_compile_unit orelse unreachable.toScope();
                 const owner_decl_index = ty.getOwnerDecl();
 
                 const name = try ty.nameAlloc(gpa, o.module);
@@ -1745,7 +1745,7 @@ pub const Object = struct {
                     const fwd_decl = dib.createReplaceableCompositeType(
                         DW.TAG.structure_type,
                         name.ptr,
-                        o.di_compile_unit.?.toScope(),
+                        o.di_compile_unit orelse unreachable.toScope(),
                         null, // file
                         0, // line
                     );
@@ -1764,7 +1764,7 @@ pub const Object = struct {
                 }
 
                 const layout = ty.unionGetLayout(target);
-                const union_obj = ty.cast(Type.Payload.Union).?.data;
+                const union_obj = ty.cast(Type.Payload.Union) orelse unreachable.data;
 
                 if (layout.payload_size == 0) {
                     const tag_di_ty = try o.lowerDebugType(union_obj.tag_ty, .full);
@@ -1991,7 +1991,7 @@ pub const Object = struct {
     fn makeEmptyNamespaceDIType(o: *Object, decl_index: Module.Decl.Index) !*llvm.DIType {
         const decl = o.module.declPtr(decl_index);
         const fields: [0]*llvm.DIType = .{};
-        return o.di_builder.?.createStructType(
+        return o.di_builder orelse unreachable.createStructType(
             try o.namespaceToDebugScope(decl.src_namespace),
             decl.name, // TODO use fully qualified name
             try o.getDIFile(o.gpa, decl.src_namespace.file_scope),
@@ -2011,20 +2011,20 @@ pub const Object = struct {
     fn getStackTraceType(o: *Object) Type {
         const mod = o.module;
 
-        const std_pkg = mod.main_pkg.table.get("std").?;
+        const std_pkg = mod.main_pkg.table.get("std") orelse unreachable;
         const std_file = (mod.importPkg(std_pkg) catch unreachable).file;
 
         const builtin_str: []const u8 = "builtin";
-        const std_namespace = mod.declPtr(std_file.root_decl.unwrap().?).src_namespace;
+        const std_namespace = mod.declPtr(std_file.root_decl.unwrap() orelse unreachable).src_namespace;
         const builtin_decl = std_namespace.decls
-            .getKeyAdapted(builtin_str, Module.DeclAdapter{ .mod = mod }).?;
+            .getKeyAdapted(builtin_str, Module.DeclAdapter{ .mod = mod }) orelse unreachable;
 
         const stack_trace_str: []const u8 = "StackTrace";
         // buffer is only used for int_type, `builtin` is a struct.
         const builtin_ty = mod.declPtr(builtin_decl).val.toType(undefined);
-        const builtin_namespace = builtin_ty.getNamespace().?;
+        const builtin_namespace = builtin_ty.getNamespace() orelse unreachable;
         const stack_trace_decl = builtin_namespace.decls
-            .getKeyAdapted(stack_trace_str, Module.DeclAdapter{ .mod = mod }).?;
+            .getKeyAdapted(stack_trace_str, Module.DeclAdapter{ .mod = mod }) orelse unreachable;
 
         return mod.declPtr(stack_trace_decl).val.toType(undefined);
     }
@@ -2164,7 +2164,7 @@ pub const DeclGen = struct {
             llvm_fn.setUnnamedAddr(.True);
         } else if (dg.module.getTarget().isWasm()) {
             dg.addFnAttrString(llvm_fn, "wasm-import-name", std.mem.sliceTo(decl.name, 0));
-            if (decl.getExternFn().?.lib_name) |lib_name| {
+            if (decl.getExternFn() orelse unreachable.lib_name) |lib_name| {
                 const module_name = std.mem.sliceTo(lib_name, 0);
                 if (!std.mem.eql(u8, module_name, "c")) {
                     dg.addFnAttrString(llvm_fn, "wasm-import-module", module_name);
@@ -2394,7 +2394,7 @@ pub const DeclGen = struct {
                     // reference, we need to copy it here.
                     gop.key_ptr.* = try t.copy(dg.object.type_map_arena.allocator());
 
-                    const opaque_obj = t.castTag(.@"opaque").?.data;
+                    const opaque_obj = t.castTag(.@"opaque") orelse unreachable.data;
                     const name = try opaque_obj.getFullyQualifiedName(dg.module);
                     defer gpa.free(name);
 
@@ -2515,7 +2515,7 @@ pub const DeclGen = struct {
                     return llvm_struct_ty;
                 }
 
-                const struct_obj = t.castTag(.@"struct").?.data;
+                const struct_obj = t.castTag(.@"struct") orelse unreachable.data;
 
                 if (struct_obj.layout == .Packed) {
                     var buf: Type.Payload.Bits = undefined;
@@ -2587,7 +2587,7 @@ pub const DeclGen = struct {
                 gop.key_ptr.* = try t.copy(dg.object.type_map_arena.allocator());
 
                 const layout = t.unionGetLayout(target);
-                const union_obj = t.cast(Type.Payload.Union).?.data;
+                const union_obj = t.cast(Type.Payload.Union) orelse unreachable.data;
 
                 if (layout.payload_size == 0) {
                     const enum_tag_llvm_ty = try dg.llvmType(union_obj.tag_ty);
@@ -2786,8 +2786,8 @@ pub const DeclGen = struct {
             // TODO this duplicates code with Pointer but they should share the handling
             // of the tv.val.tag() and then Int should do extra constPtrToInt on top
             .Int => switch (tv.val.tag()) {
-                .decl_ref_mut => return lowerDeclRefValue(dg, tv, tv.val.castTag(.decl_ref_mut).?.data.decl_index),
-                .decl_ref => return lowerDeclRefValue(dg, tv, tv.val.castTag(.decl_ref).?.data),
+                .decl_ref_mut => return lowerDeclRefValue(dg, tv, tv.val.castTag(.decl_ref_mut) orelse unreachable.data.decl_index),
+                .decl_ref => return lowerDeclRefValue(dg, tv, tv.val.castTag(.decl_ref) orelse unreachable.data),
                 else => {
                     var bigint_space: Value.BigIntSpace = undefined;
                     const bigint = tv.val.toBigInt(&bigint_space, target);
@@ -2871,10 +2871,10 @@ pub const DeclGen = struct {
                 }
             },
             .Pointer => switch (tv.val.tag()) {
-                .decl_ref_mut => return lowerDeclRefValue(dg, tv, tv.val.castTag(.decl_ref_mut).?.data.decl_index),
-                .decl_ref => return lowerDeclRefValue(dg, tv, tv.val.castTag(.decl_ref).?.data),
+                .decl_ref_mut => return lowerDeclRefValue(dg, tv, tv.val.castTag(.decl_ref_mut) orelse unreachable.data.decl_index),
+                .decl_ref => return lowerDeclRefValue(dg, tv, tv.val.castTag(.decl_ref) orelse unreachable.data),
                 .variable => {
-                    const decl_index = tv.val.castTag(.variable).?.data.owner_decl;
+                    const decl_index = tv.val.castTag(.variable) orelse unreachable.data.owner_decl;
                     const decl = dg.module.declPtr(decl_index);
                     dg.module.markDeclAlive(decl);
                     const val = try dg.resolveGlobalDecl(decl_index);
@@ -2884,7 +2884,7 @@ pub const DeclGen = struct {
                     return val.constBitCast(llvm_type);
                 },
                 .slice => {
-                    const slice = tv.val.castTag(.slice).?.data;
+                    const slice = tv.val.castTag(.slice) orelse unreachable.data;
                     var buf: Type.SlicePtrFieldTypeBuffer = undefined;
                     const fields: [2]*const llvm.Value = .{
                         try dg.genTypedValue(.{
@@ -2916,7 +2916,7 @@ pub const DeclGen = struct {
             },
             .Array => switch (tv.val.tag()) {
                 .bytes => {
-                    const bytes = tv.val.castTag(.bytes).?.data;
+                    const bytes = tv.val.castTag(.bytes) orelse unreachable.data;
                     return dg.context.constString(
                         bytes.ptr,
                         @intCast(c_uint, tv.ty.arrayLenIncludingSentinel()),
@@ -2924,7 +2924,7 @@ pub const DeclGen = struct {
                     );
                 },
                 .aggregate => {
-                    const elem_vals = tv.val.castTag(.aggregate).?.data;
+                    const elem_vals = tv.val.castTag(.aggregate) orelse unreachable.data;
                     const elem_ty = tv.ty.elemType();
                     const gpa = dg.gpa;
                     const len = @intCast(usize, tv.ty.arrayLenIncludingSentinel());
@@ -2950,7 +2950,7 @@ pub const DeclGen = struct {
                     }
                 },
                 .repeated => {
-                    const val = tv.val.castTag(.repeated).?.data;
+                    const val = tv.val.castTag(.repeated) orelse unreachable.data;
                     const elem_ty = tv.ty.elemType();
                     const sentinel = tv.ty.sentinel();
                     const len = @intCast(usize, tv.ty.arrayLen());
@@ -2988,7 +2988,7 @@ pub const DeclGen = struct {
                 },
                 .empty_array_sentinel => {
                     const elem_ty = tv.ty.elemType();
-                    const sent_val = tv.ty.sentinel().?;
+                    const sent_val = tv.ty.sentinel() orelse unreachable;
                     const sentinel = try dg.genTypedValue(.{ .ty = elem_ty, .val = sent_val });
                     const llvm_elems: [1]*const llvm.Value = .{sentinel};
                     const need_unnamed = dg.isUnnamedType(elem_ty, llvm_elems[0]);
@@ -3032,8 +3032,8 @@ pub const DeclGen = struct {
             },
             .Fn => {
                 const fn_decl_index = switch (tv.val.tag()) {
-                    .extern_fn => tv.val.castTag(.extern_fn).?.data.owner_decl,
-                    .function => tv.val.castTag(.function).?.data.owner_decl,
+                    .extern_fn => tv.val.castTag(.extern_fn) orelse unreachable.data.owner_decl,
+                    .function => tv.val.castTag(.function) orelse unreachable.data.owner_decl,
                     else => unreachable,
                 };
                 const fn_decl = dg.module.declPtr(fn_decl_index);
@@ -3044,7 +3044,7 @@ pub const DeclGen = struct {
                 const llvm_ty = try dg.llvmType(tv.ty);
                 switch (tv.val.tag()) {
                     .@"error" => {
-                        const err_name = tv.val.castTag(.@"error").?.data.name;
+                        const err_name = tv.val.castTag(.@"error") orelse unreachable.data.name;
                         const kv = try dg.module.getErrorValue(err_name);
                         return llvm_ty.constInt(kv.value, .False);
                     },
@@ -3089,7 +3089,7 @@ pub const DeclGen = struct {
             },
             .Struct => {
                 const llvm_struct_ty = try dg.llvmType(tv.ty);
-                const field_vals = tv.val.castTag(.aggregate).?.data;
+                const field_vals = tv.val.castTag(.aggregate) orelse unreachable.data;
                 const gpa = dg.gpa;
 
                 if (tv.ty.isTupleOrAnonStruct()) {
@@ -3156,7 +3156,7 @@ pub const DeclGen = struct {
                     }
                 }
 
-                const struct_obj = tv.ty.castTag(.@"struct").?.data;
+                const struct_obj = tv.ty.castTag(.@"struct") orelse unreachable.data;
 
                 if (struct_obj.layout == .Packed) {
                     const big_bits = struct_obj.packedIntegerBits(target);
@@ -3249,18 +3249,18 @@ pub const DeclGen = struct {
             },
             .Union => {
                 const llvm_union_ty = try dg.llvmType(tv.ty);
-                const tag_and_val = tv.val.castTag(.@"union").?.data;
+                const tag_and_val = tv.val.castTag(.@"union") orelse unreachable.data;
 
                 const layout = tv.ty.unionGetLayout(target);
 
                 if (layout.payload_size == 0) {
                     return genTypedValue(dg, .{
-                        .ty = tv.ty.unionTagType().?,
+                        .ty = tv.ty.unionTagType() orelse unreachable,
                         .val = tag_and_val.tag,
                     });
                 }
-                const union_obj = tv.ty.cast(Type.Payload.Union).?.data;
-                const field_index = union_obj.tag_ty.enumTagFieldIndex(tag_and_val.tag, dg.module).?;
+                const union_obj = tv.ty.cast(Type.Payload.Union) orelse unreachable.data;
+                const field_index = union_obj.tag_ty.enumTagFieldIndex(tag_and_val.tag, dg.module) orelse unreachable;
                 assert(union_obj.haveFieldTypes());
                 const field_ty = union_obj.fields.values()[field_index].ty;
                 const payload = p: {
@@ -3295,7 +3295,7 @@ pub const DeclGen = struct {
                     }
                 }
                 const llvm_tag_value = try genTypedValue(dg, .{
-                    .ty = tv.ty.unionTagType().?,
+                    .ty = tv.ty.unionTagType() orelse unreachable,
                     .val = tag_and_val.tag,
                 });
                 var fields: [3]*const llvm.Value = undefined;
@@ -3318,7 +3318,7 @@ pub const DeclGen = struct {
             .Vector => switch (tv.val.tag()) {
                 .bytes => {
                     // Note, sentinel is not stored even if the type has a sentinel.
-                    const bytes = tv.val.castTag(.bytes).?.data;
+                    const bytes = tv.val.castTag(.bytes) orelse unreachable.data;
                     const vector_len = @intCast(usize, tv.ty.arrayLen());
                     assert(vector_len == bytes.len or vector_len + 1 == bytes.len);
 
@@ -3344,7 +3344,7 @@ pub const DeclGen = struct {
                 .aggregate => {
                     // Note, sentinel is not stored even if the type has a sentinel.
                     // The value includes the sentinel in those cases.
-                    const elem_vals = tv.val.castTag(.aggregate).?.data;
+                    const elem_vals = tv.val.castTag(.aggregate) orelse unreachable.data;
                     const vector_len = @intCast(usize, tv.ty.arrayLen());
                     assert(vector_len == elem_vals.len or vector_len + 1 == elem_vals.len);
                     const elem_ty = tv.ty.elemType();
@@ -3360,7 +3360,7 @@ pub const DeclGen = struct {
                 },
                 .repeated => {
                     // Note, sentinel is not stored even if the type has a sentinel.
-                    const val = tv.val.castTag(.repeated).?.data;
+                    const val = tv.val.castTag(.repeated) orelse unreachable.data;
                     const elem_ty = tv.ty.elemType();
                     const len = @intCast(usize, tv.ty.arrayLen());
                     const llvm_elems = try dg.gpa.alloc(*const llvm.Value, len);
@@ -3425,31 +3425,31 @@ pub const DeclGen = struct {
         var bitcast_needed: bool = undefined;
         const llvm_ptr = switch (ptr_val.tag()) {
             .decl_ref_mut => {
-                const decl = ptr_val.castTag(.decl_ref_mut).?.data.decl_index;
+                const decl = ptr_val.castTag(.decl_ref_mut) orelse unreachable.data.decl_index;
                 return dg.lowerParentPtrDecl(ptr_val, decl, ptr_child_ty);
             },
             .decl_ref => {
-                const decl = ptr_val.castTag(.decl_ref).?.data;
+                const decl = ptr_val.castTag(.decl_ref) orelse unreachable.data;
                 return dg.lowerParentPtrDecl(ptr_val, decl, ptr_child_ty);
             },
             .variable => {
-                const decl = ptr_val.castTag(.variable).?.data.owner_decl;
+                const decl = ptr_val.castTag(.variable) orelse unreachable.data.owner_decl;
                 return dg.lowerParentPtrDecl(ptr_val, decl, ptr_child_ty);
             },
             .int_i64 => {
-                const int = ptr_val.castTag(.int_i64).?.data;
+                const int = ptr_val.castTag(.int_i64) orelse unreachable.data;
                 const llvm_usize = try dg.llvmType(Type.usize);
                 const llvm_int = llvm_usize.constInt(@bitCast(u64, int), .False);
                 return llvm_int.constIntToPtr((try dg.llvmType(ptr_child_ty)).pointerType(0));
             },
             .int_u64 => {
-                const int = ptr_val.castTag(.int_u64).?.data;
+                const int = ptr_val.castTag(.int_u64) orelse unreachable.data;
                 const llvm_usize = try dg.llvmType(Type.usize);
                 const llvm_int = llvm_usize.constInt(int, .False);
                 return llvm_int.constIntToPtr((try dg.llvmType(ptr_child_ty)).pointerType(0));
             },
             .field_ptr => blk: {
-                const field_ptr = ptr_val.castTag(.field_ptr).?.data;
+                const field_ptr = ptr_val.castTag(.field_ptr) orelse unreachable.data;
                 const parent_llvm_ptr = try dg.lowerParentPtr(field_ptr.container_ptr, field_ptr.container_ty);
                 const parent_ty = field_ptr.container_ty;
 
@@ -3480,7 +3480,7 @@ pub const DeclGen = struct {
                         bitcast_needed = !field_ty.eql(ptr_child_ty, dg.module);
 
                         var ty_buf: Type.Payload.Pointer = undefined;
-                        const llvm_field_index = llvmFieldIndex(parent_ty, field_index, target, &ty_buf).?;
+                        const llvm_field_index = llvmFieldIndex(parent_ty, field_index, target, &ty_buf) orelse unreachable;
                         const indices: [2]*const llvm.Value = .{
                             llvm_u32.constInt(0, .False),
                             llvm_u32.constInt(llvm_field_index, .False),
@@ -3491,7 +3491,7 @@ pub const DeclGen = struct {
                 }
             },
             .elem_ptr => blk: {
-                const elem_ptr = ptr_val.castTag(.elem_ptr).?.data;
+                const elem_ptr = ptr_val.castTag(.elem_ptr) orelse unreachable.data;
                 const parent_llvm_ptr = try dg.lowerParentPtr(elem_ptr.array_ptr, elem_ptr.elem_ty);
                 bitcast_needed = !elem_ptr.elem_ty.eql(ptr_child_ty, dg.module);
 
@@ -3502,7 +3502,7 @@ pub const DeclGen = struct {
                 break :blk parent_llvm_ptr.constInBoundsGEP(&indices, indices.len);
             },
             .opt_payload_ptr => blk: {
-                const opt_payload_ptr = ptr_val.castTag(.opt_payload_ptr).?.data;
+                const opt_payload_ptr = ptr_val.castTag(.opt_payload_ptr) orelse unreachable.data;
                 const parent_llvm_ptr = try dg.lowerParentPtr(opt_payload_ptr.container_ptr, opt_payload_ptr.container_ty);
                 var buf: Type.Payload.ElemType = undefined;
 
@@ -3523,7 +3523,7 @@ pub const DeclGen = struct {
                 break :blk parent_llvm_ptr.constInBoundsGEP(&indices, indices.len);
             },
             .eu_payload_ptr => blk: {
-                const eu_payload_ptr = ptr_val.castTag(.eu_payload_ptr).?.data;
+                const eu_payload_ptr = ptr_val.castTag(.eu_payload_ptr) orelse unreachable.data;
                 const parent_llvm_ptr = try dg.lowerParentPtr(eu_payload_ptr.container_ptr, eu_payload_ptr.container_ty);
 
                 const payload_ty = eu_payload_ptr.container_ty.errorUnionPayload();
@@ -3794,7 +3794,7 @@ pub const FuncGen = struct {
         const gop = try self.func_inst_table.getOrPut(self.dg.gpa, inst);
         if (gop.found_existing) return gop.value_ptr.*;
 
-        const val = self.air.value(inst).?;
+        const val = self.air.value(inst) orelse unreachable;
         const ty = self.air.typeOf(inst);
         const llvm_val = try self.dg.genTypedValue(.{ .ty = ty, .val = val });
         if (!isByRef(ty)) {
@@ -4048,7 +4048,7 @@ pub const FuncGen = struct {
         if (fn_info.return_type.isError() and
             self.dg.module.comp.bin_file.options.error_return_tracing)
         {
-            try llvm_args.append(self.err_ret_trace.?);
+            try llvm_args.append(self.err_ret_trace orelse unreachable);
         }
 
         var it = iterateParamTypes(self.dg, fn_info);
@@ -4153,7 +4153,7 @@ pub const FuncGen = struct {
                                     if (bits_used >= int_bits) break;
                                 }
                                 var ty_buf: Type.Payload.Pointer = undefined;
-                                const llvm_i = llvmFieldIndex(param_ty, field_i, target, &ty_buf).?;
+                                const llvm_i = llvmFieldIndex(param_ty, field_i, target, &ty_buf) orelse unreachable;
                                 const field_size = @intCast(u16, field.ty.abiSize(target));
                                 const field_abi_bits = field_size * 8;
 
@@ -4534,7 +4534,7 @@ pub const FuncGen = struct {
 
     fn airBr(self: *FuncGen, inst: Air.Inst.Index) !?*const llvm.Value {
         const branch = self.air.instructions.items(.data)[inst].br;
-        const block = self.blocks.get(branch.block_inst).?;
+        const block = self.blocks.get(branch.block_inst) orelse unreachable;
 
         // If the break doesn't break a value, then we don't have to add
         // the values to the lists.
@@ -4911,7 +4911,7 @@ pub const FuncGen = struct {
             switch (struct_ty.zigTypeTag()) {
                 .Struct => switch (struct_ty.containerLayout()) {
                     .Packed => {
-                        const struct_obj = struct_ty.castTag(.@"struct").?.data;
+                        const struct_obj = struct_ty.castTag(.@"struct") orelse unreachable.data;
                         const bit_offset = struct_obj.packedFieldBitOffset(target, field_index);
                         const containing_int = struct_llvm_val;
                         const shift_amt = containing_int.typeOf().constInt(bit_offset, .False);
@@ -4927,7 +4927,7 @@ pub const FuncGen = struct {
                     },
                     else => {
                         var ptr_ty_buf: Type.Payload.Pointer = undefined;
-                        const llvm_field_index = llvmFieldIndex(struct_ty, field_index, target, &ptr_ty_buf).?;
+                        const llvm_field_index = llvmFieldIndex(struct_ty, field_index, target, &ptr_ty_buf) orelse unreachable;
                         return self.builder.buildExtractValue(struct_llvm_val, llvm_field_index, "");
                     },
                 },
@@ -4942,7 +4942,7 @@ pub const FuncGen = struct {
             .Struct => {
                 assert(struct_ty.containerLayout() != .Packed);
                 var ptr_ty_buf: Type.Payload.Pointer = undefined;
-                const llvm_field_index = llvmFieldIndex(struct_ty, field_index, target, &ptr_ty_buf).?;
+                const llvm_field_index = llvmFieldIndex(struct_ty, field_index, target, &ptr_ty_buf) orelse unreachable;
                 const field_ptr = self.builder.buildStructGEP(struct_llvm_val, llvm_field_index, "");
                 const field_ptr_ty = Type.initPayload(&ptr_ty_buf.base);
                 return self.load(field_ptr, field_ptr_ty);
@@ -5019,7 +5019,7 @@ pub const FuncGen = struct {
         const dib = self.dg.object.di_builder orelse return null;
         const ty_pl = self.air.instructions.items(.data)[inst].ty_pl;
 
-        const func = self.air.values[ty_pl.payload].castTag(.function).?.data;
+        const func = self.air.values[ty_pl.payload].castTag(.function) orelse unreachable.data;
         const decl_index = func.owner_decl;
         const decl = self.dg.module.declPtr(decl_index);
         const di_file = try self.dg.object.getDIFile(self.gpa, decl.src_namespace.file_scope);
@@ -5029,7 +5029,7 @@ pub const FuncGen = struct {
 
         try self.dbg_inlined.append(self.gpa, .{
             .loc = @ptrCast(*llvm.DILocation, cur_debug_location),
-            .scope = self.di_scope.?,
+            .scope = self.di_scope orelse unreachable,
             .base_line = self.base_line,
         });
 
@@ -5062,7 +5062,7 @@ pub const FuncGen = struct {
         if (self.dg.object.di_builder == null) return null;
         const ty_pl = self.air.instructions.items(.data)[inst].ty_pl;
 
-        const func = self.air.values[ty_pl.payload].castTag(.function).?.data;
+        const func = self.air.values[ty_pl.payload].castTag(.function) orelse unreachable.data;
         const mod = self.dg.module;
         const decl = mod.declPtr(func.owner_decl);
         const di_file = try self.dg.object.getDIFile(self.gpa, decl.src_namespace.file_scope);
@@ -5075,9 +5075,9 @@ pub const FuncGen = struct {
 
     fn airDbgBlockBegin(self: *FuncGen) !?*const llvm.Value {
         const dib = self.dg.object.di_builder orelse return null;
-        const old_scope = self.di_scope.?;
+        const old_scope = self.di_scope orelse unreachable;
         try self.dbg_block_stack.append(self.gpa, old_scope);
-        const lexical_block = dib.createLexicalBlock(old_scope, self.di_file.?, self.prev_dbg_line, self.prev_dbg_column);
+        const lexical_block = dib.createLexicalBlock(old_scope, self.di_file orelse unreachable, self.prev_dbg_line, self.prev_dbg_column);
         self.di_scope = lexical_block.toScope();
         return null;
     }
@@ -5096,9 +5096,9 @@ pub const FuncGen = struct {
         const ptr_ty = self.air.typeOf(pl_op.operand);
 
         const di_local_var = dib.createAutoVariable(
-            self.di_scope.?,
+            self.di_scope orelse unreachable,
             name.ptr,
-            self.di_file.?,
+            self.di_file orelse unreachable,
             self.prev_dbg_line,
             try self.dg.object.lowerDebugType(ptr_ty.childType(), .full),
             true, // always preserve
@@ -5108,7 +5108,7 @@ pub const FuncGen = struct {
             self.dbg_inlined.items[self.dbg_inlined.items.len - 1].loc
         else
             null;
-        const debug_loc = llvm.getDebugLoc(self.prev_dbg_line, self.prev_dbg_column, self.di_scope.?, inlined_at);
+        const debug_loc = llvm.getDebugLoc(self.prev_dbg_line, self.prev_dbg_column, self.di_scope orelse unreachable, inlined_at);
         const insert_block = self.builder.getInsertBlock();
         _ = dib.insertDeclareAtEnd(operand, di_local_var, debug_loc, insert_block);
         return null;
@@ -5126,9 +5126,9 @@ pub const FuncGen = struct {
         }
 
         const di_local_var = dib.createAutoVariable(
-            self.di_scope.?,
+            self.di_scope orelse unreachable,
             name.ptr,
-            self.di_file.?,
+            self.di_file orelse unreachable,
             self.prev_dbg_line,
             try self.dg.object.lowerDebugType(operand_ty, .full),
             true, // always preserve
@@ -5138,7 +5138,7 @@ pub const FuncGen = struct {
             self.dbg_inlined.items[self.dbg_inlined.items.len - 1].loc
         else
             null;
-        const debug_loc = llvm.getDebugLoc(self.prev_dbg_line, self.prev_dbg_column, self.di_scope.?, inlined_at);
+        const debug_loc = llvm.getDebugLoc(self.prev_dbg_line, self.prev_dbg_column, self.di_scope orelse unreachable, inlined_at);
         const insert_block = self.builder.getInsertBlock();
         if (isByRef(operand_ty)) {
             _ = dib.insertDeclareAtEnd(operand, di_local_var, debug_loc, insert_block);
@@ -5581,7 +5581,7 @@ pub const FuncGen = struct {
     }
 
     fn airErrReturnTrace(self: *FuncGen, _: Air.Inst.Index) !?*const llvm.Value {
-        return self.err_ret_trace.?;
+        return self.err_ret_trace orelse unreachable;
     }
 
     fn airSetErrReturnTrace(self: *FuncGen, inst: Air.Inst.Index) !?*const llvm.Value {
@@ -6065,8 +6065,8 @@ pub const FuncGen = struct {
         const overflow_bit = self.builder.buildExtractValue(result_struct, 1, "");
 
         var ty_buf: Type.Payload.Pointer = undefined;
-        const partial = self.builder.buildInsertValue(llvm_dest_ty.getUndef(), result, llvmFieldIndex(dest_ty, 0, tg, &ty_buf).?, "");
-        return self.builder.buildInsertValue(partial, overflow_bit, llvmFieldIndex(dest_ty, 1, tg, &ty_buf).?, "");
+        const partial = self.builder.buildInsertValue(llvm_dest_ty.getUndef(), result, llvmFieldIndex(dest_ty, 0, tg, &ty_buf) orelse unreachable, "");
+        return self.builder.buildInsertValue(partial, overflow_bit, llvmFieldIndex(dest_ty, 1, tg, &ty_buf) orelse unreachable, "");
     }
 
     fn buildElementwiseCall(
@@ -6375,8 +6375,8 @@ pub const FuncGen = struct {
         const overflow_bit = self.builder.buildICmp(.NE, lhs, reconstructed, "");
 
         var ty_buf: Type.Payload.Pointer = undefined;
-        const partial = self.builder.buildInsertValue(llvm_dest_ty.getUndef(), result, llvmFieldIndex(dest_ty, 0, tg, &ty_buf).?, "");
-        return self.builder.buildInsertValue(partial, overflow_bit, llvmFieldIndex(dest_ty, 1, tg, &ty_buf).?, "");
+        const partial = self.builder.buildInsertValue(llvm_dest_ty.getUndef(), result, llvmFieldIndex(dest_ty, 0, tg, &ty_buf) orelse unreachable, "");
+        return self.builder.buildInsertValue(partial, overflow_bit, llvmFieldIndex(dest_ty, 1, tg, &ty_buf) orelse unreachable, "");
     }
 
     fn airAnd(self: *FuncGen, inst: Air.Inst.Index) !?*const llvm.Value {
@@ -6738,13 +6738,13 @@ pub const FuncGen = struct {
             }
 
             const src_index = self.getSrcArgIndex(self.arg_index - 1);
-            const func = self.dg.decl.getFunction().?;
+            const func = self.dg.decl.getFunction() orelse unreachable;
             const lbrace_line = self.dg.module.declPtr(func.owner_decl).src_line + func.lbrace_line + 1;
             const lbrace_col = func.lbrace_column + 1;
             const di_local_var = dib.createParameterVariable(
-                self.di_scope.?,
+                self.di_scope orelse unreachable,
                 func.getParamName(src_index).ptr, // TODO test 0 bit args
-                self.di_file.?,
+                self.di_file orelse unreachable,
                 lbrace_line,
                 try self.dg.object.lowerDebugType(inst_ty, .full),
                 true, // always preserve
@@ -6752,7 +6752,7 @@ pub const FuncGen = struct {
                 self.arg_index, // includes +1 because 0 is return type
             );
 
-            const debug_loc = llvm.getDebugLoc(lbrace_line, lbrace_col, self.di_scope.?, null);
+            const debug_loc = llvm.getDebugLoc(lbrace_line, lbrace_col, self.di_scope orelse unreachable, null);
             const insert_block = self.builder.getInsertBlock();
             if (isByRef(inst_ty)) {
                 _ = dib.insertDeclareAtEnd(arg_val, di_local_var, debug_loc, insert_block);
@@ -7009,11 +7009,11 @@ pub const FuncGen = struct {
         if (opt_abi_ty) |abi_ty| {
             // operand needs widening and truncating
             const casted_ptr = self.builder.buildBitCast(ptr, abi_ty.pointerType(0), "");
-            const load_inst = (try self.load(casted_ptr, ptr_ty)).?;
+            const load_inst = (try self.load(casted_ptr, ptr_ty)) orelse unreachable;
             load_inst.setOrdering(ordering);
             return self.builder.buildTrunc(load_inst, try self.dg.llvmType(operand_ty), "");
         }
-        const load_inst = (try self.load(ptr, ptr_ty)).?;
+        const load_inst = (try self.load(ptr, ptr_ty)) orelse unreachable;
         load_inst.setOrdering(ordering);
         return load_inst;
     }
@@ -7527,7 +7527,7 @@ pub const FuncGen = struct {
             },
             .Struct => {
                 if (result_ty.containerLayout() == .Packed) {
-                    const struct_obj = result_ty.castTag(.@"struct").?.data;
+                    const struct_obj = result_ty.castTag(.@"struct") orelse unreachable.data;
                     const big_bits = struct_obj.packedIntegerBits(target);
                     const int_llvm_ty = self.dg.context.intType(big_bits);
                     const fields = struct_obj.fields.values();
@@ -7568,7 +7568,7 @@ pub const FuncGen = struct {
                         if (result_ty.structFieldValueComptime(i) != null) continue;
 
                         const llvm_elem = try self.resolveInst(elem);
-                        const llvm_i = llvmFieldIndex(result_ty, i, target, &ptr_ty_buf).?;
+                        const llvm_i = llvmFieldIndex(result_ty, i, target, &ptr_ty_buf) orelse unreachable;
                         indices[1] = llvm_u32.constInt(llvm_i, .False);
                         const field_ptr = self.builder.buildInBoundsGEP(alloca_inst, &indices, indices.len, "");
                         var field_ptr_payload: Type.Payload.Pointer = .{
@@ -7589,7 +7589,7 @@ pub const FuncGen = struct {
                         if (result_ty.structFieldValueComptime(i) != null) continue;
 
                         const llvm_elem = try self.resolveInst(elem);
-                        const llvm_i = llvmFieldIndex(result_ty, i, target, &ptr_ty_buf).?;
+                        const llvm_i = llvmFieldIndex(result_ty, i, target, &ptr_ty_buf) orelse unreachable;
                         result = self.builder.buildInsertValue(result, llvm_elem, llvm_i, "");
                     }
                     return result;
@@ -7650,7 +7650,7 @@ pub const FuncGen = struct {
         // then set the fields appropriately.
         const result_ptr = self.buildAlloca(union_llvm_ty);
         const llvm_payload = try self.resolveInst(extra.init);
-        const union_obj = union_ty.cast(Type.Payload.Union).?.data;
+        const union_obj = union_ty.cast(Type.Payload.Union) orelse unreachable.data;
         assert(union_obj.haveFieldTypes());
         const field = union_obj.fields.values()[extra.field_index];
         const field_llvm_ty = try self.dg.llvmType(field.ty);
@@ -7988,7 +7988,7 @@ pub const FuncGen = struct {
         union_ty: Type,
         field_index: c_uint,
     ) !?*const llvm.Value {
-        const union_obj = union_ty.cast(Type.Payload.Union).?.data;
+        const union_obj = union_ty.cast(Type.Payload.Union) orelse unreachable.data;
         const field = &union_obj.fields.values()[field_index];
         const result_llvm_ty = try self.dg.llvmType(self.air.typeOfIndex(inst));
         if (!field.ty.hasRuntimeBitsIgnoreComptime()) {
@@ -8935,7 +8935,7 @@ fn buildAllocaInner(
         }
     }
 
-    const entry_block = llvm_func.getFirstBasicBlock().?;
+    const entry_block = llvm_func.getFirstBasicBlock() orelse unreachable;
     if (entry_block.getFirstInstruction()) |first_inst| {
         builder.positionBuilder(entry_block, first_inst);
     } else {

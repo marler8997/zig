@@ -448,14 +448,14 @@ fn testSegmentedList(comptime prealloc: usize) !void {
         try testing.expect(x == 0);
     }
 
-    try testing.expect(list.pop().? == 100);
+    try testing.expect(list.pop() orelse unreachable == 100);
     try testing.expect(list.len == 99);
 
     try list.appendSlice(gpa, &[_]i32{ 1, 2, 3 });
     try testing.expect(list.len == 102);
-    try testing.expect(list.pop().? == 3);
-    try testing.expect(list.pop().? == 2);
-    try testing.expect(list.pop().? == 1);
+    try testing.expect(list.pop() orelse unreachable == 3);
+    try testing.expect(list.pop() orelse unreachable == 2);
+    try testing.expect(list.pop() orelse unreachable == 1);
     try testing.expect(list.len == 99);
 
     try list.appendSlice(gpa, &[_]i32{});

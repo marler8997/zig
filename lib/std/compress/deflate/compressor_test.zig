@@ -397,7 +397,7 @@ test "deflate/inflate string" {
     // Skip wasi because it does not support std.fs.openDirAbsolute()
     if (builtin.os.tag == .wasi) return error.SkipZigTest;
 
-    const current_dir = try std.fs.openDirAbsolute(std.fs.path.dirname(@src().file).?, .{});
+    const current_dir = try std.fs.openDirAbsolute(std.fs.path.dirname(@src().file) orelse unreachable, .{});
     const testdata_dir = try current_dir.openDir("testdata", .{});
 
     const StringTest = struct {

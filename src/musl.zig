@@ -140,7 +140,7 @@ pub fn buildCRTFile(comp: *Compilation, crt_file: CRTFile) !void {
                 const src_file = entry.key_ptr.*;
                 const ext = entry.value_ptr.*;
 
-                const dirname = path.dirname(src_file).?;
+                const dirname = path.dirname(src_file) orelse unreachable;
                 const basename = path.basename(src_file);
                 const noextbasename = basename[0 .. basename.len - std.fs.path.extension(basename).len];
                 const dirbasename = path.basename(dirname);
@@ -249,8 +249,8 @@ pub fn buildCRTFile(comp: *Compilation, crt_file: CRTFile) !void {
             errdefer comp.gpa.free(basename);
 
             comp.crt_files.putAssumeCapacityNoClobber(basename, .{
-                .full_object_path = try sub_compilation.bin_file.options.emit.?.directory.join(comp.gpa, &[_][]const u8{
-                    sub_compilation.bin_file.options.emit.?.sub_path,
+                .full_object_path = try sub_compilation.bin_file.options.emit orelse unreachable.directory.join(comp.gpa, &[_][]const u8{
+                    sub_compilation.bin_file.options.emit orelse unreachable.sub_path,
                 }),
                 .lock = sub_compilation.bin_file.toOwnedLock(),
             });

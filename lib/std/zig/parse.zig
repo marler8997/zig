@@ -1464,7 +1464,7 @@ const Parser = struct {
             }
 
             {
-                const tok_len = tok_tag.lexeme().?.len;
+                const tok_len = tok_tag.lexeme() orelse unreachable.len;
                 const char_before = p.source[p.token_starts[oper_token] - 1];
                 const char_after = p.source[p.token_starts[oper_token] + tok_len];
                 if (tok_tag == .ampersand and char_after == '&') {

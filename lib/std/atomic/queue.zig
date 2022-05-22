@@ -293,7 +293,7 @@ test "std.atomic.Queue single-threaded" {
     queue.put(&node_1);
     try expect(!queue.isEmpty());
 
-    try expect(queue.get().?.data == 0);
+    try expect(queue.get() orelse unreachable.data == 0);
     try expect(!queue.isEmpty());
 
     var node_2 = Queue(i32).Node{
@@ -312,10 +312,10 @@ test "std.atomic.Queue single-threaded" {
     queue.put(&node_3);
     try expect(!queue.isEmpty());
 
-    try expect(queue.get().?.data == 1);
+    try expect(queue.get() orelse unreachable.data == 1);
     try expect(!queue.isEmpty());
 
-    try expect(queue.get().?.data == 2);
+    try expect(queue.get() orelse unreachable.data == 2);
     try expect(!queue.isEmpty());
 
     var node_4 = Queue(i32).Node{
@@ -326,11 +326,11 @@ test "std.atomic.Queue single-threaded" {
     queue.put(&node_4);
     try expect(!queue.isEmpty());
 
-    try expect(queue.get().?.data == 3);
+    try expect(queue.get() orelse unreachable.data == 3);
     node_3.next = null;
     try expect(!queue.isEmpty());
 
-    try expect(queue.get().?.data == 4);
+    try expect(queue.get() orelse unreachable.data == 4);
     try expect(queue.isEmpty());
 
     try expect(queue.get() == null);
@@ -392,6 +392,6 @@ test "std.atomic.Queue dump" {
         \\tail: 0x{x}=2
         \\ (null)
         \\
-    , .{ @ptrToInt(queue.head), @ptrToInt(queue.head.?.next), @ptrToInt(queue.tail) });
+    , .{ @ptrToInt(queue.head), @ptrToInt(queue.head orelse unreachable.next), @ptrToInt(queue.tail) });
     try expect(mem.eql(u8, buffer[0..fbs.pos], expected));
 }

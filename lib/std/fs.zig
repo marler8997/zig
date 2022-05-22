@@ -938,7 +938,7 @@ pub const Dir = struct {
 
     pub fn close(self: *Dir) void {
         if (need_async_thread) {
-            std.event.Loop.instance.?.close(self.fd);
+            std.event.Loop.instance orelse unreachable.close(self.fd);
         } else {
             os.close(self.fd);
         }
@@ -1029,7 +1029,7 @@ pub const Dir = struct {
             .read_write => @as(u32, os.O.RDWR),
         };
         const fd = if (flags.intended_io_mode != .blocking)
-            try std.event.Loop.instance.?.openatZ(self.fd, sub_path, os_flags, 0)
+            try std.event.Loop.instance orelse unreachable.openatZ(self.fd, sub_path, os_flags, 0)
         else
             try os.openatZ(self.fd, sub_path, os_flags, 0);
         errdefer os.close(fd);
@@ -1192,7 +1192,7 @@ pub const Dir = struct {
             (if (flags.read) @as(u32, os.O.RDWR) else os.O.WRONLY) |
             (if (flags.exclusive) @as(u32, os.O.EXCL) else 0);
         const fd = if (flags.intended_io_mode != .blocking)
-            try std.event.Loop.instance.?.openatZ(self.fd, sub_path_c, os_flags, flags.mode)
+            try std.event.Loop.instance orelse unreachable.openatZ(self.fd, sub_path_c, os_flags, flags.mode)
         else
             try os.openatZ(self.fd, sub_path_c, os_flags, flags.mode);
         errdefer os.close(fd);
@@ -1586,7 +1586,7 @@ pub const Dir = struct {
     /// `flags` must contain `os.O.DIRECTORY`.
     fn openDirFlagsZ(self: Dir, sub_path_c: [*:0]const u8, flags: u32) OpenError!Dir {
         const result = if (need_async_thread)
-            std.event.Loop.instance.?.openatZ(self.fd, sub_path_c, flags, 0)
+            std.event.Loop.instance orelse unreachable.openatZ(self.fd, sub_path_c, flags, 0)
         else
             os.openatZ(self.fd, sub_path_c, flags, 0);
         const fd = result catch |err| switch (err) {
@@ -2121,7 +2121,7 @@ pub const Dir = struct {
             .read_write => @as(u32, os.R_OK | os.W_OK),
         };
         const result = if (need_async_thread and flags.intended_io_mode != .blocking)
-            std.event.Loop.instance.?.faccessatZ(self.fd, sub_path, os_mode, 0)
+            std.event.Loop.instance orelse unreachable.faccessatZ(self.fd, sub_path, os_mode, 0)
         else
             os.faccessatZ(self.fd, sub_path, os_mode, 0);
         return result;
@@ -2674,7 +2674,7 @@ pub fn selfExeDirPath(out_buffer: []u8) SelfExePathError![]const u8 {
     const self_exe_path = try selfExePath(out_buffer);
     // Assume that the OS APIs return absolute paths, and therefore dirname
     // will not return null.
-    return path.dirname(self_exe_path).?;
+    return path.dirname(self_exe_path) orelse unreachable;
 }
 
 /// `realpath`, except caller must free the returned memory.

@@ -102,11 +102,11 @@ fn make(step: *Step) !void {
         const full_dest = try fs.path.join(self.builder.allocator, &[_][]const u8{ output_dir, self.out_basename });
         try self.builder.updateFile(output_path, full_dest);
     } else {
-        self.output_dir = fs.path.dirname(output_path).?;
+        self.output_dir = fs.path.dirname(output_path) orelse unreachable;
     }
 
     self.output_file.path = fs.path.join(
         self.builder.allocator,
-        &[_][]const u8{ self.output_dir.?, self.out_basename },
+        &[_][]const u8{ self.output_dir orelse unreachable, self.out_basename },
     ) catch unreachable;
 }

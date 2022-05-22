@@ -215,7 +215,7 @@ pub const Manifest = struct {
     /// to access the contents of the file after calling `hit()` like so:
     ///
     /// ```
-    /// var file_contents = cache_hash.files.items[file_index].contents.?;
+    /// var file_contents = cache_hash.files.items[file_index].contents orelse unreachable;
     /// ```
     pub fn addFile(self: *Manifest, file_path: []const u8, max_file_size: ?usize) !usize {
         assert(self.manifest_file == null);
@@ -362,7 +362,7 @@ pub const Manifest = struct {
 
         self.want_refresh_timestamp = true;
 
-        const file_contents = try self.manifest_file.?.reader().readAllAlloc(self.cache.gpa, manifest_file_size_max);
+        const file_contents = try self.manifest_file orelse unreachable.reader().readAllAlloc(self.cache.gpa, manifest_file_size_max);
         defer self.cache.gpa.free(file_contents);
 
         const input_file_count = self.files.items.len;
@@ -409,7 +409,7 @@ pub const Manifest = struct {
                 cache_hash_file.path = try self.cache.gpa.dupe(u8, file_path);
             }
 
-            const this_file = fs.cwd().openFile(cache_hash_file.path.?, .{ .mode = .read_only }) catch |err| switch (err) {
+            const this_file = fs.cwd().openFile(cache_hash_file.path orelse unreachable, .{ .mode = .read_only }) catch |err| switch (err) {
                 error.FileNotFound => {
                     try self.upgradeToExclusiveLock();
                     return false;
@@ -535,8 +535,8 @@ pub const Manifest = struct {
     }
 
     fn populateFileHash(self: *Manifest, ch_file: *File) !void {
-        log.debug("populateFileHash {s}", .{ch_file.path.?});
-        const file = try fs.cwd().openFile(ch_file.path.?, .{});
+        log.debug("populateFileHash {s}", .{ch_file.path orelse unreachable});
+        const file = try fs.cwd().openFile(ch_file.path orelse unreachable, .{});
         defer file.close();
 
         const actual_stat = try file.stat();
@@ -603,7 +603,7 @@ pub const Manifest = struct {
 
         try self.populateFileHash(new_ch_file);
 
-        return new_ch_file.contents.?;
+        return new_ch_file.contents orelse unreachable;
     }
 
     /// Add a file as a dependency of process being cached, after the initial hash has been
@@ -726,7 +726,7 @@ pub const Manifest = struct {
     /// If `want_shared_lock` is true, this function automatically downgrades the
     /// lock from exclusive to shared.
     pub fn writeManifest(self: *Manifest) !void {
-        const manifest_file = self.manifest_file.?;
+        const manifest_file = self.manifest_file orelse unreachable;
         if (self.manifest_dirty) {
             self.manifest_dirty = false;
 
@@ -767,7 +767,7 @@ pub const Manifest = struct {
         // TODO: If/when flock is supported on WASI, this check should be removed.
         //       See https://github.com/WebAssembly/wasi-filesystem/issues/2
         if (builtin.os.tag != .wasi or std.process.can_spawn or !builtin.single_threaded) {
-            const manifest_file = self.manifest_file.?;
+            const manifest_file = self.manifest_file orelse unreachable;
             try manifest_file.downgradeLock();
         }
         self.have_exclusive_lock = false;
@@ -780,7 +780,7 @@ pub const Manifest = struct {
         // TODO: If/when flock is supported on WASI, this check should be removed.
         //       See https://github.com/WebAssembly/wasi-filesystem/issues/2
         if (builtin.os.tag != .wasi or std.process.can_spawn or !builtin.single_threaded) {
-            const manifest_file = self.manifest_file.?;
+            const manifest_file = self.manifest_file orelse unreachable;
             // Here we intentionally have a period where the lock is released, in case there are
             // other processes holding a shared lock.
             manifest_file.unlock();
@@ -794,7 +794,7 @@ pub const Manifest = struct {
     /// Don't forget to call `writeManifest` before this!
     pub fn toOwnedLock(self: *Manifest) Lock {
         const lock: Lock = .{
-            .manifest_file = self.manifest_file.?,
+            .manifest_file = self.manifest_file orelse unreachable,
         };
         self.manifest_file = null;
         return lock;
@@ -972,7 +972,7 @@ test "check that changing a file makes cache fail" {
             // There should be nothing in the cache
             try testing.expectEqual(false, try ch.hit());
 
-            try testing.expect(mem.eql(u8, original_temp_file_contents, ch.files.items[temp_file_idx].contents.?));
+            try testing.expect(mem.eql(u8, original_temp_file_contents, ch.files.items[temp_file_idx].contents orelse unreachable));
 
             digest1 = ch.final();
 

@@ -121,7 +121,7 @@ test "inline function call that calls optional function pointer, return pointer 
         }
 
         inline fn bar() u32 {
-            return bar2.?();
+            return bar2 orelse unreachable();
         }
 
         var bar2: ?*const fn () u32 = null;
@@ -261,7 +261,7 @@ test "implicit cast fn call result to optional in field result" {
             var x = Foo{
                 .field = optionalPtr(),
             };
-            try expect(x.field.?.* == 999);
+            try expect(x.field orelse unreachable.* == 999);
         }
 
         const glob: i32 = 999;
@@ -415,6 +415,6 @@ test "function with inferred error set but returning no error" {
         fn foo() !void {}
     };
 
-    const return_ty = @typeInfo(@TypeOf(S.foo)).Fn.return_type.?;
-    try expectEqual(0, @typeInfo(@typeInfo(return_ty).ErrorUnion.error_set).ErrorSet.?.len);
+    const return_ty = @typeInfo(@TypeOf(S.foo)).Fn.return_type orelse unreachable;
+    try expectEqual(0, @typeInfo(@typeInfo(return_ty).ErrorUnion.error_set).ErrorSet orelse unreachable.len);
 }

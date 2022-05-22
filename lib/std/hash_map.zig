@@ -233,19 +233,19 @@ pub fn verifyContext(
                             errors = errors ++ ", but is " ++ @typeName(Self);
                         }
                     }
-                    if (func.args[1].arg_type != null and func.args[1].arg_type.? != PseudoKey) {
+                    if (func.args[1].arg_type != null and func.args[1].arg_type orelse unreachable != PseudoKey) {
                         if (!emitted_signature) {
                             errors = errors ++ lazy.err_invalid_hash_signature;
                             emitted_signature = true;
                         }
-                        errors = errors ++ lazy.deep_prefix ++ "Second parameter must be " ++ @typeName(PseudoKey) ++ ", but is " ++ @typeName(func.args[1].arg_type.?);
+                        errors = errors ++ lazy.deep_prefix ++ "Second parameter must be " ++ @typeName(PseudoKey) ++ ", but is " ++ @typeName(func.args[1].arg_type orelse unreachable);
                     }
-                    if (func.return_type != null and func.return_type.? != Hash) {
+                    if (func.return_type != null and func.return_type orelse unreachable != Hash) {
                         if (!emitted_signature) {
                             errors = errors ++ lazy.err_invalid_hash_signature;
                             emitted_signature = true;
                         }
-                        errors = errors ++ lazy.deep_prefix ++ "Return type must be " ++ @typeName(Hash) ++ ", but was " ++ @typeName(func.return_type.?);
+                        errors = errors ++ lazy.deep_prefix ++ "Return type must be " ++ @typeName(Hash) ++ ", but was " ++ @typeName(func.return_type orelse unreachable);
                     }
                     // If any of these are generic (null), we cannot verify them.
                     // The call sites check the return type, but cannot check the
@@ -310,26 +310,26 @@ pub fn verifyContext(
                             errors = errors ++ ", but is " ++ @typeName(Self);
                         }
                     }
-                    if (func.args[1].arg_type.? != PseudoKey) {
+                    if (func.args[1].arg_type orelse unreachable != PseudoKey) {
                         if (!emitted_signature) {
                             errors = errors ++ lazy.err_invalid_eql_signature;
                             emitted_signature = true;
                         }
-                        errors = errors ++ lazy.deep_prefix ++ "Second parameter must be " ++ @typeName(PseudoKey) ++ ", but is " ++ @typeName(func.args[1].arg_type.?);
+                        errors = errors ++ lazy.deep_prefix ++ "Second parameter must be " ++ @typeName(PseudoKey) ++ ", but is " ++ @typeName(func.args[1].arg_type orelse unreachable);
                     }
-                    if (func.args[2].arg_type.? != Key) {
+                    if (func.args[2].arg_type orelse unreachable != Key) {
                         if (!emitted_signature) {
                             errors = errors ++ lazy.err_invalid_eql_signature;
                             emitted_signature = true;
                         }
-                        errors = errors ++ lazy.deep_prefix ++ "Third parameter must be " ++ @typeName(Key) ++ ", but is " ++ @typeName(func.args[2].arg_type.?);
+                        errors = errors ++ lazy.deep_prefix ++ "Third parameter must be " ++ @typeName(Key) ++ ", but is " ++ @typeName(func.args[2].arg_type orelse unreachable);
                     }
-                    if (func.return_type.? != bool) {
+                    if (func.return_type orelse unreachable != bool) {
                         if (!emitted_signature) {
                             errors = errors ++ lazy.err_invalid_eql_signature;
                             emitted_signature = true;
                         }
-                        errors = errors ++ lazy.deep_prefix ++ "Return type must be bool, but was " ++ @typeName(func.return_type.?);
+                        errors = errors ++ lazy.deep_prefix ++ "Return type must be bool, but was " ++ @typeName(func.return_type orelse unreachable);
                     }
                     // If any of these are generic (null), we cannot verify them.
                     // The call sites check the return type, but cannot check the
@@ -819,8 +819,8 @@ pub fn HashMapUnmanaged(
                 if (it.hm.size == 0) return null;
 
                 const cap = it.hm.capacity();
-                const end = it.hm.metadata.? + cap;
-                var metadata = it.hm.metadata.? + it.index;
+                const end = it.hm.metadata orelse unreachable + cap;
+                var metadata = it.hm.metadata orelse unreachable + it.index;
 
                 while (metadata != end) : ({
                     metadata += 1;
@@ -940,7 +940,7 @@ pub fn HashMapUnmanaged(
         }
 
         fn header(self: *const Self) *Header {
-            return @ptrCast(*Header, @ptrCast([*]Header, @alignCast(@alignOf(Header), self.metadata.?)) - 1);
+            return @ptrCast(*Header, @ptrCast([*]Header, @alignCast(@alignOf(Header), self.metadata orelse unreachable)) - 1);
         }
 
         fn keys(self: *const Self) [*]K {
@@ -1033,10 +1033,10 @@ pub fn HashMapUnmanaged(
             const mask = self.capacity() - 1;
             var idx = @truncate(usize, hash & mask);
 
-            var metadata = self.metadata.? + idx;
+            var metadata = self.metadata orelse unreachable + idx;
             while (metadata[0].isUsed()) {
                 idx = (idx + 1) & mask;
-                metadata = self.metadata.? + idx;
+                metadata = self.metadata orelse unreachable + idx;
             }
 
             assert(self.available > 0);
@@ -1107,7 +1107,7 @@ pub fn HashMapUnmanaged(
                     .key = old_key.*,
                     .value = old_val.*,
                 };
-                self.metadata.?[idx].remove();
+                self.metadata orelse unreachable[idx].remove();
                 old_key.* = undefined;
                 old_val.* = undefined;
                 self.size -= 1;
@@ -1146,7 +1146,7 @@ pub fn HashMapUnmanaged(
             var limit = self.capacity();
             var idx = @truncate(usize, hash & mask);
 
-            var metadata = self.metadata.? + idx;
+            var metadata = self.metadata orelse unreachable + idx;
             while (!metadata[0].isFree() and limit != 0) {
                 if (metadata[0].isUsed() and metadata[0].fingerprint == fingerprint) {
                     const test_key = &self.keys()[idx];
@@ -1165,7 +1165,7 @@ pub fn HashMapUnmanaged(
 
                 limit -= 1;
                 idx = (idx + 1) & mask;
-                metadata = self.metadata.? + idx;
+                metadata = self.metadata orelse unreachable + idx;
             }
 
             return null;
@@ -1325,7 +1325,7 @@ pub fn HashMapUnmanaged(
             var idx = @truncate(usize, hash & mask);
 
             var first_tombstone_idx: usize = self.capacity(); // invalid index
-            var metadata = self.metadata.? + idx;
+            var metadata = self.metadata orelse unreachable + idx;
             while (!metadata[0].isFree() and limit != 0) {
                 if (metadata[0].isUsed() and metadata[0].fingerprint == fingerprint) {
                     const test_key = &self.keys()[idx];
@@ -1350,13 +1350,13 @@ pub fn HashMapUnmanaged(
 
                 limit -= 1;
                 idx = (idx + 1) & mask;
-                metadata = self.metadata.? + idx;
+                metadata = self.metadata orelse unreachable + idx;
             }
 
             if (first_tombstone_idx < self.capacity()) {
                 // Cheap try to lower probing lengths after deletions. Recycle a tombstone.
                 idx = first_tombstone_idx;
-                metadata = self.metadata.? + idx;
+                metadata = self.metadata orelse unreachable + idx;
             }
             // We're using a slot previously free or a tombstone.
             self.available -= 1;
@@ -1403,7 +1403,7 @@ pub fn HashMapUnmanaged(
         }
 
         fn removeByIndex(self: *Self, idx: usize) void {
-            self.metadata.?[idx].remove();
+            self.metadata orelse unreachable[idx].remove();
             self.keys()[idx] = undefined;
             self.values()[idx] = undefined;
             self.size -= 1;
@@ -1447,7 +1447,7 @@ pub fn HashMapUnmanaged(
         }
 
         fn initMetadatas(self: *Self) void {
-            @memset(@ptrCast([*]u8, self.metadata.?), 0, @sizeOf(Metadata) * self.capacity());
+            @memset(@ptrCast([*]u8, self.metadata orelse unreachable), 0, @sizeOf(Metadata) * self.capacity());
         }
 
         // This counts the number of occupied slots (not counting tombstones), which is
@@ -1480,7 +1480,7 @@ pub fn HashMapUnmanaged(
             other.available = @truncate(u32, (new_cap * max_load_percentage) / 100);
 
             var i: Size = 0;
-            var metadata = self.metadata.?;
+            var metadata = self.metadata orelse unreachable;
             var keys_ptr = self.keys();
             var values_ptr = self.values();
             while (i < self.capacity()) : (i += 1) {
@@ -1509,7 +1509,7 @@ pub fn HashMapUnmanaged(
             if (self.size != 0) {
                 const old_capacity = self.capacity();
                 var i: Size = 0;
-                var metadata = self.metadata.?;
+                var metadata = self.metadata orelse unreachable;
                 var keys_ptr = self.keys();
                 var values_ptr = self.values();
                 while (i < old_capacity) : (i += 1) {
@@ -1626,8 +1626,8 @@ test "std.hash_map basic usage" {
     i = 0;
     sum = 0;
     while (i < count) : (i += 1) {
-        try expectEqual(i, map.get(i).?);
-        sum += map.get(i).?;
+        try expectEqual(i, map.get(i) orelse unreachable);
+        sum += map.get(i) orelse unreachable;
     }
     try expectEqual(total, sum);
 }
@@ -1666,12 +1666,12 @@ test "std.hash_map clearRetainingCapacity" {
     map.clearRetainingCapacity();
 
     try map.put(1, 1);
-    try expectEqual(map.get(1).?, 1);
+    try expectEqual(map.get(1) orelse unreachable, 1);
     try expectEqual(map.count(), 1);
 
     map.clearRetainingCapacity();
     map.putAssumeCapacity(1, 1);
-    try expectEqual(map.get(1).?, 1);
+    try expectEqual(map.get(1) orelse unreachable, 1);
     try expectEqual(map.count(), 1);
 
     const cap = map.capacity();
@@ -1706,7 +1706,7 @@ test "std.hash_map grow" {
 
     i = 0;
     while (i < growTo) : (i += 1) {
-        try expectEqual(map.get(i).?, i);
+        try expectEqual(map.get(i) orelse unreachable, i);
     }
 }
 
@@ -1727,9 +1727,9 @@ test "std.hash_map clone" {
     defer b.deinit();
 
     try expectEqual(b.count(), 3);
-    try expectEqual(b.get(1).?, 1);
-    try expectEqual(b.get(2).?, 2);
-    try expectEqual(b.get(3).?, 3);
+    try expectEqual(b.get(1) orelse unreachable, 1);
+    try expectEqual(b.get(2) orelse unreachable, 2);
+    try expectEqual(b.get(3) orelse unreachable, 3);
 }
 
 test "std.hash_map ensureTotalCapacity with existing elements" {
@@ -1780,7 +1780,7 @@ test "std.hash_map remove" {
         if (i % 3 == 0) {
             try expect(!map.contains(i));
         } else {
-            try expectEqual(map.get(i).?, i);
+            try expectEqual(map.get(i) orelse unreachable, i);
         }
     }
 }
@@ -1800,7 +1800,7 @@ test "std.hash_map reverse removes" {
         try expect(!map.contains(i - 1));
         var j: u32 = 0;
         while (j < i - 1) : (j += 1) {
-            try expectEqual(map.get(j).?, j);
+            try expectEqual(map.get(j) orelse unreachable, j);
         }
     }
 
@@ -1830,7 +1830,7 @@ test "std.hash_map multiple removes on same metadata" {
         if (i == 7) {
             try expect(!map.contains(i));
         } else {
-            try expectEqual(map.get(i).?, i);
+            try expectEqual(map.get(i) orelse unreachable, i);
         }
     }
 
@@ -1840,7 +1840,7 @@ test "std.hash_map multiple removes on same metadata" {
     try map.put(7, 7);
     i = 0;
     while (i < 16) : (i += 1) {
-        try expectEqual(map.get(i).?, i);
+        try expectEqual(map.get(i) orelse unreachable, i);
     }
 }
 
@@ -1917,7 +1917,7 @@ test "std.hash_map put" {
 
     i = 0;
     while (i < 16) : (i += 1) {
-        try expectEqual(map.get(i).?, i);
+        try expectEqual(map.get(i) orelse unreachable, i);
     }
 
     i = 0;
@@ -1927,7 +1927,7 @@ test "std.hash_map put" {
 
     i = 0;
     while (i < 16) : (i += 1) {
-        try expectEqual(map.get(i).?, i * 16 + 1);
+        try expectEqual(map.get(i) orelse unreachable, i * 16 + 1);
     }
 }
 
@@ -1944,7 +1944,7 @@ test "std.hash_map putAssumeCapacity" {
     i = 0;
     var sum = i;
     while (i < 20) : (i += 1) {
-        sum += map.getPtr(i).?.*;
+        sum += map.getPtr(i) orelse unreachable.*;
     }
     try expectEqual(sum, 190);
 
@@ -1956,7 +1956,7 @@ test "std.hash_map putAssumeCapacity" {
     i = 0;
     sum = i;
     while (i < 20) : (i += 1) {
-        sum += map.get(i).?;
+        sum += map.get(i) orelse unreachable;
     }
     try expectEqual(sum, 20);
 }
@@ -2010,7 +2010,7 @@ test "std.hash_map getOrPut" {
     i = 0;
     var sum = i;
     while (i < 20) : (i += 1) {
-        sum += map.get(i).?;
+        sum += map.get(i) orelse unreachable;
     }
 
     try expectEqual(sum, 30);
@@ -2026,19 +2026,19 @@ test "std.hash_map basic hash map usage" {
     try testing.expect((try map.fetchPut(4, 44)) == null);
 
     try map.putNoClobber(5, 55);
-    try testing.expect((try map.fetchPut(5, 66)).?.value == 55);
-    try testing.expect((try map.fetchPut(5, 55)).?.value == 66);
+    try testing.expect((try map.fetchPut(5, 66)) orelse unreachable.value == 55);
+    try testing.expect((try map.fetchPut(5, 55)) orelse unreachable.value == 66);
 
     const gop1 = try map.getOrPut(5);
     try testing.expect(gop1.found_existing == true);
     try testing.expect(gop1.value_ptr.* == 55);
     gop1.value_ptr.* = 77;
-    try testing.expect(map.getEntry(5).?.value_ptr.* == 77);
+    try testing.expect(map.getEntry(5) orelse unreachable.value_ptr.* == 77);
 
     const gop2 = try map.getOrPut(99);
     try testing.expect(gop2.found_existing == false);
     gop2.value_ptr.* = 42;
-    try testing.expect(map.getEntry(99).?.value_ptr.* == 42);
+    try testing.expect(map.getEntry(99) orelse unreachable.value_ptr.* == 42);
 
     const gop3 = try map.getOrPutValue(5, 5);
     try testing.expect(gop3.value_ptr.* == 77);
@@ -2047,12 +2047,12 @@ test "std.hash_map basic hash map usage" {
     try testing.expect(gop4.value_ptr.* == 41);
 
     try testing.expect(map.contains(2));
-    try testing.expect(map.getEntry(2).?.value_ptr.* == 22);
-    try testing.expect(map.get(2).? == 22);
+    try testing.expect(map.getEntry(2) orelse unreachable.value_ptr.* == 22);
+    try testing.expect(map.get(2) orelse unreachable == 22);
 
     const rmv1 = map.fetchRemove(2);
-    try testing.expect(rmv1.?.key == 2);
-    try testing.expect(rmv1.?.value == 22);
+    try testing.expect(rmv1 orelse unreachable.key == 2);
+    try testing.expect(rmv1 orelse unreachable.value == 22);
     try testing.expect(map.fetchRemove(2) == null);
     try testing.expect(map.remove(2) == false);
     try testing.expect(map.getEntry(2) == null);
@@ -2075,7 +2075,7 @@ test "std.hash_map clone" {
 
     i = 0;
     while (i < 10) : (i += 1) {
-        try testing.expect(copy.get(i).? == i * 10);
+        try testing.expect(copy.get(i) orelse unreachable == i * 10);
     }
 }
 
@@ -2124,7 +2124,7 @@ test "std.hash_map getOrPutAdapted" {
         try testing.expect(result.found_existing);
         try testing.expectEqual(real_keys[i], result.key_ptr.*);
         try testing.expectEqual(@as(u64, i) * 2, result.value_ptr.*);
-        try testing.expectEqual(real_keys[i], map.getKeyAdapted(key_str, AdaptedContext{}).?);
+        try testing.expectEqual(real_keys[i], map.getKeyAdapted(key_str, AdaptedContext{}) orelse unreachable);
     }
 }
 

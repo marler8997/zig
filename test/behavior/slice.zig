@@ -22,7 +22,7 @@ comptime {
     };
     const unsigned = [_]type{ c_uint, c_ulong, c_ulonglong };
     const list: []const type = &unsigned;
-    var pos = S.indexOfScalar(type, list, c_ulong).?;
+    var pos = S.indexOfScalar(type, list, c_ulong) orelse unreachable;
     if (pos != 1) @compileError("bad pos");
 }
 
@@ -457,7 +457,7 @@ test "slice syntax resulting in pointer-to-array" {
                 // stage1 is not passing this case
                 comptime try expect(@TypeOf(slice, &array) == ?[]u8);
             }
-            comptime try expect(@TypeOf(slice.?[0..2]) == *[2]u8);
+            comptime try expect(@TypeOf(slice orelse unreachable[0..2]) == *[2]u8);
         }
 
         fn testSliceAlign() !void {

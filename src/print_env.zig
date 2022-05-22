@@ -12,10 +12,10 @@ pub fn cmdEnv(gpa: Allocator, args: []const []const u8, stdout: std.fs.File.Writ
     var zig_lib_directory = introspect.findZigLibDirFromSelfExe(gpa, self_exe_path) catch |err| {
         fatal("unable to find zig installation directory: {s}\n", .{@errorName(err)});
     };
-    defer gpa.free(zig_lib_directory.path.?);
+    defer gpa.free(zig_lib_directory.path orelse unreachable);
     defer zig_lib_directory.handle.close();
 
-    const zig_std_dir = try std.fs.path.join(gpa, &[_][]const u8{ zig_lib_directory.path.?, "std" });
+    const zig_std_dir = try std.fs.path.join(gpa, &[_][]const u8{ zig_lib_directory.path orelse unreachable, "std" });
     defer gpa.free(zig_std_dir);
 
     const global_cache_dir = try introspect.resolveGlobalCacheDir(gpa);
@@ -31,7 +31,7 @@ pub fn cmdEnv(gpa: Allocator, args: []const []const u8, stdout: std.fs.File.Writ
     try jws.emitString(self_exe_path);
 
     try jws.objectField("lib_dir");
-    try jws.emitString(zig_lib_directory.path.?);
+    try jws.emitString(zig_lib_directory.path orelse unreachable);
 
     try jws.objectField("std_dir");
     try jws.emitString(zig_std_dir);

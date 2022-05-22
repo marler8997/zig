@@ -194,7 +194,7 @@ pub const File = struct {
         if (is_windows) {
             windows.CloseHandle(self.handle);
         } else if (self.capable_io_mode != self.intended_io_mode) {
-            std.event.Loop.instance.?.close(self.handle);
+            std.event.Loop.instance orelse unreachable.close(self.handle);
         } else {
             os.close(self.handle);
         }
@@ -974,7 +974,7 @@ pub const File = struct {
         if (self.intended_io_mode == .blocking) {
             return os.read(self.handle, buffer);
         } else {
-            return std.event.Loop.instance.?.read(self.handle, buffer, self.capable_io_mode != self.intended_io_mode);
+            return std.event.Loop.instance orelse unreachable.read(self.handle, buffer, self.capable_io_mode != self.intended_io_mode);
         }
     }
 
@@ -998,7 +998,7 @@ pub const File = struct {
         if (self.intended_io_mode == .blocking) {
             return os.pread(self.handle, buffer, offset);
         } else {
-            return std.event.Loop.instance.?.pread(self.handle, buffer, offset, self.capable_io_mode != self.intended_io_mode);
+            return std.event.Loop.instance orelse unreachable.pread(self.handle, buffer, offset, self.capable_io_mode != self.intended_io_mode);
         }
     }
 
@@ -1026,7 +1026,7 @@ pub const File = struct {
         if (self.intended_io_mode == .blocking) {
             return os.readv(self.handle, iovecs);
         } else {
-            return std.event.Loop.instance.?.readv(self.handle, iovecs, self.capable_io_mode != self.intended_io_mode);
+            return std.event.Loop.instance orelse unreachable.readv(self.handle, iovecs, self.capable_io_mode != self.intended_io_mode);
         }
     }
 
@@ -1069,7 +1069,7 @@ pub const File = struct {
         if (self.intended_io_mode == .blocking) {
             return os.preadv(self.handle, iovecs, offset);
         } else {
-            return std.event.Loop.instance.?.preadv(self.handle, iovecs, offset, self.capable_io_mode != self.intended_io_mode);
+            return std.event.Loop.instance orelse unreachable.preadv(self.handle, iovecs, offset, self.capable_io_mode != self.intended_io_mode);
         }
     }
 
@@ -1111,7 +1111,7 @@ pub const File = struct {
         if (self.intended_io_mode == .blocking) {
             return os.write(self.handle, bytes);
         } else {
-            return std.event.Loop.instance.?.write(self.handle, bytes, self.capable_io_mode != self.intended_io_mode);
+            return std.event.Loop.instance orelse unreachable.write(self.handle, bytes, self.capable_io_mode != self.intended_io_mode);
         }
     }
 
@@ -1130,7 +1130,7 @@ pub const File = struct {
         if (self.intended_io_mode == .blocking) {
             return os.pwrite(self.handle, bytes, offset);
         } else {
-            return std.event.Loop.instance.?.pwrite(self.handle, bytes, offset, self.capable_io_mode != self.intended_io_mode);
+            return std.event.Loop.instance orelse unreachable.pwrite(self.handle, bytes, offset, self.capable_io_mode != self.intended_io_mode);
         }
     }
 
@@ -1154,7 +1154,7 @@ pub const File = struct {
         if (self.intended_io_mode == .blocking) {
             return os.writev(self.handle, iovecs);
         } else {
-            return std.event.Loop.instance.?.writev(self.handle, iovecs, self.capable_io_mode != self.intended_io_mode);
+            return std.event.Loop.instance orelse unreachable.writev(self.handle, iovecs, self.capable_io_mode != self.intended_io_mode);
         }
     }
 
@@ -1190,7 +1190,7 @@ pub const File = struct {
         if (self.intended_io_mode == .blocking) {
             return os.pwritev(self.handle, iovecs, offset);
         } else {
-            return std.event.Loop.instance.?.pwritev(self.handle, iovecs, offset, self.capable_io_mode != self.intended_io_mode);
+            return std.event.Loop.instance orelse unreachable.pwritev(self.handle, iovecs, offset, self.capable_io_mode != self.intended_io_mode);
         }
     }
 

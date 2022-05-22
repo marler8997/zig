@@ -151,12 +151,12 @@ pub fn parse(self: *Dylib, allocator: Allocator, target: std.Target, dependent_l
     var reader = self.file.reader();
     self.header = try reader.readStruct(macho.mach_header_64);
 
-    if (self.header.?.filetype != macho.MH_DYLIB) {
-        log.debug("invalid filetype: expected 0x{x}, found 0x{x}", .{ macho.MH_DYLIB, self.header.?.filetype });
+    if (self.header orelse unreachable.filetype != macho.MH_DYLIB) {
+        log.debug("invalid filetype: expected 0x{x}, found 0x{x}", .{ macho.MH_DYLIB, self.header orelse unreachable.filetype });
         return error.NotDylib;
     }
 
-    const this_arch: std.Target.Cpu.Arch = try fat.decodeArch(self.header.?.cputype, true);
+    const this_arch: std.Target.Cpu.Arch = try fat.decodeArch(self.header orelse unreachable.cputype, true);
 
     if (this_arch != target.cpu.arch) {
         log.err("mismatched cpu architecture: expected {s}, found {s}", .{ target.cpu.arch, this_arch });
@@ -169,12 +169,12 @@ pub fn parse(self: *Dylib, allocator: Allocator, target: std.Target, dependent_l
 }
 
 fn readLoadCommands(self: *Dylib, allocator: Allocator, reader: anytype, dependent_libs: anytype) !void {
-    const should_lookup_reexports = self.header.?.flags & macho.MH_NO_REEXPORTED_DYLIBS == 0;
+    const should_lookup_reexports = self.header orelse unreachable.flags & macho.MH_NO_REEXPORTED_DYLIBS == 0;
 
-    try self.load_commands.ensureUnusedCapacity(allocator, self.header.?.ncmds);
+    try self.load_commands.ensureUnusedCapacity(allocator, self.header orelse unreachable.ncmds);
 
     var i: u16 = 0;
-    while (i < self.header.?.ncmds) : (i += 1) {
+    while (i < self.header orelse unreachable.ncmds) : (i += 1) {
         var cmd = try macho.LoadCommand.read(allocator, reader);
         switch (cmd.cmd()) {
             .SYMTAB => {

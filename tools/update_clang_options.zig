@@ -551,7 +551,7 @@ pub fn main() anyerror!void {
             for (blacklisted_options) |blacklisted_key| {
                 if (std.mem.eql(u8, blacklisted_key, kv.key_ptr.*)) continue :it_map;
             }
-            if (kv.value_ptr.Object.get("Name").?.String.len == 0) continue;
+            if (kv.value_ptr.Object.get("Name") orelse unreachable.String.len == 0) continue;
             try all_objects.append(&kv.value_ptr.Object);
         }
     }
@@ -577,11 +577,11 @@ pub fn main() anyerror!void {
     );
 
     for (all_objects.items) |obj| {
-        const name = obj.get("Name").?.String;
+        const name = obj.get("Name") orelse unreachable.String;
         var pd1 = false;
         var pd2 = false;
         var pslash = false;
-        for (obj.get("Prefixes").?.Array.items) |prefix_json| {
+        for (obj.get("Prefixes") orelse unreachable.Array.items) |prefix_json| {
             const prefix = prefix_json.String;
             if (std.mem.eql(u8, prefix, "-")) {
                 pd1 = true;
@@ -701,8 +701,8 @@ const Syntax = union(enum) {
 };
 
 fn objSyntax(obj: *json.ObjectMap) Syntax {
-    const num_args = @intCast(u8, obj.get("NumArgs").?.Integer);
-    for (obj.get("!superclasses").?.Array.items) |superclass_json| {
+    const num_args = @intCast(u8, obj.get("NumArgs") orelse unreachable.Integer);
+    for (obj.get("!superclasses") orelse unreachable.Array.items) |superclass_json| {
         const superclass = superclass_json.String;
         if (std.mem.eql(u8, superclass, "Joined")) {
             return .joined;
@@ -736,19 +736,19 @@ fn objSyntax(obj: *json.ObjectMap) Syntax {
             return .{ .multi_arg = num_args };
         }
     }
-    const name = obj.get("Name").?.String;
+    const name = obj.get("Name") orelse unreachable.String;
     if (std.mem.eql(u8, name, "<input>")) {
         return .flag;
     } else if (std.mem.eql(u8, name, "<unknown>")) {
         return .flag;
     }
-    const kind_def = obj.get("Kind").?.Object.get("def").?.String;
+    const kind_def = obj.get("Kind") orelse unreachable.Object.get("def") orelse unreachable.String;
     if (std.mem.eql(u8, kind_def, "KIND_FLAG")) {
         return .flag;
     }
-    const key = obj.get("!name").?.String;
+    const key = obj.get("!name") orelse unreachable.String;
     std.debug.print("{s} (key {s}) has unrecognized superclasses:\n", .{ name, key });
-    for (obj.get("!superclasses").?.Array.items) |superclass_json| {
+    for (obj.get("!superclasses") orelse unreachable.Array.items) |superclass_json| {
         std.debug.print(" {s}\n", .{superclass_json.String});
     }
     std.process.exit(1);
@@ -787,15 +787,15 @@ fn objectLessThan(context: void, a: *json.ObjectMap, b: *json.ObjectMap) bool {
     }
 
     if (!a_match_with_eql and !b_match_with_eql) {
-        const a_name = a.get("Name").?.String;
-        const b_name = b.get("Name").?.String;
+        const a_name = a.get("Name") orelse unreachable.String;
+        const b_name = b.get("Name") orelse unreachable.String;
         if (a_name.len != b_name.len) {
             return a_name.len > b_name.len;
         }
     }
 
-    const a_key = a.get("!name").?.String;
-    const b_key = b.get("!name").?.String;
+    const a_key = a.get("!name") orelse unreachable.String;
+    const b_key = b.get("!name") orelse unreachable.String;
     return std.mem.lessThan(u8, a_key, b_key);
 }
 

@@ -1820,7 +1820,7 @@ fn renderArrayInit(
             } else {
                 var by_line = std.mem.split(u8, expr_text, "\n");
                 var last_line_was_empty = false;
-                try ais.writer().writeAll(by_line.next().?);
+                try ais.writer().writeAll(by_line.next() orelse unreachable);
                 while (by_line.next()) |line| {
                     if (std.mem.startsWith(u8, line, "//") and last_line_was_empty) {
                         try ais.insertNewline();
@@ -2103,7 +2103,7 @@ fn renderAsm(
     };
 
     try renderToken(ais, tree, colon3, .space); // :
-    const first_clobber = asm_node.first_clobber.?;
+    const first_clobber = asm_node.first_clobber orelse unreachable;
     var tok_i = first_clobber;
     while (true) {
         switch (token_tags[tok_i + 1]) {
@@ -2417,7 +2417,7 @@ fn renderComments(ais: *Ais, tree: Ast, start: usize, end: usize) Error!bool {
         if (ais.disabled_offset != null and mem.eql(u8, comment_content, "zig fmt: on")) {
             // Write the source for which formatting was disabled directly
             // to the underlying writer, fixing up invaild whitespace.
-            const disabled_source = tree.source[ais.disabled_offset.?..comment_start];
+            const disabled_source = tree.source[ais.disabled_offset orelse unreachable..comment_start];
             try writeFixingWhitespace(ais.underlying_writer, disabled_source);
             // Write with the canonical single space.
             try ais.underlying_writer.writeAll("// zig fmt: on\n");

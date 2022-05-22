@@ -393,12 +393,12 @@ pub fn indexOfIgnoreCase(container: []const u8, substr: []const u8) ?usize {
 }
 
 test "indexOfIgnoreCase" {
-    try std.testing.expect(indexOfIgnoreCase("one Two Three Four", "foUr").? == 14);
+    try std.testing.expect(indexOfIgnoreCase("one Two Three Four", "foUr") orelse unreachable == 14);
     try std.testing.expect(indexOfIgnoreCase("one two three FouR", "gOur") == null);
-    try std.testing.expect(indexOfIgnoreCase("foO", "Foo").? == 0);
+    try std.testing.expect(indexOfIgnoreCase("foO", "Foo") orelse unreachable == 0);
     try std.testing.expect(indexOfIgnoreCase("foo", "fool") == null);
 
-    try std.testing.expect(indexOfIgnoreCase("FOO foo", "fOo").? == 0);
+    try std.testing.expect(indexOfIgnoreCase("FOO foo", "fOo") orelse unreachable == 0);
 }
 
 /// Compares two slices of numbers lexicographically. O(n).

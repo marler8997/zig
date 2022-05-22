@@ -112,7 +112,7 @@ pub const Client = struct {
     /// Extracts the error set of a function.
     /// TODO: remove after Socket.{read, write} error unions are well-defined across different platforms
     fn ErrorSetOf(comptime Function: anytype) type {
-        return @typeInfo(@typeInfo(@TypeOf(Function)).Fn.return_type.?).ErrorUnion.error_set;
+        return @typeInfo(@typeInfo(@TypeOf(Function)).Fn.return_type orelse unreachable).ErrorUnion.error_set;
     }
 
     /// Wrap `tcp.Client` into `std.io.Reader`.

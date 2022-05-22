@@ -359,7 +359,7 @@ pub const Ip6Address = extern struct {
                     // must start with '::ffff:'
                     return error.InvalidIpv4Mapping;
                 }
-                const start_index = mem.lastIndexOfScalar(u8, buf[0..i], ':').? + 1;
+                const start_index = mem.lastIndexOfScalar(u8, buf[0..i], ':') orelse unreachable + 1;
                 const addr = (Ip4Address.parse(buf[start_index..], 0) catch {
                     return error.InvalidIpv4Mapping;
                 }).sa.addr;
@@ -474,7 +474,7 @@ pub const Ip6Address = extern struct {
                     // must start with '::ffff:'
                     return error.InvalidIpv4Mapping;
                 }
-                const start_index = mem.lastIndexOfScalar(u8, buf[0..i], ':').? + 1;
+                const start_index = mem.lastIndexOfScalar(u8, buf[0..i], ':') orelse unreachable + 1;
                 const addr = (Ip4Address.parse(buf[start_index..], 0) catch {
                     return error.InvalidIpv4Mapping;
                 }).sa.addr;
@@ -1152,7 +1152,7 @@ fn linuxLookupNameFromHosts(
         },
         else => |e| return e,
     }) |line| {
-        const no_comment_line = mem.split(u8, line, "#").next().?;
+        const no_comment_line = mem.split(u8, line, "#").next() orelse unreachable;
 
         var line_it = mem.tokenize(u8, no_comment_line, " \t");
         const ip_text = line_it.next() orelse continue;
@@ -1177,7 +1177,7 @@ fn linuxLookupNameFromHosts(
         try addrs.append(LookupAddr{ .addr = addr });
 
         // first name is canonical name
-        const name_text = first_name_text.?;
+        const name_text = first_name_text orelse unreachable;
         if (isValidHostName(name_text)) {
             canon.items.len = 0;
             try canon.appendSlice(name_text);
@@ -1351,14 +1351,14 @@ fn getResolvConf(allocator: mem.Allocator, rc: *ResolvConf) !void {
         },
         else => |e| return e,
     }) |line| {
-        const no_comment_line = mem.split(u8, line, "#").next().?;
+        const no_comment_line = mem.split(u8, line, "#").next() orelse unreachable;
         var line_it = mem.tokenize(u8, no_comment_line, " \t");
 
         const token = line_it.next() orelse continue;
         if (mem.eql(u8, token, "options")) {
             while (line_it.next()) |sub_tok| {
                 var colon_it = mem.split(u8, sub_tok, ":");
-                const name = colon_it.next().?;
+                const name = colon_it.next() orelse unreachable;
                 const value_txt = colon_it.next() orelse continue;
                 const value = std.fmt.parseInt(u8, value_txt, 10) catch |err| switch (err) {
                     error.Overflow => 255,
@@ -1483,7 +1483,7 @@ fn resMSendRc(
                     var j: usize = 0;
                     while (j < ns.len) : (j += 1) {
                         if (std.io.is_async) {
-                            _ = std.event.Loop.instance.?.sendto(fd, queries[i], os.MSG.NOSIGNAL, &ns[j].any, sl) catch undefined;
+                            _ = std.event.Loop.instance orelse unreachable.sendto(fd, queries[i], os.MSG.NOSIGNAL, &ns[j].any, sl) catch undefined;
                         } else {
                             _ = os.sendto(fd, queries[i], os.MSG.NOSIGNAL, &ns[j].any, sl) catch undefined;
                         }
@@ -1502,7 +1502,7 @@ fn resMSendRc(
         while (true) {
             var sl_copy = sl;
             const rlen = if (std.io.is_async)
-                std.event.Loop.instance.?.recvfrom(fd, answer_bufs[next], 0, &sa.any, &sl_copy) catch break
+                std.event.Loop.instance orelse unreachable.recvfrom(fd, answer_bufs[next], 0, &sa.any, &sl_copy) catch break
             else
                 os.recvfrom(fd, answer_bufs[next], 0, &sa.any, &sl_copy) catch break;
 
@@ -1531,7 +1531,7 @@ fn resMSendRc(
                 2 => if (servfail_retry != 0) {
                     servfail_retry -= 1;
                     if (std.io.is_async) {
-                        _ = std.event.Loop.instance.?.sendto(fd, queries[i], os.MSG.NOSIGNAL, &ns[j].any, sl) catch undefined;
+                        _ = std.event.Loop.instance orelse unreachable.sendto(fd, queries[i], os.MSG.NOSIGNAL, &ns[j].any, sl) catch undefined;
                     } else {
                         _ = os.sendto(fd, queries[i], os.MSG.NOSIGNAL, &ns[j].any, sl) catch undefined;
                     }
@@ -1646,7 +1646,7 @@ pub const Stream = struct {
         }
 
         if (std.io.is_async) {
-            return std.event.Loop.instance.?.read(self.handle, buffer, false);
+            return std.event.Loop.instance orelse unreachable.read(self.handle, buffer, false);
         } else {
             return os.read(self.handle, buffer);
         }
@@ -1661,7 +1661,7 @@ pub const Stream = struct {
         }
 
         if (std.io.is_async) {
-            return std.event.Loop.instance.?.write(self.handle, buffer, false);
+            return std.event.Loop.instance orelse unreachable.write(self.handle, buffer, false);
         } else {
             return os.write(self.handle, buffer);
         }
@@ -1819,9 +1819,9 @@ pub const StreamServer = struct {
         const accept_result = blk: {
             if (std.io.is_async) {
                 const loop = std.event.Loop.instance orelse return error.UnexpectedError;
-                break :blk loop.accept(self.sockfd.?, &accepted_addr.any, &adr_len, os.SOCK.CLOEXEC);
+                break :blk loop.accept(self.sockfd orelse unreachable, &accepted_addr.any, &adr_len, os.SOCK.CLOEXEC);
             } else {
-                break :blk os.accept(self.sockfd.?, &accepted_addr.any, &adr_len, os.SOCK.CLOEXEC);
+                break :blk os.accept(self.sockfd orelse unreachable, &accepted_addr.any, &adr_len, os.SOCK.CLOEXEC);
             }
         };
 

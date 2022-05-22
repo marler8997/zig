@@ -162,7 +162,7 @@ test "implicit casting between C pointer and optional non-C pointer" {
     var c_ptr: [*c]const [*c]const u8 = ptr_opt_many_ptr;
     try expect(c_ptr.*.* == 'a');
     ptr_opt_many_ptr = c_ptr;
-    try expect(ptr_opt_many_ptr.*.?[1] == 'o');
+    try expect(ptr_opt_many_ptr.* orelse unreachable[1] == 'o');
 }
 
 test "implicit cast error unions with non-optional to optional pointer" {
@@ -250,7 +250,7 @@ test "assign null directly to C pointer and test null equality" {
     try expect(!(null == x1));
     try expect(x1 != null);
     try expect(null != x1);
-    try expect(x1.?.* == 1234);
+    try expect(x1 orelse unreachable.* == 1234);
     if (x1) |same_x1| {
         try expect(same_x1.* == 1234);
     } else {
@@ -264,7 +264,7 @@ test "assign null directly to C pointer and test null equality" {
     comptime try expect(!(null == y1));
     comptime try expect(y1 != null);
     comptime try expect(null != y1);
-    comptime try expect(y1.?.* == 1234);
+    comptime try expect(y1 orelse unreachable.* == 1234);
     if (y1) |same_y1| {
         try expect(same_y1.* == 1234);
     } else {

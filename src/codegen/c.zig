@@ -248,7 +248,7 @@ pub const Function = struct {
         const gop = try f.value_map.getOrPut(inst);
         if (gop.found_existing) return gop.value_ptr.*;
 
-        const val = f.air.value(inst).?;
+        const val = f.air.value(inst) orelse unreachable;
         const ty = f.air.typeOf(inst);
         switch (ty.zigTypeTag()) {
             .Array => {
@@ -302,7 +302,7 @@ pub const Function = struct {
         switch (c_value) {
             .constant => |inst| {
                 const ty = f.air.typeOf(inst);
-                const val = f.air.value(inst).?;
+                const val = f.air.value(inst) orelse unreachable;
                 return f.object.dg.renderValue(w, ty, val, .Other);
             },
             else => return f.object.dg.writeCValue(w, c_value),
@@ -313,7 +313,7 @@ pub const Function = struct {
         switch (c_value) {
             .constant => |inst| {
                 const ty = f.air.typeOf(inst);
-                const val = f.air.value(inst).?;
+                const val = f.air.value(inst) orelse unreachable;
                 try w.writeAll("(*");
                 try f.object.dg.renderValue(w, ty, val, .Other);
                 return w.writeByte(')');
@@ -477,15 +477,15 @@ pub const DeclGen = struct {
         switch (ptr_val.tag()) {
             .decl_ref_mut, .decl_ref, .variable => {
                 const decl_index = switch (ptr_val.tag()) {
-                    .decl_ref => ptr_val.castTag(.decl_ref).?.data,
-                    .decl_ref_mut => ptr_val.castTag(.decl_ref_mut).?.data.decl_index,
-                    .variable => ptr_val.castTag(.variable).?.data.owner_decl,
+                    .decl_ref => ptr_val.castTag(.decl_ref) orelse unreachable.data,
+                    .decl_ref_mut => ptr_val.castTag(.decl_ref_mut) orelse unreachable.data.decl_index,
+                    .variable => ptr_val.castTag(.variable) orelse unreachable.data.owner_decl,
                     else => unreachable,
                 };
                 try dg.renderDeclValue(writer, ptr_ty, ptr_val, decl_index);
             },
             .field_ptr => {
-                const field_ptr = ptr_val.castTag(.field_ptr).?.data;
+                const field_ptr = ptr_val.castTag(.field_ptr) orelse unreachable.data;
                 const container_ty = field_ptr.container_ty;
                 const index = field_ptr.field_index;
                 const field_name = switch (container_ty.zigTypeTag()) {
@@ -517,7 +517,7 @@ pub const DeclGen = struct {
                 }
             },
             .elem_ptr => {
-                const elem_ptr = ptr_val.castTag(.elem_ptr).?.data;
+                const elem_ptr = ptr_val.castTag(.elem_ptr) orelse unreachable.data;
                 var elem_ptr_ty_pl: Type.Payload.ElemType = .{
                     .base = .{ .tag = .c_mut_pointer },
                     .data = elem_ptr.elem_ty,
@@ -529,7 +529,7 @@ pub const DeclGen = struct {
                 try writer.print(")[{d}]", .{elem_ptr.index});
             },
             .opt_payload_ptr, .eu_payload_ptr => {
-                const payload_ptr = ptr_val.cast(Value.Payload.PayloadPtr).?.data;
+                const payload_ptr = ptr_val.cast(Value.Payload.PayloadPtr) orelse unreachable.data;
                 var container_ptr_ty_pl: Type.Payload.ElemType = .{
                     .base = .{ .tag = .c_mut_pointer },
                     .data = payload_ptr.container_ty,
@@ -595,8 +595,8 @@ pub const DeclGen = struct {
         }
         switch (ty.zigTypeTag()) {
             .Int => switch (val.tag()) {
-                .int_big_positive => try dg.renderBigIntConst(writer, val.castTag(.int_big_positive).?.asBigInt(), ty.isSignedInt()),
-                .int_big_negative => try dg.renderBigIntConst(writer, val.castTag(.int_big_negative).?.asBigInt(), true),
+                .int_big_positive => try dg.renderBigIntConst(writer, val.castTag(.int_big_positive) orelse unreachable.asBigInt(), ty.isSignedInt()),
+                .int_big_negative => try dg.renderBigIntConst(writer, val.castTag(.int_big_negative) orelse unreachable.asBigInt(), true),
                 .field_ptr,
                 .elem_ptr,
                 .opt_payload_ptr,
@@ -632,11 +632,11 @@ pub const DeclGen = struct {
                 // between pointers and 0, which is an extension to begin with.
                 .zero => try writer.writeByte('0'),
                 .variable => {
-                    const decl = val.castTag(.variable).?.data.owner_decl;
+                    const decl = val.castTag(.variable) orelse unreachable.data.owner_decl;
                     return dg.renderDeclValue(writer, ty, val, decl);
                 },
                 .slice => {
-                    const slice = val.castTag(.slice).?.data;
+                    const slice = val.castTag(.slice) orelse unreachable.data;
                     var buf: Type.SlicePtrFieldTypeBuffer = undefined;
 
                     try writer.writeByte('(');
@@ -648,11 +648,11 @@ pub const DeclGen = struct {
                     try writer.writeAll("}");
                 },
                 .function => {
-                    const func = val.castTag(.function).?.data;
+                    const func = val.castTag(.function) orelse unreachable.data;
                     try dg.renderDeclName(writer, func.owner_decl);
                 },
                 .extern_fn => {
-                    const extern_fn = val.castTag(.extern_fn).?.data;
+                    const extern_fn = val.castTag(.extern_fn) orelse unreachable.data;
                     try dg.renderDeclName(writer, extern_fn.owner_decl);
                 },
                 .int_u64, .one => {
@@ -734,7 +734,7 @@ pub const DeclGen = struct {
             .ErrorSet => {
                 switch (val.tag()) {
                     .@"error" => {
-                        const payload = val.castTag(.@"error").?;
+                        const payload = val.castTag(.@"error") orelse unreachable;
                         // error values will be #defined at the top of the file
                         return writer.print("zig_error_{s}", .{payload.data.name});
                     },
@@ -772,11 +772,11 @@ pub const DeclGen = struct {
             .Enum => {
                 switch (val.tag()) {
                     .enum_field_index => {
-                        const field_index = val.castTag(.enum_field_index).?.data;
+                        const field_index = val.castTag(.enum_field_index) orelse unreachable.data;
                         switch (ty.tag()) {
                             .enum_simple => return writer.print("{d}", .{field_index}),
                             .enum_full, .enum_nonexhaustive => {
-                                const enum_full = ty.cast(Type.Payload.EnumFull).?.data;
+                                const enum_full = ty.cast(Type.Payload.EnumFull) orelse unreachable.data;
                                 if (enum_full.values.count() != 0) {
                                     const tag_val = enum_full.values.keys()[field_index];
                                     return dg.renderValue(writer, enum_full.tag_ty, tag_val, location);
@@ -785,7 +785,7 @@ pub const DeclGen = struct {
                                 }
                             },
                             .enum_numbered => {
-                                const enum_obj = ty.castTag(.enum_numbered).?.data;
+                                const enum_obj = ty.castTag(.enum_numbered) orelse unreachable.data;
                                 if (enum_obj.values.count() != 0) {
                                     const tag_val = enum_obj.values.keys()[field_index];
                                     return dg.renderValue(writer, enum_obj.tag_ty, tag_val, location);
@@ -805,17 +805,17 @@ pub const DeclGen = struct {
             },
             .Fn => switch (val.tag()) {
                 .function => {
-                    const decl = val.castTag(.function).?.data.owner_decl;
+                    const decl = val.castTag(.function) orelse unreachable.data.owner_decl;
                     return dg.renderDeclValue(writer, ty, val, decl);
                 },
                 .extern_fn => {
-                    const decl = val.castTag(.extern_fn).?.data.owner_decl;
+                    const decl = val.castTag(.extern_fn) orelse unreachable.data.owner_decl;
                     return dg.renderDeclValue(writer, ty, val, decl);
                 },
                 else => unreachable,
             },
             .Struct => {
-                const field_vals = val.castTag(.aggregate).?.data;
+                const field_vals = val.castTag(.aggregate) orelse unreachable.data;
 
                 try writer.writeAll("(");
                 try dg.renderTypecast(writer, ty);
@@ -834,8 +834,8 @@ pub const DeclGen = struct {
                 try writer.writeAll("}");
             },
             .Union => {
-                const union_obj = val.castTag(.@"union").?.data;
-                const union_ty = ty.cast(Type.Payload.Union).?.data;
+                const union_obj = val.castTag(.@"union") orelse unreachable.data;
+                const union_ty = ty.cast(Type.Payload.Union) orelse unreachable.data;
                 const layout = ty.unionGetLayout(target);
 
                 try writer.writeAll("(");
@@ -851,7 +851,7 @@ pub const DeclGen = struct {
                     try writer.writeAll(".payload = {");
                 }
 
-                const index = union_ty.tag_ty.enumTagFieldIndex(union_obj.tag, dg.module).?;
+                const index = union_ty.tag_ty.enumTagFieldIndex(union_obj.tag, dg.module) orelse unreachable;
                 const field_ty = ty.unionFields().values()[index].ty;
                 const field_name = ty.unionFields().keys()[index];
                 if (field_ty.hasRuntimeBits()) {
@@ -1020,7 +1020,7 @@ pub const DeclGen = struct {
     }
 
     fn renderStructTypedef(dg: *DeclGen, t: Type) error{ OutOfMemory, AnalysisFail }![]const u8 {
-        const struct_obj = t.castTag(.@"struct").?.data; // Handle 0 bit types elsewhere.
+        const struct_obj = t.castTag(.@"struct") orelse unreachable.data; // Handle 0 bit types elsewhere.
         const fqn = try struct_obj.getFullyQualifiedName(dg.module);
         defer dg.typedefs.allocator.free(fqn);
 
@@ -1100,7 +1100,7 @@ pub const DeclGen = struct {
     }
 
     fn renderUnionTypedef(dg: *DeclGen, t: Type) error{ OutOfMemory, AnalysisFail }![]const u8 {
-        const union_ty = t.cast(Type.Payload.Union).?.data;
+        const union_ty = t.cast(Type.Payload.Union) orelse unreachable.data;
         const fqn = try union_ty.getFullyQualifiedName(dg.module);
         defer dg.typedefs.allocator.free(fqn);
 
@@ -1484,11 +1484,11 @@ pub const DeclGen = struct {
         switch (tv.val.tag()) {
             .extern_fn => return true,
             .function => {
-                const func = tv.val.castTag(.function).?.data;
+                const func = tv.val.castTag(.function) orelse unreachable.data;
                 return dg.module.decl_exports.contains(func.owner_decl);
             },
             .variable => {
-                const variable = tv.val.castTag(.variable).?.data;
+                const variable = tv.val.castTag(.variable) orelse unreachable.data;
                 return dg.module.decl_exports.contains(variable.owner_decl);
             },
             else => unreachable,
@@ -2732,9 +2732,9 @@ fn airCall(
             const fn_decl = fn_decl: {
                 const callee_val = f.air.value(pl_op.operand) orelse break :known;
                 break :fn_decl switch (callee_val.tag()) {
-                    .extern_fn => callee_val.castTag(.extern_fn).?.data.owner_decl,
-                    .function => callee_val.castTag(.function).?.data.owner_decl,
-                    .decl_ref => callee_val.castTag(.decl_ref).?.data,
+                    .extern_fn => callee_val.castTag(.extern_fn) orelse unreachable.data.owner_decl,
+                    .function => callee_val.castTag(.function) orelse unreachable.data.owner_decl,
+                    .decl_ref => callee_val.castTag(.decl_ref) orelse unreachable.data,
                     else => break :known,
                 };
             };
@@ -2784,7 +2784,7 @@ fn airDbgStmt(f: *Function, inst: Air.Inst.Index) !CValue {
 fn airDbgInline(f: *Function, inst: Air.Inst.Index) !CValue {
     const ty_pl = f.air.instructions.items(.data)[inst].ty_pl;
     const writer = f.object.writer();
-    const function = f.air.values[ty_pl.payload].castTag(.function).?.data;
+    const function = f.air.values[ty_pl.payload].castTag(.function) orelse unreachable.data;
     const mod = f.object.dg.module;
     try writer.print("/* dbg func:{s} */\n", .{mod.declPtr(function.owner_decl).name});
     return CValue.none;
@@ -2831,7 +2831,7 @@ fn airBlock(f: *Function, inst: Air.Inst.Index) !CValue {
 
 fn airBr(f: *Function, inst: Air.Inst.Index) !CValue {
     const branch = f.air.instructions.items(.data)[inst].br;
-    const block = f.blocks.get(branch.block_inst).?;
+    const block = f.blocks.get(branch.block_inst) orelse unreachable;
     const result = block.result;
     const writer = f.object.writer();
 
@@ -2971,7 +2971,7 @@ fn airSwitchBr(f: *Function, inst: Air.Inst.Index) !CValue {
         for (items) |item| {
             try f.object.indent_writer.insertNewline();
             try writer.writeAll("case ");
-            try f.object.dg.renderValue(writer, condition_ty, f.air.value(item).?, .Other);
+            try f.object.dg.renderValue(writer, condition_ty, f.air.value(item) orelse unreachable, .Other);
             try writer.writeAll(": ");
         }
         // The case body must be noreturn so we don't need to insert a break.

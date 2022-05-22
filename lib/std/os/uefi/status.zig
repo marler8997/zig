@@ -186,7 +186,7 @@ pub const Status = enum(usize) {
     };
 
     pub fn err(self: Status) EfiError!void {
-        inline for (@typeInfo(EfiError).ErrorSet.?) |efi_err| {
+        inline for (@typeInfo(EfiError).ErrorSet orelse unreachable) |efi_err| {
             if (self == @field(Status, efi_err.name)) {
                 return @field(EfiError, efi_err.name);
             }

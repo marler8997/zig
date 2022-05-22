@@ -642,7 +642,7 @@ test {
 /// }
 /// ```
 pub fn checkAllAllocationFailures(backing_allocator: std.mem.Allocator, comptime test_fn: anytype, extra_args: anytype) !void {
-    switch (@typeInfo(@typeInfo(@TypeOf(test_fn)).Fn.return_type.?)) {
+    switch (@typeInfo(@typeInfo(@TypeOf(test_fn)).Fn.return_type orelse unreachable)) {
         .ErrorUnion => |info| {
             if (info.payload != void) {
                 @compileError("Return type must be !void");

@@ -269,7 +269,7 @@ pub fn generate(
         @panic("Attempted to compile for architecture that was disabled by build configuration");
     }
 
-    const mod = bin_file.options.module.?;
+    const mod = bin_file.options.module orelse unreachable;
     const fn_owner_decl = mod.declPtr(module_fn.owner_decl);
     assert(fn_owner_decl.has_tv);
     const fn_type = fn_owner_decl.ty;
@@ -305,7 +305,7 @@ pub fn generate(
     defer function.exitlude_jump_relocs.deinit(bin_file.allocator);
 
     var call_info = function.resolveCallingConventionValues(fn_type) catch |err| switch (err) {
-        error.CodegenFail => return FnResult{ .fail = function.err_msg.? },
+        error.CodegenFail => return FnResult{ .fail = function.err_msg orelse unreachable },
         error.OutOfRegisters => return FnResult{
             .fail = try ErrorMsg.create(bin_file.allocator, src_loc, "CodeGen ran out of registers. This is a bug in the Zig compiler.", .{}),
         },
@@ -319,7 +319,7 @@ pub fn generate(
     function.max_end_stack = call_info.stack_byte_count;
 
     function.gen() catch |err| switch (err) {
-        error.CodegenFail => return FnResult{ .fail = function.err_msg.? },
+        error.CodegenFail => return FnResult{ .fail = function.err_msg orelse unreachable },
         error.OutOfRegisters => return FnResult{
             .fail = try ErrorMsg.create(bin_file.allocator, src_loc, "CodeGen ran out of registers. This is a bug in the Zig compiler.", .{}),
         },
@@ -347,7 +347,7 @@ pub fn generate(
     defer emit.deinit();
 
     emit.emitMir() catch |err| switch (err) {
-        error.EmitFail => return FnResult{ .fail = emit.err_msg.? },
+        error.EmitFail => return FnResult{ .fail = emit.err_msg orelse unreachable },
         else => |e| return e,
     };
 
@@ -867,7 +867,7 @@ fn allocMemPtr(self: *Self, inst: Air.Inst.Index) !u32 {
     }
 
     const abi_size = math.cast(u32, elem_ty.abiSize(self.target.*)) catch {
-        const mod = self.bin_file.options.module.?;
+        const mod = self.bin_file.options.module orelse unreachable;
         return self.fail("type '{}' too big to fit into stack frame", .{elem_ty.fmt(mod)});
     };
     // TODO swap this for inst.ty.ptrAlign
@@ -878,7 +878,7 @@ fn allocMemPtr(self: *Self, inst: Air.Inst.Index) !u32 {
 fn allocRegOrMem(self: *Self, inst: Air.Inst.Index, reg_ok: bool) !MCValue {
     const elem_ty = self.air.typeOfIndex(inst);
     const abi_size = math.cast(u32, elem_ty.abiSize(self.target.*)) catch {
-        const mod = self.bin_file.options.module.?;
+        const mod = self.bin_file.options.module orelse unreachable;
         return self.fail("type '{}' too big to fit into stack frame", .{elem_ty.fmt(mod)});
     };
     const abi_align = elem_ty.abiAlignment(self.target.*);
@@ -1290,7 +1290,7 @@ fn binOpRegister(
 
     const lhs_reg = if (lhs_is_register) lhs.register else blk: {
         const track_inst: ?Air.Inst.Index = if (metadata) |md| inst: {
-            break :inst Air.refToIndex(md.lhs).?;
+            break :inst Air.refToIndex(md.lhs) orelse unreachable;
         } else null;
 
         const raw_reg = try self.register_manager.allocReg(track_inst, gp);
@@ -1305,7 +1305,7 @@ fn binOpRegister(
 
     const rhs_reg = if (rhs_is_register) rhs.register else blk: {
         const track_inst: ?Air.Inst.Index = if (metadata) |md| inst: {
-            break :inst Air.refToIndex(md.rhs).?;
+            break :inst Air.refToIndex(md.rhs) orelse unreachable;
         } else null;
 
         const raw_reg = try self.register_manager.allocReg(track_inst, gp);
@@ -1428,7 +1428,7 @@ fn binOpImmediate(
         const track_inst: ?Air.Inst.Index = if (metadata) |md| inst: {
             break :inst Air.refToIndex(
                 if (lhs_and_rhs_swapped) md.rhs else md.lhs,
-            ).?;
+            ) orelse unreachable;
         } else null;
 
         const raw_reg = try self.register_manager.allocReg(track_inst, gp);
@@ -1523,7 +1523,7 @@ fn binOp(
     rhs_ty: Type,
     metadata: ?BinOpMetadata,
 ) InnerError!MCValue {
-    const mod = self.bin_file.options.module.?;
+    const mod = self.bin_file.options.module orelse unreachable;
     switch (tag) {
         .add,
         .sub,
@@ -1852,7 +1852,7 @@ fn airOverflow(self: *Self, inst: Air.Inst.Index) !void {
         switch (lhs_ty.zigTypeTag()) {
             .Vector => return self.fail("TODO implement add_with_overflow/sub_with_overflow for vectors", .{}),
             .Int => {
-                const mod = self.bin_file.options.module.?;
+                const mod = self.bin_file.options.module orelse unreachable;
                 assert(lhs_ty.eql(rhs_ty, mod));
                 const int_info = lhs_ty.intInfo(self.target.*);
                 switch (int_info.bits) {
@@ -2629,7 +2629,7 @@ fn reuseOperand(self: *Self, inst: Air.Inst.Index, operand: Air.Inst.Ref, op_ind
 
     // That makes us responsible for doing the rest of the stuff that processDeath would have done.
     const branch = &self.branch_stack.items[self.branch_stack.items.len - 1];
-    branch.inst_table.putAssumeCapacity(Air.refToIndex(operand).?, .dead);
+    branch.inst_table.putAssumeCapacity(Air.refToIndex(operand) orelse unreachable, .dead);
 
     return true;
 }
@@ -3048,7 +3048,7 @@ fn airArg(self: *Self, inst: Air.Inst.Index) !void {
     const mcv = switch (result) {
         // Copy registers to the stack
         .register => |reg| blk: {
-            const mod = self.bin_file.options.module.?;
+            const mod = self.bin_file.options.module orelse unreachable;
             const abi_size = math.cast(u32, ty.abiSize(self.target.*)) catch {
                 return self.fail("type '{}' too big to fit into stack frame", .{ty.fmt(mod)});
             };
@@ -3149,7 +3149,7 @@ fn airCall(self: *Self, inst: Air.Inst.Index, modifier: std.builtin.CallOptions.
 
     // Due to incremental compilation, how function calls are generated depends
     // on linking.
-    const mod = self.bin_file.options.module.?;
+    const mod = self.bin_file.options.module orelse unreachable;
     if (self.air.value(callee)) |func_value| {
         if (self.bin_file.tag == link.File.Elf.base_tag or self.bin_file.tag == link.File.Coff.base_tag) {
             if (func_value.castTag(.function)) |func_payload| {
@@ -3158,7 +3158,7 @@ fn airCall(self: *Self, inst: Air.Inst.Index, modifier: std.builtin.CallOptions.
                 const ptr_bytes: u64 = @divExact(ptr_bits, 8);
                 const fn_owner_decl = mod.declPtr(func.owner_decl);
                 const got_addr = if (self.bin_file.cast(link.File.Elf)) |elf_file| blk: {
-                    const got = &elf_file.program_headers.items[elf_file.phdr_got_index.?];
+                    const got = &elf_file.program_headers.items[elf_file.phdr_got_index orelse unreachable];
                     break :blk @intCast(u32, got.p_vaddr + fn_owner_decl.link.elf.offset_table_index * ptr_bytes);
                 } else if (self.bin_file.cast(link.File.Coff)) |coff_file|
                     coff_file.offset_table_virtual_address + fn_owner_decl.link.coff.offset_table_index * ptr_bytes
@@ -3217,7 +3217,7 @@ fn airCall(self: *Self, inst: Air.Inst.Index, modifier: std.builtin.CallOptions.
                 const ptr_bits = self.target.cpu.arch.ptrBitWidth();
                 const ptr_bytes: u64 = @divExact(ptr_bits, 8);
                 const got_addr = p9.bases.data;
-                const got_index = mod.declPtr(func_payload.data.owner_decl).link.plan9.got_index.?;
+                const got_index = mod.declPtr(func_payload.data.owner_decl).link.plan9.got_index orelse unreachable;
                 const fn_got_addr = got_addr + got_index * ptr_bytes;
 
                 try self.genSetReg(Type.initTag(.usize), .x30, .{ .memory = fn_got_addr });
@@ -3377,7 +3377,7 @@ fn airDbgStmt(self: *Self, inst: Air.Inst.Index) !void {
 
 fn airDbgInline(self: *Self, inst: Air.Inst.Index) !void {
     const ty_pl = self.air.instructions.items(.data)[inst].ty_pl;
-    const function = self.air.values[ty_pl.payload].castTag(.function).?.data;
+    const function = self.air.values[ty_pl.payload].castTag(.function) orelse unreachable.data;
     // TODO emit debug info for function change
     _ = function;
     return self.finishAir(inst, .dead, .{ .none, .none, .none });
@@ -3784,7 +3784,7 @@ fn airBlock(self: *Self, inst: Air.Inst.Index) !void {
         // block results.
         .mcv = MCValue{ .none = {} },
     });
-    defer self.blocks.getPtr(inst).?.relocs.deinit(self.gpa);
+    defer self.blocks.getPtr(inst) orelse unreachable.relocs.deinit(self.gpa);
 
     const ty_pl = self.air.instructions.items(.data)[inst].ty_pl;
     const extra = self.air.extraData(Air.Block, ty_pl.payload);
@@ -3792,7 +3792,7 @@ fn airBlock(self: *Self, inst: Air.Inst.Index) !void {
     try self.genBody(body);
 
     // relocations for `br` instructions
-    const relocs = &self.blocks.getPtr(inst).?.relocs;
+    const relocs = &self.blocks.getPtr(inst) orelse unreachable.relocs;
     if (relocs.items.len > 0 and relocs.items[relocs.items.len - 1] == self.mir_instructions.len - 1) {
         // If the last Mir instruction is the last relocation (which
         // would just jump one instruction further), it can be safely
@@ -3803,7 +3803,7 @@ fn airBlock(self: *Self, inst: Air.Inst.Index) !void {
         try self.performReloc(reloc);
     }
 
-    const result = self.blocks.getPtr(inst).?.mcv;
+    const result = self.blocks.getPtr(inst) orelse unreachable.mcv;
     return self.finishAir(inst, result, .{ .none, .none, .none });
 }
 
@@ -3832,7 +3832,7 @@ fn airBr(self: *Self, inst: Air.Inst.Index) !void {
 }
 
 fn br(self: *Self, block: Air.Inst.Index, operand: Air.Inst.Ref) !void {
-    const block_data = self.blocks.getPtr(block).?;
+    const block_data = self.blocks.getPtr(block) orelse unreachable;
 
     if (self.air.typeOf(operand).hasRuntimeBits()) {
         const operand_mcv = try self.resolveInst(operand);
@@ -3856,7 +3856,7 @@ fn br(self: *Self, block: Air.Inst.Index, operand: Air.Inst.Ref) !void {
 }
 
 fn brVoid(self: *Self, block: Air.Inst.Index) !void {
-    const block_data = self.blocks.getPtr(block).?;
+    const block_data = self.blocks.getPtr(block) orelse unreachable;
 
     // Emit a jump with a relocation. It will be patched up after the block ends.
     try block_data.relocs.ensureUnusedCapacity(self.gpa, 1);
@@ -4139,7 +4139,7 @@ fn genSetStack(self: *Self, ty: Type, stack_offset: u32, mcv: MCValue) InnerErro
                             .direct_load => .load_memory_ptr_direct,
                             else => unreachable,
                         };
-                        const mod = self.bin_file.options.module.?;
+                        const mod = self.bin_file.options.module orelse unreachable;
                         _ = try self.addInst(.{
                             .tag = tag,
                             .data = .{
@@ -4262,7 +4262,7 @@ fn genSetReg(self: *Self, ty: Type, reg: Register, mcv: MCValue) InnerError!void
                 .direct_load => .load_memory_direct,
                 else => unreachable,
             };
-            const mod = self.bin_file.options.module.?;
+            const mod = self.bin_file.options.module orelse unreachable;
             _ = try self.addInst(.{
                 .tag = tag,
                 .data = .{
@@ -4538,12 +4538,12 @@ fn lowerDeclRef(self: *Self, tv: TypedValue, decl_index: Module.Decl.Index) Inne
         }
     }
 
-    const mod = self.bin_file.options.module.?;
+    const mod = self.bin_file.options.module orelse unreachable;
     const decl = mod.declPtr(decl_index);
     mod.markDeclAlive(decl);
 
     if (self.bin_file.cast(link.File.Elf)) |elf_file| {
-        const got = &elf_file.program_headers.items[elf_file.phdr_got_index.?];
+        const got = &elf_file.program_headers.items[elf_file.phdr_got_index orelse unreachable];
         const got_addr = got.p_vaddr + decl.link.elf.offset_table_index * ptr_bytes;
         return MCValue{ .memory = got_addr };
     } else if (self.bin_file.cast(link.File.MachO)) |_| {
@@ -4556,7 +4556,7 @@ fn lowerDeclRef(self: *Self, tv: TypedValue, decl_index: Module.Decl.Index) Inne
         return MCValue{ .memory = got_addr };
     } else if (self.bin_file.cast(link.File.Plan9)) |p9| {
         try p9.seeDecl(decl_index);
-        const got_addr = p9.bases.data + decl.link.plan9.got_index.? * ptr_bytes;
+        const got_addr = p9.bases.data + decl.link.plan9.got_index orelse unreachable * ptr_bytes;
         return MCValue{ .memory = got_addr };
     } else {
         return self.fail("TODO codegen non-ELF const Decl pointer", .{});
@@ -4657,7 +4657,7 @@ fn genTypedValue(self: *Self, typed_value: TypedValue) InnerError!MCValue {
                         return MCValue{ .immediate = field_index.data };
                     },
                     .enum_full, .enum_nonexhaustive => {
-                        const enum_full = typed_value.ty.cast(Type.Payload.EnumFull).?.data;
+                        const enum_full = typed_value.ty.cast(Type.Payload.EnumFull) orelse unreachable.data;
                         if (enum_full.values.count() != 0) {
                             const tag_val = enum_full.values.keys()[field_index.data];
                             return self.genTypedValue(.{ .ty = enum_full.tag_ty, .val = tag_val });
@@ -4674,10 +4674,10 @@ fn genTypedValue(self: *Self, typed_value: TypedValue) InnerError!MCValue {
             }
         },
         .ErrorSet => {
-            const err_name = typed_value.val.castTag(.@"error").?.data.name;
-            const module = self.bin_file.options.module.?;
+            const err_name = typed_value.val.castTag(.@"error") orelse unreachable.data.name;
+            const module = self.bin_file.options.module orelse unreachable;
             const global_error_set = module.global_error_set;
-            const error_index = global_error_set.get(err_name).?;
+            const error_index = global_error_set.get(err_name) orelse unreachable;
             return MCValue{ .immediate = error_index };
         },
         .ErrorUnion => {

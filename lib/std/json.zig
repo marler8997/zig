@@ -1165,7 +1165,7 @@ pub const TokenStream = struct {
 };
 
 fn checkNext(p: *TokenStream, id: std.meta.Tag(Token)) !void {
-    const token = (p.next() catch unreachable).?;
+    const token = (p.next() catch unreachable) orelse unreachable;
     try testing.expect(std.meta.activeTag(token) == id);
 }
 
@@ -1430,7 +1430,7 @@ fn parsedEqual(a: anytype, b: @TypeOf(a)) bool {
         .Optional => {
             if (a == null and b == null) return true;
             if (a == null or b == null) return false;
-            return parsedEqual(a.?, b.?);
+            return parsedEqual(a orelse unreachable, b orelse unreachable);
         },
         .Union => |info| {
             if (info.tag_type) |UnionTag| {
@@ -1545,11 +1545,11 @@ test "skipValue" {
 
     { // should fail if no value found (e.g. immediate close of object)
         var empty_object = TokenStream.init("{}");
-        assert(.ObjectBegin == (try empty_object.next()).?);
+        assert(.ObjectBegin == (try empty_object.next()) orelse unreachable);
         try testing.expectError(error.UnexpectedJsonDepth, skipValue(&empty_object));
 
         var empty_array = TokenStream.init("[]");
-        assert(.ArrayBegin == (try empty_array.next()).?);
+        assert(.ArrayBegin == (try empty_array.next()) orelse unreachable);
         try testing.expectError(error.UnexpectedJsonDepth, skipValue(&empty_array));
     }
 }
@@ -1765,7 +1765,7 @@ fn parseInternal(
                                     }
                                 }
                                 if (field.is_comptime) {
-                                    if (!try parsesTo(field.field_type, @ptrCast(*const field.field_type, field.default_value.?).*, tokens, child_options)) {
+                                    if (!try parsesTo(field.field_type, @ptrCast(*const field.field_type, field.default_value orelse unreachable).*, tokens, child_options)) {
                                         return error.UnexpectedValue;
                                     }
                                 } else {
@@ -2702,30 +2702,30 @@ test "json.parser.dynamic" {
 
     var root = tree.root;
 
-    var image = root.Object.get("Image").?;
+    var image = root.Object.get("Image") orelse unreachable;
 
-    const width = image.Object.get("Width").?;
+    const width = image.Object.get("Width") orelse unreachable;
     try testing.expect(width.Integer == 800);
 
-    const height = image.Object.get("Height").?;
+    const height = image.Object.get("Height") orelse unreachable;
     try testing.expect(height.Integer == 600);
 
-    const title = image.Object.get("Title").?;
+    const title = image.Object.get("Title") orelse unreachable;
     try testing.expect(mem.eql(u8, title.String, "View from 15th Floor"));
 
-    const animated = image.Object.get("Animated").?;
+    const animated = image.Object.get("Animated") orelse unreachable;
     try testing.expect(animated.Bool == false);
 
-    const array_of_object = image.Object.get("ArrayOfObject").?;
+    const array_of_object = image.Object.get("ArrayOfObject") orelse unreachable;
     try testing.expect(array_of_object.Array.items.len == 1);
 
-    const obj0 = array_of_object.Array.items[0].Object.get("n").?;
+    const obj0 = array_of_object.Array.items[0].Object.get("n") orelse unreachable;
     try testing.expect(mem.eql(u8, obj0.String, "m"));
 
-    const double = image.Object.get("double").?;
+    const double = image.Object.get("double") orelse unreachable;
     try testing.expect(double.Float == 1.3412);
 
-    const large_int = image.Object.get("LargeInt").?;
+    const large_int = image.Object.get("LargeInt") orelse unreachable;
     try testing.expect(mem.eql(u8, large_int.NumberString, "18446744073709551615"));
 }
 
@@ -2773,12 +2773,12 @@ test "write json then parse it" {
     var tree = try parser.parse(fixed_buffer_stream.getWritten());
     defer tree.deinit();
 
-    try testing.expect(tree.root.Object.get("f").?.Bool == false);
-    try testing.expect(tree.root.Object.get("t").?.Bool == true);
-    try testing.expect(tree.root.Object.get("int").?.Integer == 1234);
-    try testing.expect(tree.root.Object.get("array").?.Array.items[0].Null == {});
-    try testing.expect(tree.root.Object.get("array").?.Array.items[1].Float == 12.34);
-    try testing.expect(mem.eql(u8, tree.root.Object.get("str").?.String, "hello"));
+    try testing.expect(tree.root.Object.get("f") orelse unreachable.Bool == false);
+    try testing.expect(tree.root.Object.get("t") orelse unreachable.Bool == true);
+    try testing.expect(tree.root.Object.get("int") orelse unreachable.Integer == 1234);
+    try testing.expect(tree.root.Object.get("array") orelse unreachable.Array.items[0].Null == {});
+    try testing.expect(tree.root.Object.get("array") orelse unreachable.Array.items[1].Float == 12.34);
+    try testing.expect(mem.eql(u8, tree.root.Object.get("str") orelse unreachable.String, "hello"));
 }
 
 fn testParse(arena_allocator: std.mem.Allocator, json_str: []const u8) !Value {
@@ -2801,7 +2801,7 @@ test "integer after float has proper type" {
         \\  "ints": [1, 2, 3]
         \\}
     );
-    try std.testing.expect(json.Object.get("ints").?.Array.items[0] == .Integer);
+    try std.testing.expect(json.Object.get("ints") orelse unreachable.Array.items[0] == .Integer);
 }
 
 test "parse exponential into int" {
@@ -2832,16 +2832,16 @@ test "escaped characters" {
 
     const obj = (try testParse(arena_allocator.allocator(), input)).Object;
 
-    try testing.expectEqualSlices(u8, obj.get("backslash").?.String, "\\");
-    try testing.expectEqualSlices(u8, obj.get("forwardslash").?.String, "/");
-    try testing.expectEqualSlices(u8, obj.get("newline").?.String, "\n");
-    try testing.expectEqualSlices(u8, obj.get("carriagereturn").?.String, "\r");
-    try testing.expectEqualSlices(u8, obj.get("tab").?.String, "\t");
-    try testing.expectEqualSlices(u8, obj.get("formfeed").?.String, "\x0C");
-    try testing.expectEqualSlices(u8, obj.get("backspace").?.String, "\x08");
-    try testing.expectEqualSlices(u8, obj.get("doublequote").?.String, "\"");
-    try testing.expectEqualSlices(u8, obj.get("unicode").?.String, "ą");
-    try testing.expectEqualSlices(u8, obj.get("surrogatepair").?.String, "😂");
+    try testing.expectEqualSlices(u8, obj.get("backslash") orelse unreachable.String, "\\");
+    try testing.expectEqualSlices(u8, obj.get("forwardslash") orelse unreachable.String, "/");
+    try testing.expectEqualSlices(u8, obj.get("newline") orelse unreachable.String, "\n");
+    try testing.expectEqualSlices(u8, obj.get("carriagereturn") orelse unreachable.String, "\r");
+    try testing.expectEqualSlices(u8, obj.get("tab") orelse unreachable.String, "\t");
+    try testing.expectEqualSlices(u8, obj.get("formfeed") orelse unreachable.String, "\x0C");
+    try testing.expectEqualSlices(u8, obj.get("backspace") orelse unreachable.String, "\x08");
+    try testing.expectEqualSlices(u8, obj.get("doublequote") orelse unreachable.String, "\"");
+    try testing.expectEqualSlices(u8, obj.get("unicode") orelse unreachable.String, "ą");
+    try testing.expectEqualSlices(u8, obj.get("surrogatepair") orelse unreachable.String, "😂");
 }
 
 test "string copy option" {
@@ -2865,11 +2865,11 @@ test "string copy option" {
     const obj_copy = tree_copy.root.Object;
 
     for ([_][]const u8{ "noescape", "simple", "unicode", "surrogatepair" }) |field_name| {
-        try testing.expectEqualSlices(u8, obj_nocopy.get(field_name).?.String, obj_copy.get(field_name).?.String);
+        try testing.expectEqualSlices(u8, obj_nocopy.get(field_name) orelse unreachable.String, obj_copy.get(field_name) orelse unreachable.String);
     }
 
-    const nocopy_addr = &obj_nocopy.get("noescape").?.String[0];
-    const copy_addr = &obj_copy.get("noescape").?.String[0];
+    const nocopy_addr = &obj_nocopy.get("noescape") orelse unreachable.String[0];
+    const copy_addr = &obj_copy.get("noescape") orelse unreachable.String[0];
 
     var found_nocopy = false;
     for (input) |_, index| {

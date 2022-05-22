@@ -115,12 +115,12 @@ pub fn parse(self: *Archive, allocator: Allocator, target: std.Target) !void {
     }
 
     self.header = try reader.readStruct(ar_hdr);
-    if (!mem.eql(u8, &self.header.?.ar_fmag, ARFMAG)) {
-        log.debug("invalid header delimiter: expected '{s}', found '{s}'", .{ ARFMAG, self.header.?.ar_fmag });
+    if (!mem.eql(u8, &self.header orelse unreachable.ar_fmag, ARFMAG)) {
+        log.debug("invalid header delimiter: expected '{s}', found '{s}'", .{ ARFMAG, self.header orelse unreachable.ar_fmag });
         return error.NotArchive;
     }
 
-    var embedded_name = try parseName(allocator, self.header.?, reader);
+    var embedded_name = try parseName(allocator, self.header orelse unreachable, reader);
     log.debug("parsing archive '{s}' at '{s}'", .{ embedded_name, self.name });
     defer allocator.free(embedded_name);
 
@@ -213,7 +213,7 @@ pub fn parseObject(self: Archive, allocator: Allocator, target: std.Target, offs
         .file = try fs.cwd().openFile(self.name, .{}),
         .name = name,
         .file_offset = @intCast(u32, try reader.context.getPos()),
-        .mtime = try self.header.?.date(),
+        .mtime = try self.header orelse unreachable.date(),
     };
 
     try object.parse(allocator, target);

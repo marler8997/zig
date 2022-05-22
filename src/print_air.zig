@@ -592,7 +592,7 @@ const Writer = struct {
 
     fn writeDbgInline(w: *Writer, s: anytype, inst: Air.Inst.Index) @TypeOf(s).Error!void {
         const ty_pl = w.air.instructions.items(.data)[inst].ty_pl;
-        const function = w.air.values[ty_pl.payload].castTag(.function).?.data;
+        const function = w.air.values[ty_pl.payload].castTag(.function) orelse unreachable.data;
         const owner_decl = w.module.declPtr(function.owner_decl);
         try s.print("{s}", .{owner_decl.name});
     }
@@ -731,7 +731,7 @@ const Writer = struct {
         const dies = if (op_index < small_tomb_bits)
             w.liveness.operandDies(inst, @intCast(Liveness.OperandInt, op_index))
         else blk: {
-            var extra_index = w.liveness.special.get(inst).?;
+            var extra_index = w.liveness.special.get(inst) orelse unreachable;
             var tomb_op_index: usize = small_tomb_bits;
             while (true) {
                 const bits = w.liveness.extra[extra_index];

@@ -132,7 +132,7 @@ pub const DeclState = struct {
             });
             break :blk self.abbrev_resolver.getContext(ty, .{
                 .mod = self.mod,
-            }).?;
+            }) orelse unreachable;
         };
         const add: u32 = addend orelse 0;
 
@@ -336,7 +336,7 @@ pub const DeclState = struct {
                         dbg_info_buffer.appendSliceAssumeCapacity(struct_name);
                         dbg_info_buffer.appendAssumeCapacity(0);
 
-                        const struct_obj = ty.castTag(.@"struct").?.data;
+                        const struct_obj = ty.castTag(.@"struct") orelse unreachable.data;
                         if (struct_obj.layout == .Packed) {
                             log.debug("TODO implement .debug_info for packed structs", .{});
                             break :blk;
@@ -344,7 +344,7 @@ pub const DeclState = struct {
 
                         const fields = ty.structFields();
                         for (fields.keys()) |field_name, field_index| {
-                            const field = fields.get(field_name).?;
+                            const field = fields.get(field_name) orelse unreachable;
                             // DW.AT.member
                             try dbg_info_buffer.ensureUnusedCapacity(field_name.len + 2);
                             dbg_info_buffer.appendAssumeCapacity(@enumToInt(AbbrevKind.struct_member));
@@ -379,9 +379,9 @@ pub const DeclState = struct {
 
                 const fields = ty.enumFields();
                 const values: ?Module.EnumFull.ValueMap = switch (ty.tag()) {
-                    .enum_full, .enum_nonexhaustive => ty.cast(Type.Payload.EnumFull).?.data.values,
+                    .enum_full, .enum_nonexhaustive => ty.cast(Type.Payload.EnumFull) orelse unreachable.data.values,
                     .enum_simple => null,
-                    .enum_numbered => ty.castTag(.enum_numbered).?.data.values,
+                    .enum_numbered => ty.castTag(.enum_numbered) orelse unreachable.data.values,
                     else => unreachable,
                 };
                 for (fields.keys()) |field_name, field_i| {
@@ -406,7 +406,7 @@ pub const DeclState = struct {
             },
             .Union => {
                 const layout = ty.unionGetLayout(target);
-                const union_obj = ty.cast(Type.Payload.Union).?.data;
+                const union_obj = ty.cast(Type.Payload.Union) orelse unreachable.data;
                 const payload_offset = if (layout.tag_align >= layout.payload_align) layout.tag_size else 0;
                 const tag_offset = if (layout.tag_align >= layout.payload_align) 0 else layout.payload_size;
                 const is_tagged = layout.tag_size > 0;
@@ -452,7 +452,7 @@ pub const DeclState = struct {
 
                 const fields = ty.unionFields();
                 for (fields.keys()) |field_name| {
-                    const field = fields.get(field_name).?;
+                    const field = fields.get(field_name) orelse unreachable;
                     if (!field.ty.hasRuntimeBits()) continue;
                     // DW.AT.member
                     try dbg_info_buffer.append(@enumToInt(AbbrevKind.struct_member));
@@ -676,7 +676,7 @@ pub fn initDeclState(self: *Dwarf, mod: *Module, decl: *Module.Decl) !DeclState 
             // For functions we need to add a prologue to the debug line program.
             try dbg_line_buffer.ensureTotalCapacity(26);
 
-            const func = decl.val.castTag(.function).?.data;
+            const func = decl.val.castTag(.function) orelse unreachable.data;
             log.debug("decl.src_line={d}, func.lbrace_line={d}, func.rbrace_line={d}", .{
                 decl.src_line,
                 func.lbrace_line,
@@ -838,21 +838,21 @@ pub fn commitDeclState(
                         // Populate where it used to be with NOPs.
                         switch (self.tag) {
                             .elf => {
-                                const elf_file = file.cast(File.Elf).?;
-                                const debug_line_sect = &elf_file.sections.items[elf_file.debug_line_section_index.?];
+                                const elf_file = file.cast(File.Elf) orelse unreachable;
+                                const debug_line_sect = &elf_file.sections.items[elf_file.debug_line_section_index orelse unreachable];
                                 const file_pos = debug_line_sect.sh_offset + src_fn.off;
-                                try pwriteDbgLineNops(elf_file.base.file.?, file_pos, 0, &[0]u8{}, src_fn.len);
+                                try pwriteDbgLineNops(elf_file.base.file orelse unreachable, file_pos, 0, &[0]u8{}, src_fn.len);
                             },
                             .macho => {
-                                const macho_file = file.cast(File.MachO).?;
-                                const d_sym = &macho_file.d_sym.?;
-                                const dwarf_segment = &d_sym.load_commands.items[d_sym.dwarf_segment_cmd_index.?].segment;
-                                const debug_line_sect = &dwarf_segment.sections.items[d_sym.debug_line_section_index.?];
+                                const macho_file = file.cast(File.MachO) orelse unreachable;
+                                const d_sym = &macho_file.d_sym orelse unreachable;
+                                const dwarf_segment = &d_sym.load_commands.items[d_sym.dwarf_segment_cmd_index orelse unreachable].segment;
+                                const debug_line_sect = &dwarf_segment.sections.items[d_sym.debug_line_section_index orelse unreachable];
                                 const file_pos = debug_line_sect.offset + src_fn.off;
                                 try pwriteDbgLineNops(d_sym.file, file_pos, 0, &[0]u8{}, src_fn.len);
                             },
                             .wasm => {
-                                const wasm_file = file.cast(File.Wasm).?;
+                                const wasm_file = file.cast(File.Wasm) orelse unreachable;
                                 writeDbgLineNopsBuffered(wasm_file.debug_line.items, src_fn.off, 0, &.{}, src_fn.len);
                             },
                             else => unreachable,
@@ -881,7 +881,7 @@ pub fn commitDeclState(
                 src_fn.off = padToIdeal(self.dbgLineNeededHeaderBytes(module));
             }
 
-            const last_src_fn = self.dbg_line_fn_last.?;
+            const last_src_fn = self.dbg_line_fn_last orelse unreachable;
             const needed_size = last_src_fn.off + last_src_fn.len;
             const prev_padding_size: u32 = if (src_fn.prev) |prev| src_fn.off - (prev.off + prev.len) else 0;
             const next_padding_size: u32 = if (src_fn.next) |next| next.off - (src_fn.off + src_fn.len) else 0;
@@ -890,8 +890,8 @@ pub fn commitDeclState(
             // from the .debug_line section.
             switch (self.tag) {
                 .elf => {
-                    const elf_file = file.cast(File.Elf).?;
-                    const debug_line_sect = &elf_file.sections.items[elf_file.debug_line_section_index.?];
+                    const elf_file = file.cast(File.Elf) orelse unreachable;
+                    const debug_line_sect = &elf_file.sections.items[elf_file.debug_line_section_index orelse unreachable];
                     if (needed_size != debug_line_sect.sh_size) {
                         if (needed_size > elf_file.allocatedSize(debug_line_sect.sh_offset)) {
                             const new_offset = elf_file.findFreeSpace(needed_size, 1);
@@ -901,9 +901,9 @@ pub fn commitDeclState(
                                 debug_line_sect.sh_offset,
                                 new_offset,
                             });
-                            const amt = try elf_file.base.file.?.copyRangeAll(
+                            const amt = try elf_file.base.file orelse unreachable.copyRangeAll(
                                 debug_line_sect.sh_offset,
-                                elf_file.base.file.?,
+                                elf_file.base.file orelse unreachable,
                                 new_offset,
                                 existing_size,
                             );
@@ -916,7 +916,7 @@ pub fn commitDeclState(
                     }
                     const file_pos = debug_line_sect.sh_offset + src_fn.off;
                     try pwriteDbgLineNops(
-                        elf_file.base.file.?,
+                        elf_file.base.file orelse unreachable,
                         file_pos,
                         prev_padding_size,
                         dbg_line_buffer.items,
@@ -924,10 +924,10 @@ pub fn commitDeclState(
                     );
                 },
                 .macho => {
-                    const macho_file = file.cast(File.MachO).?;
-                    const d_sym = &macho_file.d_sym.?;
-                    const dwarf_segment = &d_sym.load_commands.items[d_sym.dwarf_segment_cmd_index.?].segment;
-                    const debug_line_sect = &dwarf_segment.sections.items[d_sym.debug_line_section_index.?];
+                    const macho_file = file.cast(File.MachO) orelse unreachable;
+                    const d_sym = &macho_file.d_sym orelse unreachable;
+                    const dwarf_segment = &d_sym.load_commands.items[d_sym.dwarf_segment_cmd_index orelse unreachable].segment;
+                    const debug_line_sect = &dwarf_segment.sections.items[d_sym.debug_line_section_index orelse unreachable];
                     if (needed_size != debug_line_sect.size) {
                         if (needed_size > d_sym.allocatedSize(debug_line_sect.offset)) {
                             const new_offset = d_sym.findFreeSpace(needed_size, 1);
@@ -964,7 +964,7 @@ pub fn commitDeclState(
                     );
                 },
                 .wasm => {
-                    const wasm_file = file.cast(File.Wasm).?;
+                    const wasm_file = file.cast(File.Wasm) orelse unreachable;
                     const segment_index = try wasm_file.getDebugLineIndex();
                     const segment = &wasm_file.segments.items[segment_index];
                     const debug_line = &wasm_file.debug_line;
@@ -1018,7 +1018,7 @@ pub fn commitDeclState(
                 if (ty.isAnyError()) break :blk true;
                 switch (ty.tag()) {
                     .error_set_inferred => {
-                        if (!ty.castTag(.error_set_inferred).?.data.is_resolved) break :blk true;
+                        if (!ty.castTag(.error_set_inferred) orelse unreachable.data.is_resolved) break :blk true;
                     },
                     else => {},
                 }
@@ -1040,7 +1040,7 @@ pub fn commitDeclState(
             if (ty.isAnyError()) break :blk true;
             switch (ty.tag()) {
                 .error_set_inferred => {
-                    if (!ty.castTag(.error_set_inferred).?.data.is_resolved) break :blk true;
+                    if (!ty.castTag(.error_set_inferred) orelse unreachable.data.is_resolved) break :blk true;
                 },
                 else => {},
             }
@@ -1066,8 +1066,8 @@ pub fn commitDeclState(
     while (decl_state.exprloc_relocs.popOrNull()) |reloc| {
         switch (self.tag) {
             .macho => {
-                const macho_file = file.cast(File.MachO).?;
-                const d_sym = &macho_file.d_sym.?;
+                const macho_file = file.cast(File.MachO) orelse unreachable;
+                const d_sym = &macho_file.d_sym orelse unreachable;
                 try d_sym.relocs.append(d_sym.base.base.allocator, .{
                     .@"type" = switch (reloc.@"type") {
                         .direct_load => .direct_load,
@@ -1111,21 +1111,21 @@ fn updateDeclDebugInfoAllocation(self: *Dwarf, file: *File, atom: *Atom, len: u3
                 // Populate where it used to be with NOPs.
                 switch (self.tag) {
                     .elf => {
-                        const elf_file = file.cast(File.Elf).?;
-                        const debug_info_sect = &elf_file.sections.items[elf_file.debug_info_section_index.?];
+                        const elf_file = file.cast(File.Elf) orelse unreachable;
+                        const debug_info_sect = &elf_file.sections.items[elf_file.debug_info_section_index orelse unreachable];
                         const file_pos = debug_info_sect.sh_offset + atom.off;
-                        try pwriteDbgInfoNops(elf_file.base.file.?, file_pos, 0, &[0]u8{}, atom.len, false);
+                        try pwriteDbgInfoNops(elf_file.base.file orelse unreachable, file_pos, 0, &[0]u8{}, atom.len, false);
                     },
                     .macho => {
-                        const macho_file = file.cast(File.MachO).?;
-                        const d_sym = &macho_file.d_sym.?;
-                        const dwarf_segment = &d_sym.load_commands.items[d_sym.dwarf_segment_cmd_index.?].segment;
-                        const debug_info_sect = &dwarf_segment.sections.items[d_sym.debug_info_section_index.?];
+                        const macho_file = file.cast(File.MachO) orelse unreachable;
+                        const d_sym = &macho_file.d_sym orelse unreachable;
+                        const dwarf_segment = &d_sym.load_commands.items[d_sym.dwarf_segment_cmd_index orelse unreachable].segment;
+                        const debug_info_sect = &dwarf_segment.sections.items[d_sym.debug_info_section_index orelse unreachable];
                         const file_pos = debug_info_sect.offset + atom.off;
                         try pwriteDbgInfoNops(d_sym.file, file_pos, 0, &[0]u8{}, atom.len, false);
                     },
                     .wasm => {
-                        const wasm_file = file.cast(File.Wasm).?;
+                        const wasm_file = file.cast(File.Wasm) orelse unreachable;
                         writeDbgInfoNopsBuffered(wasm_file.debug_info.items, atom.off, 0, &.{0}, atom.len, false);
                     },
                     else => unreachable,
@@ -1164,7 +1164,7 @@ fn writeDeclDebugInfo(self: *Dwarf, file: *File, atom: *Atom, dbg_info_buf: []co
     // probably need to edit that logic too.
     const gpa = self.allocator;
 
-    const last_decl = self.atom_last.?;
+    const last_decl = self.atom_last orelse unreachable;
     // +1 for a trailing zero to end the children of the decl tag.
     const needed_size = last_decl.off + last_decl.len + 1;
     const prev_padding_size: u32 = if (atom.prev) |prev| atom.off - (prev.off + prev.len) else 0;
@@ -1177,8 +1177,8 @@ fn writeDeclDebugInfo(self: *Dwarf, file: *File, atom: *Atom, dbg_info_buf: []co
     // from the .debug_info section.
     switch (self.tag) {
         .elf => {
-            const elf_file = file.cast(File.Elf).?;
-            const debug_info_sect = &elf_file.sections.items[elf_file.debug_info_section_index.?];
+            const elf_file = file.cast(File.Elf) orelse unreachable;
+            const debug_info_sect = &elf_file.sections.items[elf_file.debug_info_section_index orelse unreachable];
             if (needed_size != debug_info_sect.sh_size) {
                 if (needed_size > elf_file.allocatedSize(debug_info_sect.sh_offset)) {
                     const new_offset = elf_file.findFreeSpace(needed_size, 1);
@@ -1188,9 +1188,9 @@ fn writeDeclDebugInfo(self: *Dwarf, file: *File, atom: *Atom, dbg_info_buf: []co
                         debug_info_sect.sh_offset,
                         new_offset,
                     });
-                    const amt = try elf_file.base.file.?.copyRangeAll(
+                    const amt = try elf_file.base.file orelse unreachable.copyRangeAll(
                         debug_info_sect.sh_offset,
-                        elf_file.base.file.?,
+                        elf_file.base.file orelse unreachable,
                         new_offset,
                         existing_size,
                     );
@@ -1203,7 +1203,7 @@ fn writeDeclDebugInfo(self: *Dwarf, file: *File, atom: *Atom, dbg_info_buf: []co
             }
             const file_pos = debug_info_sect.sh_offset + atom.off;
             try pwriteDbgInfoNops(
-                elf_file.base.file.?,
+                elf_file.base.file orelse unreachable,
                 file_pos,
                 prev_padding_size,
                 dbg_info_buf,
@@ -1212,10 +1212,10 @@ fn writeDeclDebugInfo(self: *Dwarf, file: *File, atom: *Atom, dbg_info_buf: []co
             );
         },
         .macho => {
-            const macho_file = file.cast(File.MachO).?;
-            const d_sym = &macho_file.d_sym.?;
-            const dwarf_segment = &d_sym.load_commands.items[d_sym.dwarf_segment_cmd_index.?].segment;
-            const debug_info_sect = &dwarf_segment.sections.items[d_sym.debug_info_section_index.?];
+            const macho_file = file.cast(File.MachO) orelse unreachable;
+            const d_sym = &macho_file.d_sym orelse unreachable;
+            const dwarf_segment = &d_sym.load_commands.items[d_sym.dwarf_segment_cmd_index orelse unreachable].segment;
+            const debug_info_sect = &dwarf_segment.sections.items[d_sym.debug_info_section_index orelse unreachable];
             if (needed_size != debug_info_sect.size) {
                 if (needed_size > d_sym.allocatedSize(debug_info_sect.offset)) {
                     const new_offset = d_sym.findFreeSpace(needed_size, 1);
@@ -1253,7 +1253,7 @@ fn writeDeclDebugInfo(self: *Dwarf, file: *File, atom: *Atom, dbg_info_buf: []co
             );
         },
         .wasm => {
-            const wasm_file = file.cast(File.Wasm).?;
+            const wasm_file = file.cast(File.Wasm) orelse unreachable;
             const segment_index = try wasm_file.getDebugInfoIndex();
             const segment = &wasm_file.segments.items[segment_index];
             const debug_info = &wasm_file.debug_info;
@@ -1285,7 +1285,7 @@ pub fn updateDeclLineNumber(self: *Dwarf, file: *File, decl: *const Module.Decl)
     const tracy = trace(@src());
     defer tracy.end();
 
-    const func = decl.val.castTag(.function).?.data;
+    const func = decl.val.castTag(.function) orelse unreachable.data;
     log.debug("decl.src_line={d}, func.lbrace_line={d}, func.rbrace_line={d}", .{
         decl.src_line,
         func.lbrace_line,
@@ -1297,21 +1297,21 @@ pub fn updateDeclLineNumber(self: *Dwarf, file: *File, decl: *const Module.Decl)
 
     switch (self.tag) {
         .elf => {
-            const elf_file = file.cast(File.Elf).?;
-            const shdr = elf_file.sections.items[elf_file.debug_line_section_index.?];
+            const elf_file = file.cast(File.Elf) orelse unreachable;
+            const shdr = elf_file.sections.items[elf_file.debug_line_section_index orelse unreachable];
             const file_pos = shdr.sh_offset + decl.fn_link.elf.off + self.getRelocDbgLineOff();
-            try elf_file.base.file.?.pwriteAll(&data, file_pos);
+            try elf_file.base.file orelse unreachable.pwriteAll(&data, file_pos);
         },
         .macho => {
-            const macho_file = file.cast(File.MachO).?;
-            const d_sym = macho_file.d_sym.?;
-            const dwarf_seg = d_sym.load_commands.items[d_sym.dwarf_segment_cmd_index.?].segment;
-            const sect = dwarf_seg.sections.items[d_sym.debug_line_section_index.?];
+            const macho_file = file.cast(File.MachO) orelse unreachable;
+            const d_sym = macho_file.d_sym orelse unreachable;
+            const dwarf_seg = d_sym.load_commands.items[d_sym.dwarf_segment_cmd_index orelse unreachable].segment;
+            const sect = dwarf_seg.sections.items[d_sym.debug_line_section_index orelse unreachable];
             const file_pos = sect.offset + decl.fn_link.macho.off + self.getRelocDbgLineOff();
             try d_sym.file.pwriteAll(&data, file_pos);
         },
         .wasm => {
-            const wasm_file = file.cast(File.Wasm).?;
+            const wasm_file = file.cast(File.Wasm) orelse unreachable;
             const segment_index = wasm_file.getDebugLineIndex() catch unreachable;
             const segment = wasm_file.segments.items[segment_index];
             const offset = segment.offset + decl.fn_link.wasm.src_fn.off + self.getRelocDbgLineOff();
@@ -1513,8 +1513,8 @@ pub fn writeDbgAbbrev(self: *Dwarf, file: *File) !void {
     const needed_size = abbrev_buf.len;
     switch (self.tag) {
         .elf => {
-            const elf_file = file.cast(File.Elf).?;
-            const debug_abbrev_sect = &elf_file.sections.items[elf_file.debug_abbrev_section_index.?];
+            const elf_file = file.cast(File.Elf) orelse unreachable;
+            const debug_abbrev_sect = &elf_file.sections.items[elf_file.debug_abbrev_section_index orelse unreachable];
             const allocated_size = elf_file.allocatedSize(debug_abbrev_sect.sh_offset);
             if (needed_size > allocated_size) {
                 debug_abbrev_sect.sh_size = 0; // free the space
@@ -1527,13 +1527,13 @@ pub fn writeDbgAbbrev(self: *Dwarf, file: *File) !void {
             });
 
             const file_pos = debug_abbrev_sect.sh_offset + abbrev_offset;
-            try elf_file.base.file.?.pwriteAll(&abbrev_buf, file_pos);
+            try elf_file.base.file orelse unreachable.pwriteAll(&abbrev_buf, file_pos);
         },
         .macho => {
-            const macho_file = file.cast(File.MachO).?;
-            const d_sym = &macho_file.d_sym.?;
-            const dwarf_segment = &d_sym.load_commands.items[d_sym.dwarf_segment_cmd_index.?].segment;
-            const debug_abbrev_sect = &dwarf_segment.sections.items[d_sym.debug_abbrev_section_index.?];
+            const macho_file = file.cast(File.MachO) orelse unreachable;
+            const d_sym = &macho_file.d_sym orelse unreachable;
+            const dwarf_segment = &d_sym.load_commands.items[d_sym.dwarf_segment_cmd_index orelse unreachable].segment;
+            const debug_abbrev_sect = &dwarf_segment.sections.items[d_sym.debug_abbrev_section_index orelse unreachable];
             const allocated_size = d_sym.allocatedSize(debug_abbrev_sect.offset);
             if (needed_size > allocated_size) {
                 debug_abbrev_sect.size = 0; // free the space
@@ -1550,7 +1550,7 @@ pub fn writeDbgAbbrev(self: *Dwarf, file: *File) !void {
             try d_sym.file.pwriteAll(&abbrev_buf, file_pos);
         },
         .wasm => {
-            const wasm_file = file.cast(File.Wasm).?;
+            const wasm_file = file.cast(File.Wasm) orelse unreachable;
             try wasm_file.debug_abbrev.resize(wasm_file.base.allocator, needed_size);
             mem.copy(u8, wasm_file.debug_abbrev.items, &abbrev_buf);
         },
@@ -1587,7 +1587,7 @@ pub fn writeDbgInfoHeader(self: *Dwarf, file: *File, module: *Module, low_pc: u6
     // We have to come back and write it later after we know the size.
     const after_init_len = di_buf.items.len + init_len_size;
     // +1 for the final 0 that ends the compilation unit children.
-    const dbg_info_end = self.getDebugInfoEnd().? + 1;
+    const dbg_info_end = self.getDebugInfoEnd() orelse unreachable + 1;
     const init_len = dbg_info_end - after_init_len;
     if (self.tag == .macho) {
         mem.writeIntLittle(u32, di_buf.addManyAsArrayAssumeCapacity(4), @intCast(u32, init_len));
@@ -1601,7 +1601,7 @@ pub fn writeDbgInfoHeader(self: *Dwarf, file: *File, module: *Module, low_pc: u6
         },
     }
     mem.writeInt(u16, di_buf.addManyAsArrayAssumeCapacity(2), 4, target_endian); // DWARF version
-    const abbrev_offset = self.abbrev_table_offset.?;
+    const abbrev_offset = self.abbrev_table_offset orelse unreachable;
     if (self.tag == .macho) {
         mem.writeIntLittle(u32, di_buf.addManyAsArrayAssumeCapacity(4), @intCast(u32, abbrev_offset));
         di_buf.appendAssumeCapacity(8); // address size
@@ -1648,21 +1648,21 @@ pub fn writeDbgInfoHeader(self: *Dwarf, file: *File, module: *Module, low_pc: u6
     const jmp_amt = first_dbg_info_off - di_buf.items.len;
     switch (self.tag) {
         .elf => {
-            const elf_file = file.cast(File.Elf).?;
-            const debug_info_sect = elf_file.sections.items[elf_file.debug_info_section_index.?];
+            const elf_file = file.cast(File.Elf) orelse unreachable;
+            const debug_info_sect = elf_file.sections.items[elf_file.debug_info_section_index orelse unreachable];
             const file_pos = debug_info_sect.sh_offset;
-            try pwriteDbgInfoNops(elf_file.base.file.?, file_pos, 0, di_buf.items, jmp_amt, false);
+            try pwriteDbgInfoNops(elf_file.base.file orelse unreachable, file_pos, 0, di_buf.items, jmp_amt, false);
         },
         .macho => {
-            const macho_file = file.cast(File.MachO).?;
-            const d_sym = &macho_file.d_sym.?;
-            const dwarf_seg = d_sym.load_commands.items[d_sym.dwarf_segment_cmd_index.?].segment;
-            const debug_info_sect = dwarf_seg.sections.items[d_sym.debug_info_section_index.?];
+            const macho_file = file.cast(File.MachO) orelse unreachable;
+            const d_sym = &macho_file.d_sym orelse unreachable;
+            const dwarf_seg = d_sym.load_commands.items[d_sym.dwarf_segment_cmd_index orelse unreachable].segment;
+            const debug_info_sect = dwarf_seg.sections.items[d_sym.debug_info_section_index orelse unreachable];
             const file_pos = debug_info_sect.offset;
             try pwriteDbgInfoNops(d_sym.file, file_pos, 0, di_buf.items, jmp_amt, false);
         },
         .wasm => {
-            const wasm_file = file.cast(File.Wasm).?;
+            const wasm_file = file.cast(File.Wasm) orelse unreachable;
             writeDbgInfoNopsBuffered(wasm_file.debug_info.items, 0, 0, di_buf.items, jmp_amt, false);
         },
         else => unreachable,
@@ -1965,8 +1965,8 @@ pub fn writeDbgAranges(self: *Dwarf, file: *File, addr: u64, size: u64) !void {
     const needed_size = di_buf.items.len;
     switch (self.tag) {
         .elf => {
-            const elf_file = file.cast(File.Elf).?;
-            const debug_aranges_sect = &elf_file.sections.items[elf_file.debug_aranges_section_index.?];
+            const elf_file = file.cast(File.Elf) orelse unreachable;
+            const debug_aranges_sect = &elf_file.sections.items[elf_file.debug_aranges_section_index orelse unreachable];
             const allocated_size = elf_file.allocatedSize(debug_aranges_sect.sh_offset);
             if (needed_size > allocated_size) {
                 debug_aranges_sect.sh_size = 0; // free the space
@@ -1978,13 +1978,13 @@ pub fn writeDbgAranges(self: *Dwarf, file: *File, addr: u64, size: u64) !void {
                 debug_aranges_sect.sh_offset + needed_size,
             });
             const file_pos = debug_aranges_sect.sh_offset;
-            try elf_file.base.file.?.pwriteAll(di_buf.items, file_pos);
+            try elf_file.base.file orelse unreachable.pwriteAll(di_buf.items, file_pos);
         },
         .macho => {
-            const macho_file = file.cast(File.MachO).?;
-            const d_sym = &macho_file.d_sym.?;
-            const dwarf_seg = &d_sym.load_commands.items[d_sym.dwarf_segment_cmd_index.?].segment;
-            const debug_aranges_sect = &dwarf_seg.sections.items[d_sym.debug_aranges_section_index.?];
+            const macho_file = file.cast(File.MachO) orelse unreachable;
+            const d_sym = &macho_file.d_sym orelse unreachable;
+            const dwarf_seg = &d_sym.load_commands.items[d_sym.dwarf_segment_cmd_index orelse unreachable].segment;
+            const debug_aranges_sect = &dwarf_seg.sections.items[d_sym.debug_aranges_section_index orelse unreachable];
             const allocated_size = d_sym.allocatedSize(debug_aranges_sect.offset);
             if (needed_size > allocated_size) {
                 debug_aranges_sect.size = 0; // free the space
@@ -2001,7 +2001,7 @@ pub fn writeDbgAranges(self: *Dwarf, file: *File, addr: u64, size: u64) !void {
             try d_sym.file.pwriteAll(di_buf.items, file_pos);
         },
         .wasm => {
-            const wasm_file = file.cast(File.Wasm).?;
+            const wasm_file = file.cast(File.Wasm) orelse unreachable;
             try wasm_file.debug_aranges.resize(wasm_file.base.allocator, needed_size);
             mem.copy(u8, wasm_file.debug_aranges.items, di_buf.items);
         },
@@ -2020,7 +2020,7 @@ pub fn writeDbgLineHeader(self: *Dwarf, file: *File, module: *Module) !void {
     };
 
     const dbg_line_prg_off = self.getDebugLineProgramOff() orelse return;
-    const dbg_line_prg_end = self.getDebugLineProgramEnd().?;
+    const dbg_line_prg_end = self.getDebugLineProgramEnd() orelse unreachable;
     assert(dbg_line_prg_end != 0);
 
     // The size of this header is variable, depending on the number of directories,
@@ -2111,21 +2111,21 @@ pub fn writeDbgLineHeader(self: *Dwarf, file: *File, module: *Module) !void {
     const jmp_amt = dbg_line_prg_off - di_buf.items.len;
     switch (self.tag) {
         .elf => {
-            const elf_file = file.cast(File.Elf).?;
-            const debug_line_sect = elf_file.sections.items[elf_file.debug_line_section_index.?];
+            const elf_file = file.cast(File.Elf) orelse unreachable;
+            const debug_line_sect = elf_file.sections.items[elf_file.debug_line_section_index orelse unreachable];
             const file_pos = debug_line_sect.sh_offset;
-            try pwriteDbgLineNops(elf_file.base.file.?, file_pos, 0, di_buf.items, jmp_amt);
+            try pwriteDbgLineNops(elf_file.base.file orelse unreachable, file_pos, 0, di_buf.items, jmp_amt);
         },
         .macho => {
-            const macho_file = file.cast(File.MachO).?;
-            const d_sym = &macho_file.d_sym.?;
-            const dwarf_seg = d_sym.load_commands.items[d_sym.dwarf_segment_cmd_index.?].segment;
-            const debug_line_sect = dwarf_seg.sections.items[d_sym.debug_line_section_index.?];
+            const macho_file = file.cast(File.MachO) orelse unreachable;
+            const d_sym = &macho_file.d_sym orelse unreachable;
+            const dwarf_seg = d_sym.load_commands.items[d_sym.dwarf_segment_cmd_index orelse unreachable].segment;
+            const debug_line_sect = dwarf_seg.sections.items[d_sym.debug_line_section_index orelse unreachable];
             const file_pos = debug_line_sect.offset;
             try pwriteDbgLineNops(d_sym.file, file_pos, 0, di_buf.items, jmp_amt);
         },
         .wasm => {
-            const wasm_file = file.cast(File.Wasm).?;
+            const wasm_file = file.cast(File.Wasm) orelse unreachable;
             writeDbgLineNopsBuffered(wasm_file.debug_line.items, 0, 0, di_buf.items, jmp_amt);
         },
         else => unreachable,
@@ -2240,15 +2240,15 @@ pub fn flushModule(self: *Dwarf, file: *File, module: *Module) !void {
         const file_pos = blk: {
             switch (self.tag) {
                 .elf => {
-                    const elf_file = file.cast(File.Elf).?;
-                    const debug_info_sect = &elf_file.sections.items[elf_file.debug_info_section_index.?];
+                    const elf_file = file.cast(File.Elf) orelse unreachable;
+                    const debug_info_sect = &elf_file.sections.items[elf_file.debug_info_section_index orelse unreachable];
                     break :blk debug_info_sect.sh_offset;
                 },
                 .macho => {
-                    const macho_file = file.cast(File.MachO).?;
-                    const d_sym = &macho_file.d_sym.?;
-                    const dwarf_segment = &d_sym.load_commands.items[d_sym.dwarf_segment_cmd_index.?].segment;
-                    const debug_info_sect = &dwarf_segment.sections.items[d_sym.debug_info_section_index.?];
+                    const macho_file = file.cast(File.MachO) orelse unreachable;
+                    const d_sym = &macho_file.d_sym orelse unreachable;
+                    const dwarf_segment = &d_sym.load_commands.items[d_sym.dwarf_segment_cmd_index orelse unreachable].segment;
+                    const debug_info_sect = &dwarf_segment.sections.items[d_sym.debug_info_section_index orelse unreachable];
                     break :blk debug_info_sect.offset;
                 },
                 // for wasm, the offset is always 0 as we write to memory first
@@ -2263,16 +2263,16 @@ pub fn flushModule(self: *Dwarf, file: *File, module: *Module) !void {
         while (self.global_abbrev_relocs.popOrNull()) |reloc| {
             switch (self.tag) {
                 .elf => {
-                    const elf_file = file.cast(File.Elf).?;
-                    try elf_file.base.file.?.pwriteAll(&buf, file_pos + reloc.atom.off + reloc.offset);
+                    const elf_file = file.cast(File.Elf) orelse unreachable;
+                    try elf_file.base.file orelse unreachable.pwriteAll(&buf, file_pos + reloc.atom.off + reloc.offset);
                 },
                 .macho => {
-                    const macho_file = file.cast(File.MachO).?;
-                    const d_sym = &macho_file.d_sym.?;
+                    const macho_file = file.cast(File.MachO) orelse unreachable;
+                    const d_sym = &macho_file.d_sym orelse unreachable;
                     try d_sym.file.pwriteAll(&buf, file_pos + reloc.atom.off + reloc.offset);
                 },
                 .wasm => {
-                    const wasm_file = file.cast(File.Wasm).?;
+                    const wasm_file = file.cast(File.Wasm) orelse unreachable;
                     mem.copy(u8, wasm_file.debug_info.items[reloc.atom.off + reloc.offset ..], &buf);
                 },
                 else => unreachable,

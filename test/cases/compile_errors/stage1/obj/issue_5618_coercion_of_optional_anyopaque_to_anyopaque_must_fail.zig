@@ -8,4 +8,4 @@ export fn foo() void {
 // backend=stage1
 // target=native
 //
-// tmp.zig:4:9: error: cannot convert optional to payload type. consider using `.?`, `orelse`, or `if`. expected type '*anyopaque', found '?*anyopaque'
+// tmp.zig:4:9: error: cannot convert optional to payload type. consider using ` orelse unreachable`, `orelse`, or `if`. expected type '*anyopaque', found '?*anyopaque'

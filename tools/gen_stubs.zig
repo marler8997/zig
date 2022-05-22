@@ -75,7 +75,7 @@ const MultiSym = struct {
                 size = ms.size[i];
             }
         }
-        return size.?;
+        return size orelse unreachable;
     }
 
     fn commonBinding(ms: MultiSym) ?u4 {
@@ -90,7 +90,7 @@ const MultiSym = struct {
                 binding = ms.binding[i];
             }
         }
-        return binding.?;
+        return binding orelse unreachable;
     }
 
     fn isPtrSize(ms: MultiSym) bool {

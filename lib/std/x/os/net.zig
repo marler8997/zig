@@ -481,7 +481,7 @@ pub const IPv6 = extern struct {
                     if (!abbrv or out[0] != 0xFF and out[1] != 0xFF) {
                         return error.MalformedV4Mapping;
                     }
-                    const start_index = mem.lastIndexOfScalar(u8, buf[0..i], ':').? + 1;
+                    const start_index = mem.lastIndexOfScalar(u8, buf[0..i], ':') orelse unreachable + 1;
                     const v4 = try IPv4.parse(buf[start_index..]);
                     octets[10] = 0xFF;
                     octets[11] = 0xFF;

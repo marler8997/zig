@@ -650,7 +650,7 @@ pub const HeapAllocator = switch (builtin.os.tag) {
                 const hh = os.windows.kernel32.HeapCreate(options, amt, 0) orelse return error.OutOfMemory;
                 const other_hh = @cmpxchgStrong(?HeapHandle, &self.heap_handle, null, hh, .SeqCst, .SeqCst) orelse break :blk hh;
                 os.windows.HeapDestroy(hh);
-                break :blk other_hh.?; // can't be null because of the cmpxchg
+                break :blk other_hh orelse unreachable; // can't be null because of the cmpxchg
             };
             const ptr = os.windows.kernel32.HeapAlloc(heap_handle, 0, amt) orelse return error.OutOfMemory;
             const root_addr = @ptrToInt(ptr);
@@ -682,7 +682,7 @@ pub const HeapAllocator = switch (builtin.os.tag) {
             const align_offset = @ptrToInt(buf.ptr) - root_addr;
             const amt = align_offset + new_size + @sizeOf(usize);
             const new_ptr = os.windows.kernel32.HeapReAlloc(
-                self.heap_handle.?,
+                self.heap_handle orelse unreachable,
                 os.windows.HEAP_REALLOC_IN_PLACE_ONLY,
                 @intToPtr(*anyopaque, root_addr),
                 amt,
@@ -690,7 +690,7 @@ pub const HeapAllocator = switch (builtin.os.tag) {
             assert(new_ptr == @intToPtr(*anyopaque, root_addr));
             const return_len = init: {
                 if (len_align == 0) break :init new_size;
-                const full_len = os.windows.kernel32.HeapSize(self.heap_handle.?, 0, new_ptr);
+                const full_len = os.windows.kernel32.HeapSize(self.heap_handle orelse unreachable, 0, new_ptr);
                 assert(full_len != std.math.maxInt(usize));
                 assert(full_len >= amt);
                 break :init mem.alignBackwardAnyAlign(full_len - align_offset, len_align);
@@ -707,7 +707,7 @@ pub const HeapAllocator = switch (builtin.os.tag) {
         ) void {
             _ = buf_align;
             _ = return_address;
-            os.windows.HeapFree(self.heap_handle.?, 0, @intToPtr(*anyopaque, getRecordPtr(buf).*));
+            os.windows.HeapFree(self.heap_handle orelse unreachable, 0, @intToPtr(*anyopaque, getRecordPtr(buf).*));
         }
     },
     else => @compileError("Unsupported OS"),

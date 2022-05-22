@@ -146,7 +146,7 @@ const ObjectArray = struct {
             self.slots[index] = @ptrCast(*anyopaque, data);
         }
 
-        return self.slots[index].?;
+        return self.slots[index] orelse unreachable;
     }
 };
 

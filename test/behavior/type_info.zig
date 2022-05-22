@@ -113,7 +113,7 @@ fn testNullTerminatedPtr() !void {
     try expect(ptr_info.Pointer.size == .Many);
     try expect(ptr_info.Pointer.is_const == false);
     try expect(ptr_info.Pointer.is_volatile == false);
-    try expect(@ptrCast(*const u8, ptr_info.Pointer.sentinel.?).* == 0);
+    try expect(@ptrCast(*const u8, ptr_info.Pointer.sentinel orelse unreachable).* == 0);
 
     try expect(@typeInfo([:0]u8).Pointer.sentinel != null);
 }
@@ -151,7 +151,7 @@ fn testArray() !void {
         const info = @typeInfo([10:0]u8);
         try expect(info.Array.len == 10);
         try expect(info.Array.child == u8);
-        try expect(@ptrCast(*const u8, info.Array.sentinel.?).* == @as(u8, 0));
+        try expect(@ptrCast(*const u8, info.Array.sentinel orelse unreachable).* == @as(u8, 0));
         try expect(@sizeOf([10:0]u8) == info.Array.len + 1);
     }
 }
@@ -174,8 +174,8 @@ fn testErrorSet() !void {
 
     const error_set_info = @typeInfo(TestErrorSet);
     try expect(error_set_info == .ErrorSet);
-    try expect(error_set_info.ErrorSet.?.len == 3);
-    try expect(mem.eql(u8, error_set_info.ErrorSet.?[0].name, "First"));
+    try expect(error_set_info.ErrorSet orelse unreachable.len == 3);
+    try expect(mem.eql(u8, error_set_info.ErrorSet orelse unreachable[0].name, "First"));
 
     const error_union_info = @typeInfo(TestErrorSet!usize);
     try expect(error_union_info == .ErrorUnion);
@@ -196,8 +196,8 @@ test "type info: error set single value" {
 
     const error_set_info = @typeInfo(@TypeOf(TestSet));
     try expect(error_set_info == .ErrorSet);
-    try expect(error_set_info.ErrorSet.?.len == 1);
-    try expect(mem.eql(u8, error_set_info.ErrorSet.?[0].name, "One"));
+    try expect(error_set_info.ErrorSet orelse unreachable.len == 1);
+    try expect(mem.eql(u8, error_set_info.ErrorSet orelse unreachable[0].name, "One"));
 }
 
 test "type info: error set merged" {
@@ -212,10 +212,10 @@ test "type info: error set merged" {
 
     const error_set_info = @typeInfo(TestSet);
     try expect(error_set_info == .ErrorSet);
-    try expect(error_set_info.ErrorSet.?.len == 3);
-    try expect(mem.eql(u8, error_set_info.ErrorSet.?[0].name, "One"));
-    try expect(mem.eql(u8, error_set_info.ErrorSet.?[1].name, "Three"));
-    try expect(mem.eql(u8, error_set_info.ErrorSet.?[2].name, "Two"));
+    try expect(error_set_info.ErrorSet orelse unreachable.len == 3);
+    try expect(mem.eql(u8, error_set_info.ErrorSet orelse unreachable[0].name, "One"));
+    try expect(mem.eql(u8, error_set_info.ErrorSet orelse unreachable[1].name, "Three"));
+    try expect(mem.eql(u8, error_set_info.ErrorSet orelse unreachable[2].name, "Two"));
 }
 
 test "type info: enum info" {
@@ -254,7 +254,7 @@ fn testUnion() !void {
     const typeinfo_info = @typeInfo(Type);
     try expect(typeinfo_info == .Union);
     try expect(typeinfo_info.Union.layout == .Auto);
-    try expect(typeinfo_info.Union.tag_type.? == TypeId);
+    try expect(typeinfo_info.Union.tag_type orelse unreachable == TypeId);
     try expect(typeinfo_info.Union.fields.len == 25);
     try expect(typeinfo_info.Union.fields[4].field_type == @TypeOf(@typeInfo(u8).Int));
     try expect(typeinfo_info.Union.decls.len == 22);
@@ -294,8 +294,8 @@ fn testStruct() !void {
     const unpacked_struct_info = @typeInfo(TestStruct);
     try expect(unpacked_struct_info.Struct.is_tuple == false);
     try expect(unpacked_struct_info.Struct.fields[0].alignment == @alignOf(u32));
-    try expect(@ptrCast(*const u32, unpacked_struct_info.Struct.fields[0].default_value.?).* == 4);
-    try expect(mem.eql(u8, "foobar", @ptrCast(*const *const [6:0]u8, unpacked_struct_info.Struct.fields[1].default_value.?).*));
+    try expect(@ptrCast(*const u32, unpacked_struct_info.Struct.fields[0].default_value orelse unreachable).* == 4);
+    try expect(mem.eql(u8, "foobar", @ptrCast(*const *const [6:0]u8, unpacked_struct_info.Struct.fields[1].default_value orelse unreachable).*));
 }
 
 const TestStruct = struct {
@@ -319,7 +319,7 @@ fn testPackedStruct() !void {
     try expect(struct_info.Struct.fields[0].alignment == 0);
     try expect(struct_info.Struct.fields[2].field_type == f32);
     try expect(struct_info.Struct.fields[2].default_value == null);
-    try expect(@ptrCast(*const u32, struct_info.Struct.fields[3].default_value.?).* == 4);
+    try expect(@ptrCast(*const u32, struct_info.Struct.fields[3].default_value orelse unreachable).* == 4);
     try expect(struct_info.Struct.fields[3].alignment == 0);
     try expect(struct_info.Struct.decls.len == 2);
     try expect(struct_info.Struct.decls[0].is_pub);
@@ -372,7 +372,7 @@ fn testFunction() !void {
     try expect(!fn_info.Fn.is_generic);
     try expect(fn_info.Fn.args.len == 2);
     try expect(fn_info.Fn.is_var_args);
-    try expect(fn_info.Fn.return_type.? == usize);
+    try expect(fn_info.Fn.return_type orelse unreachable == usize);
     const fn_aligned_info = @typeInfo(@TypeOf(fooAligned));
     try expect(fn_aligned_info.Fn.alignment == 4);
 }
@@ -467,7 +467,7 @@ fn testAnyFrame() !void {
     {
         const anyframe_info = @typeInfo(anyframe->i32);
         try expect(anyframe_info == .AnyFrame);
-        try expect(anyframe_info.AnyFrame.child.? == i32);
+        try expect(anyframe_info.AnyFrame.child orelse unreachable == i32);
     }
 
     {

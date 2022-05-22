@@ -1,5 +1,5 @@
 fn entry(a: ?*addrspace(.gs) i32) *i32 {
-    return a.?;
+    return a orelse unreachable;
 }
 pub fn main() void {
     _ = entry;

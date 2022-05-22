@@ -283,7 +283,7 @@ pub fn openPath(allocator: Allocator, sub_path: []const u8, options: link.Option
     errdefer wasm_bin.base.destroy();
 
     // TODO: read the file and keep valid parts instead of truncating
-    const file = try options.emit.?.directory.handle.createFile(sub_path, .{ .truncate = true, .read = true });
+    const file = try options.emit orelse unreachable.directory.handle.createFile(sub_path, .{ .truncate = true, .read = true });
     wasm_bin.base.file = file;
     wasm_bin.name = sub_path;
 
@@ -474,7 +474,7 @@ pub fn deinit(self: *Wasm) void {
         gpa.free(segment_info.name);
     }
     for (self.objects.items) |*object| {
-        object.file.?.close();
+        object.file orelse unreachable.close();
         object.deinit(gpa);
     }
 
@@ -520,7 +520,7 @@ pub fn deinit(self: *Wasm) void {
 
 pub fn allocateDeclIndexes(self: *Wasm, decl_index: Module.Decl.Index) !void {
     if (self.llvm_object) |_| return;
-    const decl = self.base.options.module.?.declPtr(decl_index);
+    const decl = self.base.options.module orelse unreachable.declPtr(decl_index);
     if (decl.link.wasm.sym_index != 0) return;
 
     try self.symbols.ensureUnusedCapacity(self.base.allocator, 1);
@@ -596,7 +596,7 @@ pub fn updateFunc(self: *Wasm, mod: *Module, func: *Module.Fn, air: Air, livenes
             // which isn't known until flush().
             0,
             code.len,
-            &decl_state.?,
+            &decl_state orelse unreachable,
         );
     }
     return self.finishUpdateDecl(decl, code);
@@ -672,7 +672,7 @@ pub fn updateDeclLineNumber(self: *Wasm, mod: *Module, decl: *const Module.Decl)
 
 fn finishUpdateDecl(self: *Wasm, decl: *Module.Decl, code: []const u8) !void {
     if (code.len == 0) return;
-    const mod = self.base.options.module.?;
+    const mod = self.base.options.module orelse unreachable;
     const atom: *Atom = &decl.link.wasm;
     atom.size = @intCast(u32, code.len);
     atom.alignment = decl.ty.abiAlignment(self.base.options.target);
@@ -692,7 +692,7 @@ fn finishUpdateDecl(self: *Wasm, decl: *Module.Decl, code: []const u8) !void {
 pub fn lowerUnnamedConst(self: *Wasm, tv: TypedValue, decl_index: Module.Decl.Index) !u32 {
     assert(tv.ty.zigTypeTag() != .Fn); // cannot create local symbols for functions
 
-    const mod = self.base.options.module.?;
+    const mod = self.base.options.module orelse unreachable;
     const decl = mod.declPtr(decl_index);
 
     // Create and initialize a new local symbol and atom
@@ -760,12 +760,12 @@ pub fn getDeclVAddr(
     decl_index: Module.Decl.Index,
     reloc_info: link.File.RelocInfo,
 ) !u64 {
-    const mod = self.base.options.module.?;
+    const mod = self.base.options.module orelse unreachable;
     const decl = mod.declPtr(decl_index);
     const target_symbol_index = decl.link.wasm.sym_index;
     assert(target_symbol_index != 0);
     assert(reloc_info.parent_atom_index != 0);
-    const atom = self.symbol_atom.get(.{ .file = null, .index = reloc_info.parent_atom_index }).?;
+    const atom = self.symbol_atom.get(.{ .file = null, .index = reloc_info.parent_atom_index }) orelse unreachable;
     const is_wasm32 = self.base.options.target.cpu.arch == .wasm32;
     if (decl.ty.zigTypeTag() == .Fn) {
         assert(reloc_info.addend == 0); // addend not allowed for function relocations
@@ -907,7 +907,7 @@ pub fn freeDecl(self: *Wasm, decl_index: Module.Decl.Index) void {
     if (build_options.have_llvm) {
         if (self.llvm_object) |llvm_object| return llvm_object.freeDecl(decl_index);
     }
-    const mod = self.base.options.module.?;
+    const mod = self.base.options.module orelse unreachable;
     const decl = mod.declPtr(decl_index);
     const atom = &decl.link.wasm;
     self.symbols_free_list.append(self.base.allocator, atom.sym_index) catch {};
@@ -969,7 +969,7 @@ pub fn addOrUpdateImport(self: *Wasm, decl: *Module.Decl) !void {
     switch (decl.ty.zigTypeTag()) {
         .Fn => {
             const gop = try self.imports.getOrPut(self.base.allocator, .{ .index = symbol_index, .file = null });
-            const module_name = if (decl.getExternFn().?.lib_name) |lib_name| blk: {
+            const module_name = if (decl.getExternFn() orelse unreachable.lib_name) |lib_name| blk: {
                 break :blk mem.sliceTo(lib_name, 0);
             } else self.host_name;
             if (!gop.found_existing) {
@@ -1008,7 +1008,7 @@ fn parseAtom(self: *Wasm, atom: *Atom, kind: Kind) !void {
                 });
             }
 
-            break :result self.code_section_index.?;
+            break :result self.code_section_index orelse unreachable;
         },
         .data => result: {
             // TODO: Add mutables global decls to .bss section instead
@@ -1125,7 +1125,7 @@ fn setupImports(self: *Wasm) !void {
         }
 
         log.debug("Symbol '{s}' will be imported from the host", .{symbol_loc.getName(self)});
-        const object = self.objects.items[symbol_loc.file.?];
+        const object = self.objects.items[symbol_loc.file orelse unreachable];
         const import = object.findImport(symbol.tag.externalType(), symbol.index);
 
         // We copy the import to a new import to ensure the names contain references
@@ -1179,7 +1179,7 @@ fn setupImports(self: *Wasm) !void {
 fn mergeSections(self: *Wasm) !void {
     // append the indirect function table if initialized
     if (self.string_table.getOffset("__indirect_function_table")) |offset| {
-        const sym_loc = self.globals.get(offset).?;
+        const sym_loc = self.globals.get(offset) orelse unreachable;
         const table: wasm.Table = .{
             .limits = .{ .min = @intCast(u32, self.function_table.count()), .max = null },
             .reftype = .funcref,
@@ -1195,7 +1195,7 @@ fn mergeSections(self: *Wasm) !void {
             continue;
         }
 
-        const object = self.objects.items[sym_loc.file.?];
+        const object = self.objects.items[sym_loc.file orelse unreachable];
         const symbol = &object.symtable[sym_loc.index];
         if (symbol.isUndefined() or (symbol.tag != .function and symbol.tag != .global and symbol.tag != .table)) {
             // Skip undefined symbols as they go in the `import` section
@@ -1239,7 +1239,7 @@ fn mergeTypes(self: *Wasm) !void {
             // zig code-generated symbols are already present in final type section
             continue;
         }
-        const object = self.objects.items[sym_loc.file.?];
+        const object = self.objects.items[sym_loc.file orelse unreachable];
         const symbol = object.symtable[sym_loc.index];
         if (symbol.tag != .function) {
             // Only functions have types
@@ -1248,7 +1248,7 @@ fn mergeTypes(self: *Wasm) !void {
 
         if (symbol.isUndefined()) {
             log.debug("Adding type from extern function '{s}'", .{sym_loc.getName(self)});
-            const import: *types.Import = self.imports.getPtr(sym_loc).?;
+            const import: *types.Import = self.imports.getPtr(sym_loc) orelse unreachable;
             const original_type = object.func_types[import.kind.function];
             import.kind.function = try self.putOrGetFuncType(original_type);
         } else {
@@ -1302,7 +1302,7 @@ fn setupStart(self: *Wasm) !void {
         return error.MissingSymbol;
     };
 
-    const symbol_loc = self.globals.get(symbol_name_offset).?;
+    const symbol_loc = self.globals.get(symbol_name_offset) orelse unreachable;
     const symbol = symbol_loc.getSymbol(self);
     if (symbol.tag != .function) {
         log.err("Entry symbol '{s}' is not a function", .{entry_name});
@@ -1483,7 +1483,7 @@ pub fn getErrorTableSymbol(self: *Wasm) !u32 {
 /// The table is what is being pointed to within the runtime bodies that are generated.
 fn populateErrorNameTable(self: *Wasm) !void {
     const symbol_index = self.error_table_symbol orelse return;
-    const atom: *Atom = self.symbol_atom.get(.{ .file = null, .index = symbol_index }).?;
+    const atom: *Atom = self.symbol_atom.get(.{ .file = null, .index = symbol_index }) orelse unreachable;
     // Rather than creating a symbol for each individual error name,
     // we create a symbol for the entire region of error names. We then calculate
     // the pointers into the list using addends which are appended to the relocation.
@@ -1511,7 +1511,7 @@ fn populateErrorNameTable(self: *Wasm) !void {
 
     // Addend for each relocation to the table
     var addend: u32 = 0;
-    const mod = self.base.options.module.?;
+    const mod = self.base.options.module orelse unreachable;
     for (mod.error_name_list.items) |error_name| {
         const len = @intCast(u32, error_name.len + 1); // names are 0-termianted
 
@@ -1560,7 +1560,7 @@ pub fn getDebugInfoIndex(self: *Wasm) !u32 {
             // debug sections always have alignment '1'
             .alignment = 1,
         };
-        return self.debug_info_index.?;
+        return self.debug_info_index orelse unreachable;
     };
 }
 
@@ -1574,7 +1574,7 @@ pub fn getDebugLineIndex(self: *Wasm) !u32 {
             .offset = 0,
             .alignment = 1,
         };
-        return self.debug_line_index.?;
+        return self.debug_line_index orelse unreachable;
     };
 }
 
@@ -1582,7 +1582,7 @@ fn resetState(self: *Wasm) void {
     for (self.segment_info.items) |*segment_info| {
         self.base.allocator.free(segment_info.name);
     }
-    const mod = self.base.options.module.?;
+    const mod = self.base.options.module orelse unreachable;
     var decl_it = self.decls.keyIterator();
     while (decl_it.next()) |decl_index_ptr| {
         const decl = mod.declPtr(decl_index_ptr.*);
@@ -1676,7 +1676,7 @@ pub fn flushModule(self: *Wasm, comp: *Compilation, prog_node: *std.Progress.Nod
     defer self.resetState();
     try self.setupStart();
     try self.setupImports();
-    const mod = self.base.options.module.?;
+    const mod = self.base.options.module orelse unreachable;
     var decl_it = self.decls.keyIterator();
     while (decl_it.next()) |decl_index_ptr| {
         const decl = mod.declPtr(decl_index_ptr.*);
@@ -1700,7 +1700,7 @@ pub fn flushModule(self: *Wasm, comp: *Compilation, prog_node: *std.Progress.Nod
     }
 
     if (self.dwarf) |*dwarf| {
-        try dwarf.flushModule(&self.base, self.base.options.module.?);
+        try dwarf.flushModule(&self.base, self.base.options.module orelse unreachable);
     }
     try self.allocateAtoms();
     try self.setupMemory();
@@ -1709,7 +1709,7 @@ pub fn flushModule(self: *Wasm, comp: *Compilation, prog_node: *std.Progress.Nod
     try self.mergeTypes();
     try self.setupExports();
 
-    const file = self.base.file.?;
+    const file = self.base.file orelse unreachable;
     const header_size = 5 + 1;
     const is_obj = self.base.options.output_mode == .Obj;
 
@@ -1935,7 +1935,7 @@ pub fn flushModule(self: *Wasm, comp: *Compilation, prog_node: *std.Progress.Nod
     if (self.code_section_index) |code_index| {
         const header_offset = try reserveVecSectionHeader(file);
         const writer = file.writer();
-        var atom: *Atom = self.atoms.get(code_index).?.getFirst();
+        var atom: *Atom = self.atoms.get(code_index) orelse unreachable.getFirst();
         while (true) {
             if (!is_obj) {
                 try atom.resolveRelocs(self);
@@ -1970,7 +1970,7 @@ pub fn flushModule(self: *Wasm, comp: *Compilation, prog_node: *std.Progress.Nod
             if (std.mem.eql(u8, entry.key_ptr.*, ".bss") and !import_memory) continue;
             segment_count += 1;
             const atom_index = entry.value_ptr.*;
-            var atom: *Atom = self.atoms.getPtr(atom_index).?.*.getFirst();
+            var atom: *Atom = self.atoms.getPtr(atom_index) orelse unreachable.*.getFirst();
             const segment = self.segments.items[atom_index];
 
             // flag and index to memory section (currently, there can only be 1 memory section in wasm)
@@ -2094,7 +2094,7 @@ fn emitNameSection(self: *Wasm, file: fs.File, arena: Allocator) !void {
     for (self.resolved_symbols.keys()) |sym_loc| {
         const symbol = sym_loc.getSymbol(self).*;
         const name = if (symbol.isUndefined()) blk: {
-            break :blk self.string_table.get(self.imports.get(sym_loc).?.name);
+            break :blk self.string_table.get(self.imports.get(sym_loc) orelse unreachable.name);
         } else sym_loc.getName(self);
         switch (symbol.tag) {
             .function => funcs.appendAssumeCapacity(.{ .index = symbol.index, .name = name }),
@@ -2214,8 +2214,8 @@ fn linkWithLLD(self: *Wasm, comp: *Compilation, prog_node: *std.Progress.Node) !
     defer arena_allocator.deinit();
     const arena = arena_allocator.allocator();
 
-    const directory = self.base.options.emit.?.directory; // Just an alias to make it shorter to type.
-    const full_out_path = try directory.join(arena, &[_][]const u8{self.base.options.emit.?.sub_path});
+    const directory = self.base.options.emit orelse unreachable.directory; // Just an alias to make it shorter to type.
+    const full_out_path = try directory.join(arena, &[_][]const u8{self.base.options.emit orelse unreachable.sub_path});
 
     // If there is no Zig code to compile, then we should skip flushing the output file because it
     // will not be part of the linker line anyway.
@@ -2233,7 +2233,7 @@ fn linkWithLLD(self: *Wasm, comp: *Compilation, prog_node: *std.Progress.Node) !
                     &[_][]const u8{obj_basename},
                 ),
                 .whole => break :blk try fs.path.join(arena, &.{
-                    fs.path.dirname(full_out_path).?, obj_basename,
+                    fs.path.dirname(full_out_path) orelse unreachable, obj_basename,
                 }),
             }
         }
@@ -2241,9 +2241,9 @@ fn linkWithLLD(self: *Wasm, comp: *Compilation, prog_node: *std.Progress.Node) !
         try self.flushModule(comp, prog_node);
 
         if (fs.path.dirname(full_out_path)) |dirname| {
-            break :blk try fs.path.join(arena, &.{ dirname, self.base.intermediary_basename.? });
+            break :blk try fs.path.join(arena, &.{ dirname, self.base.intermediary_basename orelse unreachable });
         } else {
-            break :blk self.base.intermediary_basename.?;
+            break :blk self.base.intermediary_basename orelse unreachable;
         }
     } else null;
 
@@ -2255,7 +2255,7 @@ fn linkWithLLD(self: *Wasm, comp: *Compilation, prog_node: *std.Progress.Node) !
     const is_obj = self.base.options.output_mode == .Obj;
 
     const compiler_rt_path: ?[]const u8 = if (self.base.options.include_compiler_rt and !is_obj)
-        comp.compiler_rt_static_lib.?.full_object_path
+        comp.compiler_rt_static_lib orelse unreachable.full_object_path
     else
         null;
 
@@ -2359,7 +2359,7 @@ fn linkWithLLD(self: *Wasm, comp: *Compilation, prog_node: *std.Progress.Node) !
         // We will invoke ourselves as a child process to gain access to LLD.
         // This is necessary because LLD does not behave properly as a library -
         // it calls exit() and does not reset all global data between invocations.
-        try argv.appendSlice(&[_][]const u8{ comp.self_exe_path.?, "wasm-ld" });
+        try argv.appendSlice(&[_][]const u8{ comp.self_exe_path orelse unreachable, "wasm-ld" });
         try argv.append("-error-limit=0");
 
         if (self.base.options.lto) {
@@ -2511,8 +2511,8 @@ fn linkWithLLD(self: *Wasm, comp: *Compilation, prog_node: *std.Progress.Node) !
                 }
 
                 if (self.base.options.link_libcpp) {
-                    try argv.append(comp.libcxx_static_lib.?.full_object_path);
-                    try argv.append(comp.libcxxabi_static_lib.?.full_object_path);
+                    try argv.append(comp.libcxx_static_lib orelse unreachable.full_object_path);
+                    try argv.append(comp.libcxxabi_static_lib orelse unreachable.full_object_path);
                 }
             }
         }
@@ -2545,7 +2545,7 @@ fn linkWithLLD(self: *Wasm, comp: *Compilation, prog_node: *std.Progress.Node) !
             !self.base.options.skip_linker_dependencies and
             !self.base.options.link_libc)
         {
-            try argv.append(comp.libc_static_lib.?.full_object_path);
+            try argv.append(comp.libc_static_lib orelse unreachable.full_object_path);
         }
 
         if (compiler_rt_path) |p| {
@@ -2586,7 +2586,7 @@ fn linkWithLLD(self: *Wasm, comp: *Compilation, prog_node: *std.Progress.Node) !
 
                 try child.spawn();
 
-                const stderr = try child.stderr.?.reader().readAllAlloc(arena, 10 * 1024 * 1024);
+                const stderr = try child.stderr orelse unreachable.reader().readAllAlloc(arena, 10 * 1024 * 1024);
 
                 const term = child.wait() catch |err| {
                     log.err("unable to spawn {s}: {s}", .{ argv.items[0], @errorName(err) });
@@ -2720,7 +2720,7 @@ fn emitSymbolTable(self: *Wasm, file: fs.File, arena: Allocator, symbol_table: *
 
                 if (symbol.isDefined()) {
                     try leb.writeULEB128(writer, symbol.index);
-                    const atom = self.symbol_atom.get(sym_loc).?;
+                    const atom = self.symbol_atom.get(sym_loc) orelse unreachable;
                     try leb.writeULEB128(writer, @as(u32, atom.offset));
                     try leb.writeULEB128(writer, @as(u32, atom.size));
                 }
@@ -2809,7 +2809,7 @@ fn emitCodeRelocations(
     const reloc_start = payload.items.len;
 
     var count: u32 = 0;
-    var atom: *Atom = self.atoms.get(code_index).?.getFirst();
+    var atom: *Atom = self.atoms.get(code_index) orelse unreachable.getFirst();
     // for each atom, we calculate the uleb size and append that
     var size_offset: u32 = 5; // account for code section size leb128
     while (true) {
@@ -2817,7 +2817,7 @@ fn emitCodeRelocations(
         for (atom.relocs.items) |relocation| {
             count += 1;
             const sym_loc: SymbolLoc = .{ .file = atom.file, .index = relocation.index };
-            const symbol_index = symbol_table.get(sym_loc).?;
+            const symbol_index = symbol_table.get(sym_loc) orelse unreachable;
             try leb.writeULEB128(writer, @enumToInt(relocation.relocation_type));
             const offset = atom.offset + relocation.offset + size_offset;
             try leb.writeULEB128(writer, offset);
@@ -2867,7 +2867,7 @@ fn emitDataRelocations(
     // for each atom, we calculate the uleb size and append that
     var size_offset: u32 = 5; // account for code section size leb128
     for (self.data_segments.values()) |segment_index| {
-        var atom: *Atom = self.atoms.get(segment_index).?.getFirst();
+        var atom: *Atom = self.atoms.get(segment_index) orelse unreachable.getFirst();
         while (true) {
             size_offset += getULEB128Size(atom.size);
             for (atom.relocs.items) |relocation| {
@@ -2876,7 +2876,7 @@ fn emitDataRelocations(
                     .file = atom.file,
                     .index = relocation.index,
                 };
-                const symbol_index = symbol_table.get(sym_loc).?;
+                const symbol_index = symbol_table.get(sym_loc) orelse unreachable;
                 try leb.writeULEB128(writer, @enumToInt(relocation.relocation_type));
                 const offset = atom.offset + relocation.offset + size_offset;
                 try leb.writeULEB128(writer, offset);

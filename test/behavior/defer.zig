@@ -55,7 +55,7 @@ test "return variable while defer expression in scope to modify it" {
 
     const S = struct {
         fn doTheTest() !void {
-            try expect(notNull().? == 1);
+            try expect(notNull() orelse unreachable == 1);
         }
 
         fn notNull() ?u8 {

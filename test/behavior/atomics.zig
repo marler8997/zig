@@ -303,7 +303,7 @@ fn testAtomicsWithType(comptime T: type, a: T, b: T) !void {
     try expect(@atomicRmw(T, &x, .Xchg, b, .SeqCst) == a);
     try expect(@cmpxchgStrong(T, &x, b, a, .SeqCst, .SeqCst) == null);
     if (@sizeOf(T) != 0)
-        try expect(@cmpxchgStrong(T, &x, b, a, .SeqCst, .SeqCst).? == a);
+        try expect(@cmpxchgStrong(T, &x, b, a, .SeqCst, .SeqCst) orelse unreachable == a);
 }
 
 test "return @atomicStore, using it as a void value" {

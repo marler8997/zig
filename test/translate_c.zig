@@ -1823,13 +1823,13 @@ pub fn addCases(cases: *tests.TranslateCContext) void {
         \\pub extern var fn_ptr: ?fn () callconv(.C) void;
         ,
         \\pub inline fn foo() void {
-        \\    return fn_ptr.?();
+        \\    return fn_ptr orelse unreachable();
         \\}
         ,
         \\pub extern var fn_ptr2: ?fn (c_int, f32) callconv(.C) u8;
         ,
         \\pub inline fn bar(arg_1: c_int, arg_2: f32) u8 {
-        \\    return fn_ptr2.?(arg_1, arg_2);
+        \\    return fn_ptr2 orelse unreachable(arg_1, arg_2);
         \\}
     });
 
@@ -1862,7 +1862,7 @@ pub fn addCases(cases: *tests.TranslateCContext) void {
         \\pub const glClearPFN = PFNGLCLEARPROC;
         ,
         \\pub inline fn glClearUnion(arg_2: GLbitfield) void {
-        \\    return glProcs.gl.Clear.?(arg_2);
+        \\    return glProcs.gl.Clear orelse unreachable(arg_2);
         \\}
         ,
         \\pub const OpenGLProcs = union_OpenGLProcs;
@@ -2794,11 +2794,11 @@ pub fn addCases(cases: *tests.TranslateCContext) void {
         \\pub export fn bar() void {
         \\    var f: ?fn () callconv(.C) void = foo;
         \\    var b: ?fn () callconv(.C) c_int = baz;
-        \\    f.?();
-        \\    f.?();
+        \\    f orelse unreachable();
+        \\    f orelse unreachable();
         \\    foo();
-        \\    _ = b.?();
-        \\    _ = b.?();
+        \\    _ = b orelse unreachable();
+        \\    _ = b orelse unreachable();
         \\    _ = baz();
         \\}
     });
@@ -3140,7 +3140,7 @@ pub fn addCases(cases: *tests.TranslateCContext) void {
         \\pub export fn foo(arg_baz: ?fn () callconv(.C) [*c]c_int) void {
         \\    var baz = arg_baz;
         \\    bar();
-        \\    _ = baz.?();
+        \\    _ = baz orelse unreachable();
         \\}
     });
 

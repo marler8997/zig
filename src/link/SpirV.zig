@@ -108,7 +108,7 @@ pub fn openPath(allocator: Allocator, sub_path: []const u8, options: link.Option
     errdefer spirv.base.destroy();
 
     // TODO: read the file and keep valid parts instead of truncating
-    const file = try options.emit.?.directory.handle.createFile(sub_path, .{ .truncate = true, .read = true });
+    const file = try options.emit orelse unreachable.directory.handle.createFile(sub_path, .{ .truncate = true, .read = true });
     spirv.base.file = file;
     return spirv;
 }
@@ -167,8 +167,8 @@ pub fn updateDeclExports(
 }
 
 pub fn freeDecl(self: *SpirV, decl_index: Module.Decl.Index) void {
-    const index = self.decl_table.getIndex(decl_index).?;
-    const module = self.base.options.module.?;
+    const index = self.decl_table.getIndex(decl_index) orelse unreachable;
+    const module = self.base.options.module orelse unreachable;
     const decl = module.declPtr(decl_index);
     if (decl.val.tag() == .function) {
         self.decl_table.values()[index].deinit(self.base.allocator);
@@ -196,7 +196,7 @@ pub fn flushModule(self: *SpirV, comp: *Compilation, prog_node: *std.Progress.No
     sub_prog_node.activate();
     defer sub_prog_node.end();
 
-    const module = self.base.options.module.?;
+    const module = self.base.options.module orelse unreachable;
     const target = comp.getTarget();
 
     var arena = std.heap.ArenaAllocator.init(self.base.allocator);
@@ -240,7 +240,7 @@ pub fn flushModule(self: *SpirV, comp: *Compilation, prog_node: *std.Progress.No
     try writeCapabilities(&spv, target);
     try writeMemoryModel(&spv, target);
 
-    try spv.flush(self.base.file.?);
+    try spv.flush(self.base.file orelse unreachable);
 }
 
 fn writeCapabilities(spv: *SpvModule, target: std.Target) !void {

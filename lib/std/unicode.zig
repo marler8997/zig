@@ -375,15 +375,15 @@ fn testUtf8IteratorOnAscii() !void {
     const s = Utf8View.initComptime("abc");
 
     var it1 = s.iterator();
-    try testing.expect(std.mem.eql(u8, "a", it1.nextCodepointSlice().?));
-    try testing.expect(std.mem.eql(u8, "b", it1.nextCodepointSlice().?));
-    try testing.expect(std.mem.eql(u8, "c", it1.nextCodepointSlice().?));
+    try testing.expect(std.mem.eql(u8, "a", it1.nextCodepointSlice() orelse unreachable));
+    try testing.expect(std.mem.eql(u8, "b", it1.nextCodepointSlice() orelse unreachable));
+    try testing.expect(std.mem.eql(u8, "c", it1.nextCodepointSlice() orelse unreachable));
     try testing.expect(it1.nextCodepointSlice() == null);
 
     var it2 = s.iterator();
-    try testing.expect(it2.nextCodepoint().? == 'a');
-    try testing.expect(it2.nextCodepoint().? == 'b');
-    try testing.expect(it2.nextCodepoint().? == 'c');
+    try testing.expect(it2.nextCodepoint() orelse unreachable == 'a');
+    try testing.expect(it2.nextCodepoint() orelse unreachable == 'b');
+    try testing.expect(it2.nextCodepoint() orelse unreachable == 'c');
     try testing.expect(it2.nextCodepoint() == null);
 }
 
@@ -405,15 +405,15 @@ fn testUtf8ViewOk() !void {
     const s = Utf8View.initComptime("東京市");
 
     var it1 = s.iterator();
-    try testing.expect(std.mem.eql(u8, "東", it1.nextCodepointSlice().?));
-    try testing.expect(std.mem.eql(u8, "京", it1.nextCodepointSlice().?));
-    try testing.expect(std.mem.eql(u8, "市", it1.nextCodepointSlice().?));
+    try testing.expect(std.mem.eql(u8, "東", it1.nextCodepointSlice() orelse unreachable));
+    try testing.expect(std.mem.eql(u8, "京", it1.nextCodepointSlice() orelse unreachable));
+    try testing.expect(std.mem.eql(u8, "市", it1.nextCodepointSlice() orelse unreachable));
     try testing.expect(it1.nextCodepointSlice() == null);
 
     var it2 = s.iterator();
-    try testing.expect(it2.nextCodepoint().? == 0x6771);
-    try testing.expect(it2.nextCodepoint().? == 0x4eac);
-    try testing.expect(it2.nextCodepoint().? == 0x5e02);
+    try testing.expect(it2.nextCodepoint() orelse unreachable == 0x6771);
+    try testing.expect(it2.nextCodepoint() orelse unreachable == 0x4eac);
+    try testing.expect(it2.nextCodepoint() orelse unreachable == 0x5e02);
     try testing.expect(it2.nextCodepoint() == null);
 }
 
@@ -516,7 +516,7 @@ fn testUtf8Peeking() !void {
     const s = Utf8View.initComptime("noël");
     var it = s.iterator();
 
-    try testing.expect(std.mem.eql(u8, "n", it.nextCodepointSlice().?));
+    try testing.expect(std.mem.eql(u8, "n", it.nextCodepointSlice() orelse unreachable));
 
     try testing.expect(std.mem.eql(u8, "o", it.peek(1)));
     try testing.expect(std.mem.eql(u8, "oë", it.peek(2)));
@@ -524,9 +524,9 @@ fn testUtf8Peeking() !void {
     try testing.expect(std.mem.eql(u8, "oël", it.peek(4)));
     try testing.expect(std.mem.eql(u8, "oël", it.peek(10)));
 
-    try testing.expect(std.mem.eql(u8, "o", it.nextCodepointSlice().?));
-    try testing.expect(std.mem.eql(u8, "ë", it.nextCodepointSlice().?));
-    try testing.expect(std.mem.eql(u8, "l", it.nextCodepointSlice().?));
+    try testing.expect(std.mem.eql(u8, "o", it.nextCodepointSlice() orelse unreachable));
+    try testing.expect(std.mem.eql(u8, "ë", it.nextCodepointSlice() orelse unreachable));
+    try testing.expect(std.mem.eql(u8, "l", it.nextCodepointSlice() orelse unreachable));
     try testing.expect(it.nextCodepointSlice() == null);
 
     try testing.expect(std.mem.eql(u8, &[_]u8{}, it.peek(1)));

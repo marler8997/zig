@@ -215,7 +215,7 @@ pub fn RegisterManager(
 
                 if (insts[j]) |inst| {
                     // Track the register
-                    const index = indexOfRegIntoTracked(reg).?; // indexOfReg() on a callee-preserved reg should never return null
+                    const index = indexOfRegIntoTracked(reg) orelse unreachable; // indexOfReg() on a callee-preserved reg should never return null
                     self.registers[index] = inst;
                     self.markRegUsed(reg);
                 }
@@ -260,7 +260,7 @@ pub fn RegisterManager(
 
                     regs[i] = reg;
                     self.markRegAllocated(reg);
-                    const index = indexOfRegIntoTracked(reg).?; // indexOfReg() on a callee-preserved reg should never return null
+                    const index = indexOfRegIntoTracked(reg) orelse unreachable; // indexOfReg() on a callee-preserved reg should never return null
                     if (insts[i]) |inst| {
                         // Track the register
                         if (self.isRegFree(reg)) {
@@ -543,7 +543,7 @@ pub fn RegisterManager(
 
 //                if (insts[j]) |inst| {
 //                    // Track the register
-//                    const index = indexOfRegIntoTracked(reg).?; // indexOfReg() on a callee-preserved reg should never return null
+//                    const index = indexOfRegIntoTracked(reg) orelse unreachable; // indexOfReg() on a callee-preserved reg should never return null
 //                    self.registers[index] = inst;
 //                    self.markRegUsed(reg);
 //                }
@@ -588,7 +588,7 @@ pub fn RegisterManager(
 
 //                    regs[i] = reg;
 //                    self.markRegAllocated(reg);
-//                    const index = indexOfRegIntoTracked(reg).?; // indexOfReg() on a callee-preserved reg should never return null
+//                    const index = indexOfRegIntoTracked(reg) orelse unreachable; // indexOfReg() on a callee-preserved reg should never return null
 //                    if (insts[i]) |inst| {
 //                        // Track the register
 //                        if (self.isRegFree(reg)) {
@@ -881,7 +881,7 @@ test "tryAllocRegs" {
         null,
         null,
         null,
-    }, gp).?);
+    }, gp) orelse unreachable);
 
     try expect(function.register_manager.isRegAllocated(.r0));
     try expect(function.register_manager.isRegAllocated(.r1));
@@ -900,7 +900,7 @@ test "tryAllocRegs" {
             null,
             null,
             null,
-        }, gp).?);
+        }, gp) orelse unreachable);
     }
     try expect(!function.register_manager.lockedRegsExist());
 
@@ -968,7 +968,7 @@ test "allocRegs: selectively reducing register pressure" {
         const regs = try function.register_manager.allocRegs(2, .{ null, null }, gp);
 
         try function.genAdd(result_reg, regs[0], regs[1]);
-        function.register_manager.unlockReg(lock.?);
+        function.register_manager.unlockReg(lock orelse unreachable);
 
         const extra_summand_reg = try function.register_manager.allocReg(null, gp);
         try function.genAdd(result_reg, result_reg, extra_summand_reg);

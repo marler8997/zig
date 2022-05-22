@@ -39,7 +39,7 @@ test "test maybe object and get a pointer to the inner value" {
         b.* = false;
     }
 
-    try expect(maybe_bool.? == false);
+    try expect(maybe_bool orelse unreachable == false);
 }
 
 test "rhs maybe unwrap return" {
@@ -58,9 +58,9 @@ test "maybe return" {
 }
 
 fn maybeReturnImpl() !void {
-    try expect(foo(1235).?);
+    try expect(foo(1235) orelse unreachable);
     if (foo(null) != null) unreachable;
-    try expect(!foo(1234).?);
+    try expect(!foo(1234) orelse unreachable);
 }
 
 fn foo(x: ?i32) ?bool {
@@ -206,7 +206,7 @@ var struct_with_optional: StructWithOptional = undefined;
 test "optional types" {
     comptime {
         const opt_type_struct = StructWithOptionalType{ .t = u8 };
-        try expect(opt_type_struct.t != null and opt_type_struct.t.? == u8);
+        try expect(opt_type_struct.t != null and opt_type_struct.t orelse unreachable == u8);
     }
 }
 

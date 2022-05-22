@@ -412,11 +412,11 @@ test "LinearFifo(u8, .Dynamic)" {
     }
 
     {
-        try testing.expectEqual(@as(u8, 'H'), fifo.readItem().?);
-        try testing.expectEqual(@as(u8, 'E'), fifo.readItem().?);
-        try testing.expectEqual(@as(u8, 'L'), fifo.readItem().?);
-        try testing.expectEqual(@as(u8, 'L'), fifo.readItem().?);
-        try testing.expectEqual(@as(u8, 'O'), fifo.readItem().?);
+        try testing.expectEqual(@as(u8, 'H'), fifo.readItem() orelse unreachable);
+        try testing.expectEqual(@as(u8, 'E'), fifo.readItem() orelse unreachable);
+        try testing.expectEqual(@as(u8, 'L'), fifo.readItem() orelse unreachable);
+        try testing.expectEqual(@as(u8, 'L'), fifo.readItem() orelse unreachable);
+        try testing.expectEqual(@as(u8, 'O'), fifo.readItem() orelse unreachable);
     }
     try testing.expectEqual(@as(usize, 5), fifo.readableLength());
 
@@ -466,10 +466,10 @@ test "LinearFifo(u8, .Dynamic)" {
     {
         try fifo.writer().writeAll("This is a test");
         var result: [30]u8 = undefined;
-        try testing.expectEqualSlices(u8, "This", (try fifo.reader().readUntilDelimiterOrEof(&result, ' ')).?);
-        try testing.expectEqualSlices(u8, "is", (try fifo.reader().readUntilDelimiterOrEof(&result, ' ')).?);
-        try testing.expectEqualSlices(u8, "a", (try fifo.reader().readUntilDelimiterOrEof(&result, ' ')).?);
-        try testing.expectEqualSlices(u8, "test", (try fifo.reader().readUntilDelimiterOrEof(&result, ' ')).?);
+        try testing.expectEqualSlices(u8, "This", (try fifo.reader().readUntilDelimiterOrEof(&result, ' ')) orelse unreachable);
+        try testing.expectEqualSlices(u8, "is", (try fifo.reader().readUntilDelimiterOrEof(&result, ' ')) orelse unreachable);
+        try testing.expectEqualSlices(u8, "a", (try fifo.reader().readUntilDelimiterOrEof(&result, ' ')) orelse unreachable);
+        try testing.expectEqualSlices(u8, "test", (try fifo.reader().readUntilDelimiterOrEof(&result, ' ')) orelse unreachable);
     }
 
     {
@@ -498,11 +498,11 @@ test "LinearFifo" {
             try testing.expectEqual(@as(usize, 5), fifo.readableLength());
 
             {
-                try testing.expectEqual(@as(T, 0), fifo.readItem().?);
-                try testing.expectEqual(@as(T, 1), fifo.readItem().?);
-                try testing.expectEqual(@as(T, 1), fifo.readItem().?);
-                try testing.expectEqual(@as(T, 0), fifo.readItem().?);
-                try testing.expectEqual(@as(T, 1), fifo.readItem().?);
+                try testing.expectEqual(@as(T, 0), fifo.readItem() orelse unreachable);
+                try testing.expectEqual(@as(T, 1), fifo.readItem() orelse unreachable);
+                try testing.expectEqual(@as(T, 1), fifo.readItem() orelse unreachable);
+                try testing.expectEqual(@as(T, 0), fifo.readItem() orelse unreachable);
+                try testing.expectEqual(@as(T, 1), fifo.readItem() orelse unreachable);
                 try testing.expectEqual(@as(usize, 0), fifo.readableLength());
             }
 

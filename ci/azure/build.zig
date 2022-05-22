@@ -442,7 +442,7 @@ fn addCxxKnownPath(
         ctx.cxx_compiler,
         b.fmt("-print-file-name={s}", .{objname}),
     });
-    const path_unpadded = mem.tokenize(u8, path_padded, "\r\n").next().?;
+    const path_unpadded = mem.tokenize(u8, path_padded, "\r\n").next() orelse unreachable;
     if (mem.eql(u8, path_unpadded, objname)) {
         if (errtxt) |msg| {
             std.debug.print("{s}", .{msg});
@@ -494,7 +494,7 @@ fn findAndParseConfigH(b: *Builder, config_h_path_option: ?[]const u8) ?CMakeCon
     } else blk: {
         // TODO this should stop looking for config.h once it detects we hit the
         // zig source root directory.
-        var check_dir = fs.path.dirname(b.zig_exe).?;
+        var check_dir = fs.path.dirname(b.zig_exe) orelse unreachable;
         while (true) {
             var dir = fs.cwd().openDir(check_dir, .{}) catch unreachable;
             defer dir.close();
@@ -502,10 +502,10 @@ fn findAndParseConfigH(b: *Builder, config_h_path_option: ?[]const u8) ?CMakeCon
             break :blk dir.readFileAlloc(b.allocator, "config.h", max_config_h_bytes) catch |err| switch (err) {
                 error.FileNotFound => {
                     const new_check_dir = fs.path.dirname(check_dir);
-                    if (new_check_dir == null or mem.eql(u8, new_check_dir.?, check_dir)) {
+                    if (new_check_dir == null or mem.eql(u8, new_check_dir orelse unreachable, check_dir)) {
                         return null;
                     }
-                    check_dir = new_check_dir.?;
+                    check_dir = new_check_dir orelse unreachable;
                     continue;
                 },
                 else => unreachable,
@@ -564,8 +564,8 @@ fn findAndParseConfigH(b: *Builder, config_h_path_option: ?[]const u8) ?CMakeCon
         inline for (mappings) |mapping| {
             if (mem.startsWith(u8, line, mapping.prefix)) {
                 var it = mem.split(u8, line, "\"");
-                _ = it.next().?; // skip the stuff before the quote
-                const quoted = it.next().?; // the stuff inside the quote
+                _ = it.next() orelse unreachable; // skip the stuff before the quote
+                const quoted = it.next() orelse unreachable; // the stuff inside the quote
                 @field(ctx, mapping.field) = toNativePathSep(b, quoted);
             }
         }

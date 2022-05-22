@@ -2326,7 +2326,7 @@ test "zig fmt: statements with empty line between" {
 test "zig fmt: ptr deref operator and unwrap optional operator" {
     try testCanonical(
         \\const a = b.*;
-        \\const a = b.?;
+        \\const a = b orelse unreachable;
         \\
     );
 }

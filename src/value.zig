@@ -464,7 +464,7 @@ pub const Value = extern union {
             => unreachable,
 
             .ty, .lazy_align, .lazy_size => {
-                const payload = self.cast(Payload.Ty).?;
+                const payload = self.cast(Payload.Ty) orelse unreachable;
                 const new_payload = try arena.create(Payload.Ty);
                 new_payload.* = .{
                     .base = payload.base,
@@ -476,7 +476,7 @@ pub const Value = extern union {
             .int_u64 => return self.copyPayloadShallow(arena, Payload.U64),
             .int_i64 => return self.copyPayloadShallow(arena, Payload.I64),
             .int_big_positive, .int_big_negative => {
-                const old_payload = self.cast(Payload.BigInt).?;
+                const old_payload = self.cast(Payload.BigInt) orelse unreachable;
                 const new_payload = try arena.create(Payload.BigInt);
                 new_payload.* = .{
                     .base = .{ .tag = self.ptr_otherwise.tag },
@@ -492,7 +492,7 @@ pub const Value = extern union {
             .eu_payload_ptr,
             .opt_payload_ptr,
             => {
-                const payload = self.cast(Payload.PayloadPtr).?;
+                const payload = self.cast(Payload.PayloadPtr) orelse unreachable;
                 const new_payload = try arena.create(Payload.PayloadPtr);
                 new_payload.* = .{
                     .base = payload.base,
@@ -504,7 +504,7 @@ pub const Value = extern union {
                 return Value{ .ptr_otherwise = &new_payload.base };
             },
             .elem_ptr => {
-                const payload = self.castTag(.elem_ptr).?;
+                const payload = self.castTag(.elem_ptr) orelse unreachable;
                 const new_payload = try arena.create(Payload.ElemPtr);
                 new_payload.* = .{
                     .base = payload.base,
@@ -517,7 +517,7 @@ pub const Value = extern union {
                 return Value{ .ptr_otherwise = &new_payload.base };
             },
             .field_ptr => {
-                const payload = self.castTag(.field_ptr).?;
+                const payload = self.castTag(.field_ptr) orelse unreachable;
                 const new_payload = try arena.create(Payload.FieldPtr);
                 new_payload.* = .{
                     .base = payload.base,
@@ -530,7 +530,7 @@ pub const Value = extern union {
                 return Value{ .ptr_otherwise = &new_payload.base };
             },
             .bytes => {
-                const bytes = self.castTag(.bytes).?.data;
+                const bytes = self.castTag(.bytes) orelse unreachable.data;
                 const new_payload = try arena.create(Payload.Bytes);
                 new_payload.* = .{
                     .base = .{ .tag = .bytes },
@@ -543,7 +543,7 @@ pub const Value = extern union {
             .opt_payload,
             .empty_array_sentinel,
             => {
-                const payload = self.cast(Payload.SubValue).?;
+                const payload = self.cast(Payload.SubValue) orelse unreachable;
                 const new_payload = try arena.create(Payload.SubValue);
                 new_payload.* = .{
                     .base = payload.base,
@@ -552,7 +552,7 @@ pub const Value = extern union {
                 return Value{ .ptr_otherwise = &new_payload.base };
             },
             .slice => {
-                const payload = self.castTag(.slice).?;
+                const payload = self.castTag(.slice) orelse unreachable;
                 const new_payload = try arena.create(Payload.Slice);
                 new_payload.* = .{
                     .base = payload.base,
@@ -569,7 +569,7 @@ pub const Value = extern union {
             .float_80 => return self.copyPayloadShallow(arena, Payload.Float_80),
             .float_128 => return self.copyPayloadShallow(arena, Payload.Float_128),
             .enum_literal => {
-                const payload = self.castTag(.enum_literal).?;
+                const payload = self.castTag(.enum_literal) orelse unreachable;
                 const new_payload = try arena.create(Payload.Bytes);
                 new_payload.* = .{
                     .base = payload.base,
@@ -581,7 +581,7 @@ pub const Value = extern union {
             .@"error" => return self.copyPayloadShallow(arena, Payload.Error),
 
             .aggregate => {
-                const payload = self.castTag(.aggregate).?;
+                const payload = self.castTag(.aggregate) orelse unreachable;
                 const new_payload = try arena.create(Payload.Aggregate);
                 new_payload.* = .{
                     .base = payload.base,
@@ -594,7 +594,7 @@ pub const Value = extern union {
             },
 
             .@"union" => {
-                const tag_and_val = self.castTag(.@"union").?.data;
+                const tag_and_val = self.castTag(.@"union") orelse unreachable.data;
                 const new_payload = try arena.create(Payload.Union);
                 new_payload.* = .{
                     .base = .{ .tag = .@"union" },
@@ -612,7 +612,7 @@ pub const Value = extern union {
     }
 
     fn copyPayloadShallow(self: Value, arena: Allocator, comptime T: type) error{OutOfMemory}!Value {
-        const payload = self.cast(T).?;
+        const payload = self.cast(T) orelse unreachable;
         const new_payload = try arena.create(T);
         new_payload.* = payload.*;
         return Value{ .ptr_otherwise = &new_payload.base };
@@ -717,86 +717,86 @@ pub const Value = extern union {
             .the_only_possible_value => return out_stream.writeAll("(the only possible value)"),
             .bool_true => return out_stream.writeAll("true"),
             .bool_false => return out_stream.writeAll("false"),
-            .ty => return val.castTag(.ty).?.data.dump("", options, out_stream),
+            .ty => return val.castTag(.ty) orelse unreachable.data.dump("", options, out_stream),
             .lazy_align => {
                 try out_stream.writeAll("@alignOf(");
-                try val.castTag(.lazy_align).?.data.dump("", options, out_stream);
+                try val.castTag(.lazy_align) orelse unreachable.data.dump("", options, out_stream);
                 return try out_stream.writeAll(")");
             },
             .lazy_size => {
                 try out_stream.writeAll("@sizeOf(");
-                try val.castTag(.lazy_size).?.data.dump("", options, out_stream);
+                try val.castTag(.lazy_size) orelse unreachable.data.dump("", options, out_stream);
                 return try out_stream.writeAll(")");
             },
             .int_type => {
-                const int_type = val.castTag(.int_type).?.data;
+                const int_type = val.castTag(.int_type) orelse unreachable.data;
                 return out_stream.print("{s}{d}", .{
                     if (int_type.signed) "s" else "u",
                     int_type.bits,
                 });
             },
-            .int_u64 => return std.fmt.formatIntValue(val.castTag(.int_u64).?.data, "", options, out_stream),
-            .int_i64 => return std.fmt.formatIntValue(val.castTag(.int_i64).?.data, "", options, out_stream),
-            .int_big_positive => return out_stream.print("{}", .{val.castTag(.int_big_positive).?.asBigInt()}),
-            .int_big_negative => return out_stream.print("{}", .{val.castTag(.int_big_negative).?.asBigInt()}),
-            .function => return out_stream.print("(function decl={d})", .{val.castTag(.function).?.data.owner_decl}),
+            .int_u64 => return std.fmt.formatIntValue(val.castTag(.int_u64) orelse unreachable.data, "", options, out_stream),
+            .int_i64 => return std.fmt.formatIntValue(val.castTag(.int_i64) orelse unreachable.data, "", options, out_stream),
+            .int_big_positive => return out_stream.print("{}", .{val.castTag(.int_big_positive) orelse unreachable.asBigInt()}),
+            .int_big_negative => return out_stream.print("{}", .{val.castTag(.int_big_negative) orelse unreachable.asBigInt()}),
+            .function => return out_stream.print("(function decl={d})", .{val.castTag(.function) orelse unreachable.data.owner_decl}),
             .extern_fn => return out_stream.writeAll("(extern function)"),
             .variable => return out_stream.writeAll("(variable)"),
             .decl_ref_mut => {
-                const decl_index = val.castTag(.decl_ref_mut).?.data.decl_index;
+                const decl_index = val.castTag(.decl_ref_mut) orelse unreachable.data.decl_index;
                 return out_stream.print("(decl_ref_mut {d})", .{decl_index});
             },
             .decl_ref => {
-                const decl_index = val.castTag(.decl_ref).?.data;
+                const decl_index = val.castTag(.decl_ref) orelse unreachable.data;
                 return out_stream.print("(decl_ref {d})", .{decl_index});
             },
             .elem_ptr => {
-                const elem_ptr = val.castTag(.elem_ptr).?.data;
+                const elem_ptr = val.castTag(.elem_ptr) orelse unreachable.data;
                 try out_stream.print("&[{}] ", .{elem_ptr.index});
                 val = elem_ptr.array_ptr;
             },
             .field_ptr => {
-                const field_ptr = val.castTag(.field_ptr).?.data;
+                const field_ptr = val.castTag(.field_ptr) orelse unreachable.data;
                 try out_stream.print("fieldptr({d}) ", .{field_ptr.field_index});
                 val = field_ptr.container_ptr;
             },
             .empty_array => return out_stream.writeAll(".{}"),
-            .enum_literal => return out_stream.print(".{}", .{std.zig.fmtId(val.castTag(.enum_literal).?.data)}),
-            .enum_field_index => return out_stream.print("(enum field {d})", .{val.castTag(.enum_field_index).?.data}),
-            .bytes => return out_stream.print("\"{}\"", .{std.zig.fmtEscapes(val.castTag(.bytes).?.data)}),
+            .enum_literal => return out_stream.print(".{}", .{std.zig.fmtId(val.castTag(.enum_literal) orelse unreachable.data)}),
+            .enum_field_index => return out_stream.print("(enum field {d})", .{val.castTag(.enum_field_index) orelse unreachable.data}),
+            .bytes => return out_stream.print("\"{}\"", .{std.zig.fmtEscapes(val.castTag(.bytes) orelse unreachable.data)}),
             .repeated => {
                 try out_stream.writeAll("(repeated) ");
-                val = val.castTag(.repeated).?.data;
+                val = val.castTag(.repeated) orelse unreachable.data;
             },
             .empty_array_sentinel => return out_stream.writeAll("(empty array with sentinel)"),
             .slice => return out_stream.writeAll("(slice)"),
-            .float_16 => return out_stream.print("{}", .{val.castTag(.float_16).?.data}),
-            .float_32 => return out_stream.print("{}", .{val.castTag(.float_32).?.data}),
-            .float_64 => return out_stream.print("{}", .{val.castTag(.float_64).?.data}),
-            .float_80 => return out_stream.print("{}", .{val.castTag(.float_80).?.data}),
-            .float_128 => return out_stream.print("{}", .{val.castTag(.float_128).?.data}),
-            .@"error" => return out_stream.print("error.{s}", .{val.castTag(.@"error").?.data.name}),
+            .float_16 => return out_stream.print("{}", .{val.castTag(.float_16) orelse unreachable.data}),
+            .float_32 => return out_stream.print("{}", .{val.castTag(.float_32) orelse unreachable.data}),
+            .float_64 => return out_stream.print("{}", .{val.castTag(.float_64) orelse unreachable.data}),
+            .float_80 => return out_stream.print("{}", .{val.castTag(.float_80) orelse unreachable.data}),
+            .float_128 => return out_stream.print("{}", .{val.castTag(.float_128) orelse unreachable.data}),
+            .@"error" => return out_stream.print("error.{s}", .{val.castTag(.@"error") orelse unreachable.data.name}),
             // TODO to print this it should be error{ Set, Items }!T(val), but we need the type for that
             .eu_payload => {
                 try out_stream.writeAll("(eu_payload) ");
-                val = val.castTag(.eu_payload).?.data;
+                val = val.castTag(.eu_payload) orelse unreachable.data;
             },
             .opt_payload => {
                 try out_stream.writeAll("(opt_payload) ");
-                val = val.castTag(.opt_payload).?.data;
+                val = val.castTag(.opt_payload) orelse unreachable.data;
             },
             .inferred_alloc => return out_stream.writeAll("(inferred allocation value)"),
             .inferred_alloc_comptime => return out_stream.writeAll("(inferred comptime allocation value)"),
             .eu_payload_ptr => {
                 try out_stream.writeAll("(eu_payload_ptr)");
-                val = val.castTag(.eu_payload_ptr).?.data.container_ptr;
+                val = val.castTag(.eu_payload_ptr) orelse unreachable.data.container_ptr;
             },
             .opt_payload_ptr => {
                 try out_stream.writeAll("(opt_payload_ptr)");
-                val = val.castTag(.opt_payload_ptr).?.data.container_ptr;
+                val = val.castTag(.opt_payload_ptr) orelse unreachable.data.container_ptr;
             },
             .bound_fn => {
-                const bound_func = val.castTag(.bound_fn).?.data;
+                const bound_func = val.castTag(.bound_fn) orelse unreachable.data;
                 return out_stream.print("(bound_fn %{}(%{})", .{ bound_func.func_inst, bound_func.arg0_inst });
             },
         };
@@ -819,27 +819,27 @@ pub const Value = extern union {
         const target = mod.getTarget();
         switch (val.tag()) {
             .bytes => {
-                const bytes = val.castTag(.bytes).?.data;
+                const bytes = val.castTag(.bytes) orelse unreachable.data;
                 const adjusted_len = bytes.len - @boolToInt(ty.sentinel() != null);
                 const adjusted_bytes = bytes[0..adjusted_len];
                 return allocator.dupe(u8, adjusted_bytes);
             },
-            .enum_literal => return allocator.dupe(u8, val.castTag(.enum_literal).?.data),
+            .enum_literal => return allocator.dupe(u8, val.castTag(.enum_literal) orelse unreachable.data),
             .repeated => {
-                const byte = @intCast(u8, val.castTag(.repeated).?.data.toUnsignedInt(target));
+                const byte = @intCast(u8, val.castTag(.repeated) orelse unreachable.data.toUnsignedInt(target));
                 const result = try allocator.alloc(u8, @intCast(usize, ty.arrayLen()));
                 std.mem.set(u8, result, byte);
                 return result;
             },
             .decl_ref => {
-                const decl_index = val.castTag(.decl_ref).?.data;
+                const decl_index = val.castTag(.decl_ref) orelse unreachable.data;
                 const decl = mod.declPtr(decl_index);
                 const decl_val = try decl.value();
                 return decl_val.toAllocatedBytes(decl.ty, allocator, mod);
             },
             .the_only_possible_value => return &[_]u8{},
             .slice => {
-                const slice = val.castTag(.slice).?.data;
+                const slice = val.castTag(.slice) orelse unreachable.data;
                 return arrayToAllocatedBytes(slice.ptr, slice.len.toUnsignedInt(target), allocator, mod);
             },
             else => return arrayToAllocatedBytes(val, ty.arrayLen(), allocator, mod),
@@ -861,7 +861,7 @@ pub const Value = extern union {
     /// Asserts that the value is representable as a type.
     pub fn toType(self: Value, buffer: *ToTypeBuffer) Type {
         return switch (self.tag()) {
-            .ty => self.castTag(.ty).?.data,
+            .ty => self.castTag(.ty) orelse unreachable.data,
             .u1_type => Type.initTag(.u1),
             .u8_type => Type.initTag(.u8),
             .i8_type => Type.initTag(.i8),
@@ -926,7 +926,7 @@ pub const Value = extern union {
             .type_info_type => Type.initTag(.type_info),
 
             .int_type => {
-                const payload = self.castTag(.int_type).?.data;
+                const payload = self.castTag(.int_type) orelse unreachable.data;
                 buffer.* = .{
                     .base = .{
                         .tag = if (payload.signed) .int_signed else .int_unsigned,
@@ -944,7 +944,7 @@ pub const Value = extern union {
     pub fn toEnum(val: Value, comptime E: type) E {
         switch (val.tag()) {
             .enum_field_index => {
-                const field_index = val.castTag(.enum_field_index).?.data;
+                const field_index = val.castTag(.enum_field_index) orelse unreachable.data;
                 // TODO should `@intToEnum` do this `@intCast` for you?
                 return @intToEnum(E, @intCast(@typeInfo(E).Enum.tag_type, field_index));
             },
@@ -959,14 +959,14 @@ pub const Value = extern union {
 
     pub fn enumToInt(val: Value, ty: Type, buffer: *Payload.U64) Value {
         const field_index = switch (val.tag()) {
-            .enum_field_index => val.castTag(.enum_field_index).?.data,
+            .enum_field_index => val.castTag(.enum_field_index) orelse unreachable.data,
             .the_only_possible_value => blk: {
                 assert(ty.enumFieldCount() == 1);
                 break :blk 0;
             },
             .enum_literal => i: {
-                const name = val.castTag(.enum_literal).?.data;
-                break :i ty.enumFieldIndex(name).?;
+                const name = val.castTag(.enum_literal) orelse unreachable.data;
+                break :i ty.enumFieldIndex(name) orelse unreachable;
             },
             // Assume it is already an integer and return it directly.
             else => return val,
@@ -974,7 +974,7 @@ pub const Value = extern union {
 
         switch (ty.tag()) {
             .enum_full, .enum_nonexhaustive => {
-                const enum_full = ty.cast(Type.Payload.EnumFull).?.data;
+                const enum_full = ty.cast(Type.Payload.EnumFull) orelse unreachable.data;
                 if (enum_full.values.count() != 0) {
                     return enum_full.values.keys()[field_index];
                 } else {
@@ -987,7 +987,7 @@ pub const Value = extern union {
                 }
             },
             .enum_numbered => {
-                const enum_obj = ty.castTag(.enum_numbered).?.data;
+                const enum_obj = ty.castTag(.enum_numbered) orelse unreachable.data;
                 if (enum_obj.values.count() != 0) {
                     return enum_obj.values.keys()[field_index];
                 } else {
@@ -1033,15 +1033,15 @@ pub const Value = extern union {
             .bool_true,
             => return BigIntMutable.init(&space.limbs, 1).toConst(),
 
-            .int_u64 => return BigIntMutable.init(&space.limbs, val.castTag(.int_u64).?.data).toConst(),
-            .int_i64 => return BigIntMutable.init(&space.limbs, val.castTag(.int_i64).?.data).toConst(),
-            .int_big_positive => return val.castTag(.int_big_positive).?.asBigInt(),
-            .int_big_negative => return val.castTag(.int_big_negative).?.asBigInt(),
+            .int_u64 => return BigIntMutable.init(&space.limbs, val.castTag(.int_u64) orelse unreachable.data).toConst(),
+            .int_i64 => return BigIntMutable.init(&space.limbs, val.castTag(.int_i64) orelse unreachable.data).toConst(),
+            .int_big_positive => return val.castTag(.int_big_positive) orelse unreachable.asBigInt(),
+            .int_big_negative => return val.castTag(.int_big_negative) orelse unreachable.asBigInt(),
 
             .undef => unreachable,
 
             .lazy_align => {
-                const ty = val.castTag(.lazy_align).?.data;
+                const ty = val.castTag(.lazy_align) orelse unreachable.data;
                 if (sema_kit) |sk| {
                     try sk.sema.resolveTypeLayout(sk.block, sk.src, ty);
                 }
@@ -1049,7 +1049,7 @@ pub const Value = extern union {
                 return BigIntMutable.init(&space.limbs, x).toConst();
             },
             .lazy_size => {
-                const ty = val.castTag(.lazy_size).?.data;
+                const ty = val.castTag(.lazy_size) orelse unreachable.data;
                 if (sema_kit) |sk| {
                     try sk.sema.resolveTypeLayout(sk.block, sk.src, ty);
                 }
@@ -1058,8 +1058,8 @@ pub const Value = extern union {
             },
 
             .elem_ptr => {
-                const elem_ptr = val.castTag(.elem_ptr).?.data;
-                const array_addr = (try elem_ptr.array_ptr.getUnsignedIntAdvanced(target, sema_kit)).?;
+                const elem_ptr = val.castTag(.elem_ptr) orelse unreachable.data;
+                const array_addr = (try elem_ptr.array_ptr.getUnsignedIntAdvanced(target, sema_kit)) orelse unreachable;
                 const elem_size = elem_ptr.elem_ty.abiSize(target);
                 const new_addr = array_addr + elem_size * elem_ptr.index;
                 return BigIntMutable.init(&space.limbs, new_addr).toConst();
@@ -1088,15 +1088,15 @@ pub const Value = extern union {
             .bool_true,
             => return 1,
 
-            .int_u64 => return val.castTag(.int_u64).?.data,
-            .int_i64 => return @intCast(u64, val.castTag(.int_i64).?.data),
-            .int_big_positive => return val.castTag(.int_big_positive).?.asBigInt().to(u64) catch null,
-            .int_big_negative => return val.castTag(.int_big_negative).?.asBigInt().to(u64) catch null,
+            .int_u64 => return val.castTag(.int_u64) orelse unreachable.data,
+            .int_i64 => return @intCast(u64, val.castTag(.int_i64) orelse unreachable.data),
+            .int_big_positive => return val.castTag(.int_big_positive) orelse unreachable.asBigInt().to(u64) catch null,
+            .int_big_negative => return val.castTag(.int_big_negative) orelse unreachable.asBigInt().to(u64) catch null,
 
             .undef => unreachable,
 
             .lazy_align => {
-                const ty = val.castTag(.lazy_align).?.data;
+                const ty = val.castTag(.lazy_align) orelse unreachable.data;
                 if (sema_kit) |sk| {
                     return (try ty.abiAlignmentAdvanced(target, .{ .sema_kit = sk })).scalar;
                 } else {
@@ -1104,7 +1104,7 @@ pub const Value = extern union {
                 }
             },
             .lazy_size => {
-                const ty = val.castTag(.lazy_size).?.data;
+                const ty = val.castTag(.lazy_size) orelse unreachable.data;
                 if (sema_kit) |sk| {
                     return (try ty.abiSizeAdvanced(target, .{ .sema_kit = sk })).scalar;
                 } else {
@@ -1118,7 +1118,7 @@ pub const Value = extern union {
 
     /// Asserts the value is an integer and it fits in a u64
     pub fn toUnsignedInt(val: Value, target: Target) u64 {
-        return getUnsignedInt(val, target).?;
+        return getUnsignedInt(val, target) orelse unreachable;
     }
 
     /// Asserts the value is an integer and it fits in a i64
@@ -1133,10 +1133,10 @@ pub const Value = extern union {
             .bool_true,
             => return 1,
 
-            .int_u64 => return @intCast(i64, self.castTag(.int_u64).?.data),
-            .int_i64 => return self.castTag(.int_i64).?.data,
-            .int_big_positive => return self.castTag(.int_big_positive).?.asBigInt().to(i64) catch unreachable,
-            .int_big_negative => return self.castTag(.int_big_negative).?.asBigInt().to(i64) catch unreachable,
+            .int_u64 => return @intCast(i64, self.castTag(.int_u64) orelse unreachable.data),
+            .int_i64 => return self.castTag(.int_i64) orelse unreachable.data,
+            .int_big_positive => return self.castTag(.int_big_positive) orelse unreachable.asBigInt().to(i64) catch unreachable,
+            .int_big_negative => return self.castTag(.int_big_negative) orelse unreachable.asBigInt().to(i64) catch unreachable,
 
             .undef => unreachable,
             else => unreachable,
@@ -1200,7 +1200,7 @@ pub const Value = extern union {
                 .Auto => unreachable, // Sema is supposed to have emitted a compile error already
                 .Extern => {
                     const fields = ty.structFields().values();
-                    const field_vals = val.castTag(.aggregate).?.data;
+                    const field_vals = val.castTag(.aggregate) orelse unreachable.data;
                     for (fields) |field, i| {
                         const off = @intCast(usize, ty.structFieldOffset(i, target));
                         writeToMemory(field_vals[i], field.ty, mod, buffer[off..]);
@@ -1219,7 +1219,7 @@ pub const Value = extern union {
             .ErrorSet => {
                 // TODO revisit this when we have the concept of the error tag type
                 const Int = u16;
-                const int = mod.global_error_set.get(val.castTag(.@"error").?.data.name).?;
+                const int = mod.global_error_set.get(val.castTag(.@"error") orelse unreachable.data.name) orelse unreachable;
                 std.mem.writeInt(Int, buffer[0..@sizeOf(Int)], @intCast(Int, int), target.cpu.arch.endian());
             },
             else => @panic("TODO implement writeToMemory for more types"),
@@ -1229,7 +1229,7 @@ pub const Value = extern union {
     fn packedStructToInt(val: Value, ty: Type, target: Target, buf: []std.math.big.Limb) BigIntConst {
         var bigint = BigIntMutable.init(buf, 0);
         const fields = ty.structFields().values();
-        const field_vals = val.castTag(.aggregate).?.data;
+        const field_vals = val.castTag(.aggregate) orelse unreachable.data;
         var bits: u16 = 0;
         // TODO allocate enough heap space instead of using this buffer
         // on the stack.
@@ -1463,11 +1463,11 @@ pub const Value = extern union {
     /// Asserts that the value is a float or an integer.
     pub fn toFloat(val: Value, comptime T: type) T {
         return switch (val.tag()) {
-            .float_16 => @floatCast(T, val.castTag(.float_16).?.data),
-            .float_32 => @floatCast(T, val.castTag(.float_32).?.data),
-            .float_64 => @floatCast(T, val.castTag(.float_64).?.data),
-            .float_80 => @floatCast(T, val.castTag(.float_80).?.data),
-            .float_128 => @floatCast(T, val.castTag(.float_128).?.data),
+            .float_16 => @floatCast(T, val.castTag(.float_16) orelse unreachable.data),
+            .float_32 => @floatCast(T, val.castTag(.float_32) orelse unreachable.data),
+            .float_64 => @floatCast(T, val.castTag(.float_64) orelse unreachable.data),
+            .float_80 => @floatCast(T, val.castTag(.float_80) orelse unreachable.data),
+            .float_128 => @floatCast(T, val.castTag(.float_128) orelse unreachable.data),
 
             .zero => 0,
             .one => 1,
@@ -1475,17 +1475,17 @@ pub const Value = extern union {
                 if (T == f80) {
                     @panic("TODO we can't lower this properly on non-x86 llvm backend yet");
                 }
-                return @intToFloat(T, val.castTag(.int_u64).?.data);
+                return @intToFloat(T, val.castTag(.int_u64) orelse unreachable.data);
             },
             .int_i64 => {
                 if (T == f80) {
                     @panic("TODO we can't lower this properly on non-x86 llvm backend yet");
                 }
-                return @intToFloat(T, val.castTag(.int_i64).?.data);
+                return @intToFloat(T, val.castTag(.int_i64) orelse unreachable.data);
             },
 
-            .int_big_positive => @floatCast(T, bigIntToFloat(val.castTag(.int_big_positive).?.data, true)),
-            .int_big_negative => @floatCast(T, bigIntToFloat(val.castTag(.int_big_negative).?.data, false)),
+            .int_big_positive => @floatCast(T, bigIntToFloat(val.castTag(.int_big_positive) orelse unreachable.data, true)),
+            .int_big_negative => @floatCast(T, bigIntToFloat(val.castTag(.int_big_negative) orelse unreachable.data, false)),
             else => unreachable,
         };
     }
@@ -1516,7 +1516,7 @@ pub const Value = extern union {
             .one, .bool_true => return ty_bits - 1,
 
             .int_u64 => {
-                const big = @clz(u64, val.castTag(.int_u64).?.data);
+                const big = @clz(u64, val.castTag(.int_u64) orelse unreachable.data);
                 return big + ty_bits - 64;
             },
             .int_i64 => {
@@ -1524,7 +1524,7 @@ pub const Value = extern union {
             },
             .int_big_positive => {
                 // TODO: move this code into std lib big ints
-                const bigint = val.castTag(.int_big_positive).?.asBigInt();
+                const bigint = val.castTag(.int_big_positive) orelse unreachable.asBigInt();
                 // Limbs are stored in little-endian order but we need
                 // to iterate big-endian.
                 var total_limb_lz: u64 = 0;
@@ -1560,7 +1560,7 @@ pub const Value = extern union {
             .one, .bool_true => return 0,
 
             .int_u64 => {
-                const big = @ctz(u64, val.castTag(.int_u64).?.data);
+                const big = @ctz(u64, val.castTag(.int_u64) orelse unreachable.data);
                 return if (big == 64) ty_bits else big;
             },
             .int_i64 => {
@@ -1568,7 +1568,7 @@ pub const Value = extern union {
             },
             .int_big_positive => {
                 // TODO: move this code into std lib big ints
-                const bigint = val.castTag(.int_big_positive).?.asBigInt();
+                const bigint = val.castTag(.int_big_positive) orelse unreachable.asBigInt();
                 // Limbs are stored in little-endian order.
                 var result: u64 = 0;
                 for (bigint.limbs) |limb| {
@@ -1597,7 +1597,7 @@ pub const Value = extern union {
             .zero, .bool_false => return 0,
             .one, .bool_true => return 1,
 
-            .int_u64 => return @popCount(u64, val.castTag(.int_u64).?.data),
+            .int_u64 => return @popCount(u64, val.castTag(.int_u64) orelse unreachable.data),
 
             else => {
                 const info = ty.intInfo(target);
@@ -1671,12 +1671,12 @@ pub const Value = extern union {
             => return 1,
 
             .int_u64 => {
-                const x = self.castTag(.int_u64).?.data;
+                const x = self.castTag(.int_u64) orelse unreachable.data;
                 if (x == 0) return 0;
                 return @intCast(usize, std.math.log2(x) + 1);
             },
-            .int_big_positive => return self.castTag(.int_big_positive).?.asBigInt().bitCountTwosComp(),
-            .int_big_negative => return self.castTag(.int_big_negative).?.asBigInt().bitCountTwosComp(),
+            .int_big_positive => return self.castTag(.int_big_positive) orelse unreachable.asBigInt().bitCountTwosComp(),
+            .int_big_negative => return self.castTag(.int_big_negative) orelse unreachable.asBigInt().bitCountTwosComp(),
 
             .decl_ref_mut,
             .extern_fn,
@@ -1714,12 +1714,12 @@ pub const Value = extern union {
             .one,
             => false,
 
-            .float_16 => @rem(self.castTag(.float_16).?.data, 1) != 0,
-            .float_32 => @rem(self.castTag(.float_32).?.data, 1) != 0,
-            .float_64 => @rem(self.castTag(.float_64).?.data, 1) != 0,
-            //.float_80 => @rem(self.castTag(.float_80).?.data, 1) != 0,
+            .float_16 => @rem(self.castTag(.float_16) orelse unreachable.data, 1) != 0,
+            .float_32 => @rem(self.castTag(.float_32) orelse unreachable.data, 1) != 0,
+            .float_64 => @rem(self.castTag(.float_64) orelse unreachable.data, 1) != 0,
+            //.float_80 => @rem(self.castTag(.float_80) orelse unreachable.data, 1) != 0,
             .float_80 => @panic("TODO implement __remx in compiler-rt"),
-            .float_128 => @rem(self.castTag(.float_128).?.data, 1) != 0,
+            .float_128 => @rem(self.castTag(.float_128) orelse unreachable.data, 1) != 0,
 
             else => unreachable,
         };
@@ -1748,13 +1748,13 @@ pub const Value = extern union {
             .variable,
             => .gt,
 
-            .int_u64 => std.math.order(lhs.castTag(.int_u64).?.data, 0),
-            .int_i64 => std.math.order(lhs.castTag(.int_i64).?.data, 0),
-            .int_big_positive => lhs.castTag(.int_big_positive).?.asBigInt().orderAgainstScalar(0),
-            .int_big_negative => lhs.castTag(.int_big_negative).?.asBigInt().orderAgainstScalar(0),
+            .int_u64 => std.math.order(lhs.castTag(.int_u64) orelse unreachable.data, 0),
+            .int_i64 => std.math.order(lhs.castTag(.int_i64) orelse unreachable.data, 0),
+            .int_big_positive => lhs.castTag(.int_big_positive) orelse unreachable.asBigInt().orderAgainstScalar(0),
+            .int_big_negative => lhs.castTag(.int_big_negative) orelse unreachable.asBigInt().orderAgainstScalar(0),
 
             .lazy_align => {
-                const ty = lhs.castTag(.lazy_align).?.data;
+                const ty = lhs.castTag(.lazy_align) orelse unreachable.data;
                 if (try ty.hasRuntimeBitsAdvanced(false, sema_kit)) {
                     return .gt;
                 } else {
@@ -1762,7 +1762,7 @@ pub const Value = extern union {
                 }
             },
             .lazy_size => {
-                const ty = lhs.castTag(.lazy_size).?.data;
+                const ty = lhs.castTag(.lazy_size) orelse unreachable.data;
                 if (try ty.hasRuntimeBitsAdvanced(false, sema_kit)) {
                     return .gt;
                 } else {
@@ -1770,14 +1770,14 @@ pub const Value = extern union {
                 }
             },
 
-            .float_16 => std.math.order(lhs.castTag(.float_16).?.data, 0),
-            .float_32 => std.math.order(lhs.castTag(.float_32).?.data, 0),
-            .float_64 => std.math.order(lhs.castTag(.float_64).?.data, 0),
-            .float_80 => std.math.order(lhs.castTag(.float_80).?.data, 0),
-            .float_128 => std.math.order(lhs.castTag(.float_128).?.data, 0),
+            .float_16 => std.math.order(lhs.castTag(.float_16) orelse unreachable.data, 0),
+            .float_32 => std.math.order(lhs.castTag(.float_32) orelse unreachable.data, 0),
+            .float_64 => std.math.order(lhs.castTag(.float_64) orelse unreachable.data, 0),
+            .float_80 => std.math.order(lhs.castTag(.float_80) orelse unreachable.data, 0),
+            .float_128 => std.math.order(lhs.castTag(.float_128) orelse unreachable.data, 0),
 
             .elem_ptr => {
-                const elem_ptr = lhs.castTag(.elem_ptr).?.data;
+                const elem_ptr = lhs.castTag(.elem_ptr) orelse unreachable.data;
                 switch (try elem_ptr.array_ptr.orderAgainstZeroAdvanced(sema_kit)) {
                     .lt => unreachable,
                     .gt => return .gt,
@@ -1823,11 +1823,11 @@ pub const Value = extern union {
         if (lhs_float and rhs_float) {
             if (lhs_tag == rhs_tag) {
                 return switch (lhs.tag()) {
-                    .float_16 => return std.math.order(lhs.castTag(.float_16).?.data, rhs.castTag(.float_16).?.data),
-                    .float_32 => return std.math.order(lhs.castTag(.float_32).?.data, rhs.castTag(.float_32).?.data),
-                    .float_64 => return std.math.order(lhs.castTag(.float_64).?.data, rhs.castTag(.float_64).?.data),
-                    .float_80 => return std.math.order(lhs.castTag(.float_80).?.data, rhs.castTag(.float_80).?.data),
-                    .float_128 => return std.math.order(lhs.castTag(.float_128).?.data, rhs.castTag(.float_128).?.data),
+                    .float_16 => return std.math.order(lhs.castTag(.float_16) orelse unreachable.data, rhs.castTag(.float_16) orelse unreachable.data),
+                    .float_32 => return std.math.order(lhs.castTag(.float_32) orelse unreachable.data, rhs.castTag(.float_32) orelse unreachable.data),
+                    .float_64 => return std.math.order(lhs.castTag(.float_64) orelse unreachable.data, rhs.castTag(.float_64) orelse unreachable.data),
+                    .float_80 => return std.math.order(lhs.castTag(.float_80) orelse unreachable.data, rhs.castTag(.float_80) orelse unreachable.data),
+                    .float_128 => return std.math.order(lhs.castTag(.float_128) orelse unreachable.data, rhs.castTag(.float_128) orelse unreachable.data),
                     else => unreachable,
                 };
             }
@@ -1924,9 +1924,9 @@ pub const Value = extern union {
         sema_kit: ?Module.WipAnalysis,
     ) Module.CompileError!bool {
         switch (lhs.tag()) {
-            .repeated => return lhs.castTag(.repeated).?.data.compareWithZeroAdvanced(op, sema_kit),
+            .repeated => return lhs.castTag(.repeated) orelse unreachable.data.compareWithZeroAdvanced(op, sema_kit),
             .aggregate => {
-                for (lhs.castTag(.aggregate).?.data) |elem_val| {
+                for (lhs.castTag(.aggregate) orelse unreachable.data) |elem_val| {
                     if (!(try elem_val.compareWithZeroAdvanced(op, sema_kit))) return false;
                 }
                 return true;
@@ -1963,24 +1963,24 @@ pub const Value = extern union {
             .undef => return true,
             .void_value, .null_value, .the_only_possible_value, .empty_struct_value => return true,
             .enum_literal => {
-                const a_name = a.castTag(.enum_literal).?.data;
-                const b_name = b.castTag(.enum_literal).?.data;
+                const a_name = a.castTag(.enum_literal) orelse unreachable.data;
+                const b_name = b.castTag(.enum_literal) orelse unreachable.data;
                 return std.mem.eql(u8, a_name, b_name);
             },
             .enum_field_index => {
-                const a_field_index = a.castTag(.enum_field_index).?.data;
-                const b_field_index = b.castTag(.enum_field_index).?.data;
+                const a_field_index = a.castTag(.enum_field_index) orelse unreachable.data;
+                const b_field_index = b.castTag(.enum_field_index) orelse unreachable.data;
                 return a_field_index == b_field_index;
             },
             .opt_payload => {
-                const a_payload = a.castTag(.opt_payload).?.data;
-                const b_payload = b.castTag(.opt_payload).?.data;
+                const a_payload = a.castTag(.opt_payload) orelse unreachable.data;
+                const b_payload = b.castTag(.opt_payload) orelse unreachable.data;
                 var buffer: Type.Payload.ElemType = undefined;
                 return eqlAdvanced(a_payload, b_payload, ty.optionalChild(&buffer), mod, sema_kit);
             },
             .slice => {
-                const a_payload = a.castTag(.slice).?.data;
-                const b_payload = b.castTag(.slice).?.data;
+                const a_payload = a.castTag(.slice) orelse unreachable.data;
+                const b_payload = b.castTag(.slice) orelse unreachable.data;
                 if (!(try eqlAdvanced(a_payload.len, b_payload.len, Type.usize, mod, sema_kit))) {
                     return false;
                 }
@@ -1991,39 +1991,39 @@ pub const Value = extern union {
                 return eqlAdvanced(a_payload.ptr, b_payload.ptr, ptr_ty, mod, sema_kit);
             },
             .elem_ptr => {
-                const a_payload = a.castTag(.elem_ptr).?.data;
-                const b_payload = b.castTag(.elem_ptr).?.data;
+                const a_payload = a.castTag(.elem_ptr) orelse unreachable.data;
+                const b_payload = b.castTag(.elem_ptr) orelse unreachable.data;
                 if (a_payload.index != b_payload.index) return false;
 
                 return eqlAdvanced(a_payload.array_ptr, b_payload.array_ptr, ty, mod, sema_kit);
             },
             .field_ptr => {
-                const a_payload = a.castTag(.field_ptr).?.data;
-                const b_payload = b.castTag(.field_ptr).?.data;
+                const a_payload = a.castTag(.field_ptr) orelse unreachable.data;
+                const b_payload = b.castTag(.field_ptr) orelse unreachable.data;
                 if (a_payload.field_index != b_payload.field_index) return false;
 
                 return eqlAdvanced(a_payload.container_ptr, b_payload.container_ptr, ty, mod, sema_kit);
             },
             .@"error" => {
-                const a_name = a.castTag(.@"error").?.data.name;
-                const b_name = b.castTag(.@"error").?.data.name;
+                const a_name = a.castTag(.@"error") orelse unreachable.data.name;
+                const b_name = b.castTag(.@"error") orelse unreachable.data.name;
                 return std.mem.eql(u8, a_name, b_name);
             },
             .eu_payload => {
-                const a_payload = a.castTag(.eu_payload).?.data;
-                const b_payload = b.castTag(.eu_payload).?.data;
+                const a_payload = a.castTag(.eu_payload) orelse unreachable.data;
+                const b_payload = b.castTag(.eu_payload) orelse unreachable.data;
                 return eqlAdvanced(a_payload, b_payload, ty.errorUnionPayload(), mod, sema_kit);
             },
             .eu_payload_ptr => @panic("TODO: Implement more pointer eql cases"),
             .opt_payload_ptr => @panic("TODO: Implement more pointer eql cases"),
             .function => {
-                const a_payload = a.castTag(.function).?.data;
-                const b_payload = b.castTag(.function).?.data;
+                const a_payload = a.castTag(.function) orelse unreachable.data;
+                const b_payload = b.castTag(.function) orelse unreachable.data;
                 return a_payload == b_payload;
             },
             .aggregate => {
-                const a_field_vals = a.castTag(.aggregate).?.data;
-                const b_field_vals = b.castTag(.aggregate).?.data;
+                const a_field_vals = a.castTag(.aggregate) orelse unreachable.data;
+                const b_field_vals = b.castTag(.aggregate) orelse unreachable.data;
                 assert(a_field_vals.len == b_field_vals.len);
 
                 if (ty.isTupleOrAnonStruct()) {
@@ -2059,8 +2059,8 @@ pub const Value = extern union {
                 return true;
             },
             .@"union" => {
-                const a_union = a.castTag(.@"union").?.data;
-                const b_union = b.castTag(.@"union").?.data;
+                const a_union = a.castTag(.@"union") orelse unreachable.data;
+                const b_union = b.castTag(.@"union") orelse unreachable.data;
                 switch (ty.containerLayout()) {
                     .Packed, .Extern => {
                         const tag_ty = ty.unionTagTypeHypothetical();
@@ -2194,7 +2194,7 @@ pub const Value = extern union {
             },
             .Bool, .Int, .ComptimeInt, .Pointer => switch (val.tag()) {
                 .slice => {
-                    const slice = val.castTag(.slice).?.data;
+                    const slice = val.castTag(.slice) orelse unreachable.data;
                     var ptr_buf: Type.SlicePtrFieldTypeBuffer = undefined;
                     const ptr_ty = ty.slicePtrFieldType(&ptr_buf);
                     hash(slice.ptr, ptr_ty, hasher, mod);
@@ -2230,7 +2230,7 @@ pub const Value = extern union {
                         }
                     },
                     .aggregate => {
-                        const field_values = val.castTag(.aggregate).?.data;
+                        const field_values = val.castTag(.aggregate) orelse unreachable.data;
                         for (field_values) |field_val, i| {
                             field_val.hash(fields[i].ty, hasher, mod);
                         }
@@ -2268,7 +2268,7 @@ pub const Value = extern union {
                 // just hash the literal error value. this is the most stable
                 // thing between compiler invocations. we can't use the error
                 // int cause (1) its not stable and (2) we don't have access to mod.
-                hasher.update(val.getError().?);
+                hasher.update(val.getError() orelse unreachable);
             },
             .Enum => {
                 var enum_space: Payload.U64 = undefined;
@@ -2276,7 +2276,7 @@ pub const Value = extern union {
                 hashInt(int_val, hasher, mod.getTarget());
             },
             .Union => {
-                const union_obj = val.cast(Payload.Union).?.data;
+                const union_obj = val.cast(Payload.Union) orelse unreachable.data;
                 if (ty.unionTagType()) |tag_ty| {
                     union_obj.tag.hash(tag_ty, hasher, mod);
                 }
@@ -2284,7 +2284,7 @@ pub const Value = extern union {
                 union_obj.val.hash(active_field_ty, hasher, mod);
             },
             .Fn => {
-                const func: *Module.Fn = val.castTag(.function).?.data;
+                const func: *Module.Fn = val.castTag(.function) orelse unreachable.data;
                 // Note that his hashes the *Fn rather than the *Decl. This is
                 // to differentiate function bodies from function pointers.
                 // This is currently redundant since we already hash the zig type tag
@@ -2298,7 +2298,7 @@ pub const Value = extern union {
                 @panic("TODO implement hashing anyframe values");
             },
             .EnumLiteral => {
-                const bytes = val.castTag(.enum_literal).?.data;
+                const bytes = val.castTag(.enum_literal) orelse unreachable.data;
                 hasher.update(bytes);
             },
         }
@@ -2336,10 +2336,10 @@ pub const Value = extern union {
     pub fn isComptimeMutablePtr(val: Value) bool {
         return switch (val.tag()) {
             .decl_ref_mut => true,
-            .elem_ptr => isComptimeMutablePtr(val.castTag(.elem_ptr).?.data.array_ptr),
-            .field_ptr => isComptimeMutablePtr(val.castTag(.field_ptr).?.data.container_ptr),
-            .eu_payload_ptr => isComptimeMutablePtr(val.castTag(.eu_payload_ptr).?.data.container_ptr),
-            .opt_payload_ptr => isComptimeMutablePtr(val.castTag(.opt_payload_ptr).?.data.container_ptr),
+            .elem_ptr => isComptimeMutablePtr(val.castTag(.elem_ptr) orelse unreachable.data.array_ptr),
+            .field_ptr => isComptimeMutablePtr(val.castTag(.field_ptr) orelse unreachable.data.container_ptr),
+            .eu_payload_ptr => isComptimeMutablePtr(val.castTag(.eu_payload_ptr) orelse unreachable.data.container_ptr),
+            .opt_payload_ptr => isComptimeMutablePtr(val.castTag(.opt_payload_ptr) orelse unreachable.data.container_ptr),
 
             else => false,
         };
@@ -2348,19 +2348,19 @@ pub const Value = extern union {
     pub fn canMutateComptimeVarState(val: Value) bool {
         if (val.isComptimeMutablePtr()) return true;
         switch (val.tag()) {
-            .repeated => return val.castTag(.repeated).?.data.canMutateComptimeVarState(),
-            .eu_payload => return val.castTag(.eu_payload).?.data.canMutateComptimeVarState(),
-            .eu_payload_ptr => return val.castTag(.eu_payload_ptr).?.data.container_ptr.canMutateComptimeVarState(),
-            .opt_payload => return val.castTag(.opt_payload).?.data.canMutateComptimeVarState(),
-            .opt_payload_ptr => return val.castTag(.opt_payload_ptr).?.data.container_ptr.canMutateComptimeVarState(),
+            .repeated => return val.castTag(.repeated) orelse unreachable.data.canMutateComptimeVarState(),
+            .eu_payload => return val.castTag(.eu_payload) orelse unreachable.data.canMutateComptimeVarState(),
+            .eu_payload_ptr => return val.castTag(.eu_payload_ptr) orelse unreachable.data.container_ptr.canMutateComptimeVarState(),
+            .opt_payload => return val.castTag(.opt_payload) orelse unreachable.data.canMutateComptimeVarState(),
+            .opt_payload_ptr => return val.castTag(.opt_payload_ptr) orelse unreachable.data.container_ptr.canMutateComptimeVarState(),
             .aggregate => {
-                const fields = val.castTag(.aggregate).?.data;
+                const fields = val.castTag(.aggregate) orelse unreachable.data;
                 for (fields) |field| {
                     if (field.canMutateComptimeVarState()) return true;
                 }
                 return false;
             },
-            .@"union" => return val.cast(Payload.Union).?.data.val.canMutateComptimeVarState(),
+            .@"union" => return val.cast(Payload.Union) orelse unreachable.data.val.canMutateComptimeVarState(),
             else => return false,
         }
     }
@@ -2370,11 +2370,11 @@ pub const Value = extern union {
     /// this function returns null.
     pub fn pointerDecl(val: Value) ?Module.Decl.Index {
         return switch (val.tag()) {
-            .decl_ref_mut => val.castTag(.decl_ref_mut).?.data.decl_index,
-            .extern_fn => val.castTag(.extern_fn).?.data.owner_decl,
-            .function => val.castTag(.function).?.data.owner_decl,
-            .variable => val.castTag(.variable).?.data.owner_decl,
-            .decl_ref => val.cast(Payload.Decl).?.data,
+            .decl_ref_mut => val.castTag(.decl_ref_mut) orelse unreachable.data.decl_index,
+            .extern_fn => val.castTag(.extern_fn) orelse unreachable.data.owner_decl,
+            .function => val.castTag(.function) orelse unreachable.data.owner_decl,
+            .variable => val.castTag(.variable) orelse unreachable.data.owner_decl,
+            .decl_ref => val.cast(Payload.Decl) orelse unreachable.data,
             else => null,
         };
     }
@@ -2396,29 +2396,29 @@ pub const Value = extern union {
             .function,
             .variable,
             => {
-                const decl: Module.Decl.Index = ptr_val.pointerDecl().?;
+                const decl: Module.Decl.Index = ptr_val.pointerDecl() orelse unreachable;
                 std.hash.autoHash(hasher, decl);
             },
 
             .elem_ptr => {
-                const elem_ptr = ptr_val.castTag(.elem_ptr).?.data;
+                const elem_ptr = ptr_val.castTag(.elem_ptr) orelse unreachable.data;
                 hashPtr(elem_ptr.array_ptr, hasher, target);
                 std.hash.autoHash(hasher, Value.Tag.elem_ptr);
                 std.hash.autoHash(hasher, elem_ptr.index);
             },
             .field_ptr => {
-                const field_ptr = ptr_val.castTag(.field_ptr).?.data;
+                const field_ptr = ptr_val.castTag(.field_ptr) orelse unreachable.data;
                 std.hash.autoHash(hasher, Value.Tag.field_ptr);
                 hashPtr(field_ptr.container_ptr, hasher, target);
                 std.hash.autoHash(hasher, field_ptr.field_index);
             },
             .eu_payload_ptr => {
-                const err_union_ptr = ptr_val.castTag(.eu_payload_ptr).?.data;
+                const err_union_ptr = ptr_val.castTag(.eu_payload_ptr) orelse unreachable.data;
                 std.hash.autoHash(hasher, Value.Tag.eu_payload_ptr);
                 hashPtr(err_union_ptr.container_ptr, hasher, target);
             },
             .opt_payload_ptr => {
-                const opt_ptr = ptr_val.castTag(.opt_payload_ptr).?.data;
+                const opt_ptr = ptr_val.castTag(.opt_payload_ptr) orelse unreachable.data;
                 std.hash.autoHash(hasher, Value.Tag.opt_payload_ptr);
                 hashPtr(opt_ptr.container_ptr, hasher, target);
             },
@@ -2442,7 +2442,7 @@ pub const Value = extern union {
 
     pub fn slicePtr(val: Value) Value {
         return switch (val.tag()) {
-            .slice => val.castTag(.slice).?.data.ptr,
+            .slice => val.castTag(.slice) orelse unreachable.data.ptr,
             // TODO this should require being a slice tag, and not allow decl_ref, field_ptr, etc.
             .decl_ref, .decl_ref_mut, .field_ptr, .elem_ptr => val,
             else => unreachable,
@@ -2451,9 +2451,9 @@ pub const Value = extern union {
 
     pub fn sliceLen(val: Value, mod: *Module) u64 {
         return switch (val.tag()) {
-            .slice => val.castTag(.slice).?.data.len.toUnsignedInt(mod.getTarget()),
+            .slice => val.castTag(.slice) orelse unreachable.data.len.toUnsignedInt(mod.getTarget()),
             .decl_ref => {
-                const decl_index = val.castTag(.decl_ref).?.data;
+                const decl_index = val.castTag(.decl_ref) orelse unreachable.data;
                 const decl = mod.declPtr(decl_index);
                 if (decl.ty.zigTypeTag() == .Array) {
                     return decl.ty.arrayLen();
@@ -2462,7 +2462,7 @@ pub const Value = extern union {
                 }
             },
             .decl_ref_mut => {
-                const decl_index = val.castTag(.decl_ref_mut).?.data.decl_index;
+                const decl_index = val.castTag(.decl_ref_mut) orelse unreachable.data.decl_index;
                 const decl = mod.declPtr(decl_index);
                 if (decl.ty.zigTypeTag() == .Array) {
                     return decl.ty.arrayLen();
@@ -2479,9 +2479,9 @@ pub const Value = extern union {
     /// a new `repeated` each time a constant is used.
     pub fn indexVectorlike(val: Value, index: usize) Value {
         return switch (val.tag()) {
-            .aggregate => val.castTag(.aggregate).?.data[index],
+            .aggregate => val.castTag(.aggregate) orelse unreachable.data[index],
 
-            .repeated => val.castTag(.repeated).?.data,
+            .repeated => val.castTag(.repeated) orelse unreachable.data,
             // These values will implicitly be treated as `repeated`.
             .zero,
             .one,
@@ -2522,11 +2522,11 @@ pub const Value = extern union {
 
             .empty_array_sentinel => {
                 assert(index == 0); // The only valid index for an empty array with sentinel.
-                return val.castTag(.empty_array_sentinel).?.data;
+                return val.castTag(.empty_array_sentinel) orelse unreachable.data;
             },
 
             .bytes => {
-                const byte = val.castTag(.bytes).?.data[index];
+                const byte = val.castTag(.bytes) orelse unreachable.data[index];
                 if (arena) |a| {
                     return Tag.int_u64.create(a, byte);
                 } else {
@@ -2539,15 +2539,15 @@ pub const Value = extern union {
             },
 
             // No matter the index; all the elements are the same!
-            .repeated => return val.castTag(.repeated).?.data,
+            .repeated => return val.castTag(.repeated) orelse unreachable.data,
 
-            .aggregate => return val.castTag(.aggregate).?.data[index],
-            .slice => return val.castTag(.slice).?.data.ptr.elemValueAdvanced(mod, index, arena, buffer),
+            .aggregate => return val.castTag(.aggregate) orelse unreachable.data[index],
+            .slice => return val.castTag(.slice) orelse unreachable.data.ptr.elemValueAdvanced(mod, index, arena, buffer),
 
-            .decl_ref => return mod.declPtr(val.castTag(.decl_ref).?.data).val.elemValueAdvanced(mod, index, arena, buffer),
-            .decl_ref_mut => return mod.declPtr(val.castTag(.decl_ref_mut).?.data.decl_index).val.elemValueAdvanced(mod, index, arena, buffer),
+            .decl_ref => return mod.declPtr(val.castTag(.decl_ref) orelse unreachable.data).val.elemValueAdvanced(mod, index, arena, buffer),
+            .decl_ref_mut => return mod.declPtr(val.castTag(.decl_ref_mut) orelse unreachable.data.decl_index).val.elemValueAdvanced(mod, index, arena, buffer),
             .elem_ptr => {
-                const data = val.castTag(.elem_ptr).?.data;
+                const data = val.castTag(.elem_ptr) orelse unreachable.data;
                 return data.array_ptr.elemValueAdvanced(mod, index + data.index, arena, buffer);
             },
 
@@ -2569,14 +2569,14 @@ pub const Value = extern union {
     ) error{OutOfMemory}!Value {
         return switch (val.tag()) {
             .empty_array_sentinel => if (start == 0 and end == 1) val else Value.initTag(.empty_array),
-            .bytes => Tag.bytes.create(arena, val.castTag(.bytes).?.data[start..end]),
-            .aggregate => Tag.aggregate.create(arena, val.castTag(.aggregate).?.data[start..end]),
-            .slice => sliceArray(val.castTag(.slice).?.data.ptr, mod, arena, start, end),
+            .bytes => Tag.bytes.create(arena, val.castTag(.bytes) orelse unreachable.data[start..end]),
+            .aggregate => Tag.aggregate.create(arena, val.castTag(.aggregate) orelse unreachable.data[start..end]),
+            .slice => sliceArray(val.castTag(.slice) orelse unreachable.data.ptr, mod, arena, start, end),
 
-            .decl_ref => sliceArray(mod.declPtr(val.castTag(.decl_ref).?.data).val, mod, arena, start, end),
-            .decl_ref_mut => sliceArray(mod.declPtr(val.castTag(.decl_ref_mut).?.data.decl_index).val, mod, arena, start, end),
+            .decl_ref => sliceArray(mod.declPtr(val.castTag(.decl_ref) orelse unreachable.data).val, mod, arena, start, end),
+            .decl_ref_mut => sliceArray(mod.declPtr(val.castTag(.decl_ref_mut) orelse unreachable.data.decl_index).val, mod, arena, start, end),
             .elem_ptr => blk: {
-                const elem_ptr = val.castTag(.elem_ptr).?.data;
+                const elem_ptr = val.castTag(.elem_ptr) orelse unreachable.data;
                 break :blk sliceArray(elem_ptr.array_ptr, mod, arena, start + elem_ptr.index, end + elem_ptr.index);
             },
 
@@ -2591,16 +2591,16 @@ pub const Value = extern union {
     pub fn fieldValue(val: Value, ty: Type, index: usize) Value {
         switch (val.tag()) {
             .aggregate => {
-                const field_values = val.castTag(.aggregate).?.data;
+                const field_values = val.castTag(.aggregate) orelse unreachable.data;
                 return field_values[index];
             },
             .@"union" => {
-                const payload = val.castTag(.@"union").?.data;
+                const payload = val.castTag(.@"union") orelse unreachable.data;
                 // TODO assert the tag is correct
                 return payload.val;
             },
 
-            .the_only_possible_value => return ty.onePossibleValue().?,
+            .the_only_possible_value => return ty.onePossibleValue() orelse unreachable,
 
             .empty_struct_value => {
                 if (ty.isTupleOrAnonStruct()) {
@@ -2617,7 +2617,7 @@ pub const Value = extern union {
     pub fn unionTag(val: Value) Value {
         switch (val.tag()) {
             .undef, .enum_field_index => return val,
-            .@"union" => return val.castTag(.@"union").?.data.tag,
+            .@"union" => return val.castTag(.@"union") orelse unreachable.data.tag,
             else => unreachable,
         }
     }
@@ -2632,12 +2632,12 @@ pub const Value = extern union {
     ) Allocator.Error!Value {
         const elem_ty = ty.elemType2();
         const ptr_val = switch (val.tag()) {
-            .slice => val.castTag(.slice).?.data.ptr,
+            .slice => val.castTag(.slice) orelse unreachable.data.ptr,
             else => val,
         };
 
         if (ptr_val.tag() == .elem_ptr) {
-            const elem_ptr = ptr_val.castTag(.elem_ptr).?.data;
+            const elem_ptr = ptr_val.castTag(.elem_ptr) orelse unreachable.data;
             if (elem_ptr.elem_ty.eql(elem_ty, mod)) {
                 return Tag.elem_ptr.create(arena, .{
                     .array_ptr = elem_ptr.array_ptr,
@@ -2703,7 +2703,7 @@ pub const Value = extern union {
     /// because it works without having to figure out the string.
     pub fn getError(self: Value) ?[]const u8 {
         return switch (self.tag()) {
-            .@"error" => self.castTag(.@"error").?.data.name,
+            .@"error" => self.castTag(.@"error") orelse unreachable.data.name,
             .int_u64 => @panic("TODO"),
             .int_i64 => @panic("TODO"),
             .int_big_positive => @panic("TODO"),
@@ -2773,18 +2773,18 @@ pub const Value = extern union {
             .undef, .zero, .one => return val,
             .the_only_possible_value => return Value.initTag(.zero), // for i0, u0
             .int_u64 => {
-                return intToFloatInner(val.castTag(.int_u64).?.data, arena, float_ty, target);
+                return intToFloatInner(val.castTag(.int_u64) orelse unreachable.data, arena, float_ty, target);
             },
             .int_i64 => {
-                return intToFloatInner(val.castTag(.int_i64).?.data, arena, float_ty, target);
+                return intToFloatInner(val.castTag(.int_i64) orelse unreachable.data, arena, float_ty, target);
             },
             .int_big_positive => {
-                const limbs = val.castTag(.int_big_positive).?.data;
+                const limbs = val.castTag(.int_big_positive) orelse unreachable.data;
                 const float = bigIntToFloat(limbs, true);
                 return floatToValue(float, arena, float_ty, target);
             },
             .int_big_negative => {
-                const limbs = val.castTag(.int_big_negative).?.data;
+                const limbs = val.castTag(.int_big_negative) orelse unreachable.data;
                 const float = bigIntToFloat(limbs, false);
                 return floatToValue(float, arena, float_ty, target);
             },
@@ -3414,11 +3414,11 @@ pub const Value = extern union {
     /// Returns true if the value is a floating point type and is NaN. Returns false otherwise.
     pub fn isNan(val: Value) bool {
         return switch (val.tag()) {
-            .float_16 => std.math.isNan(val.castTag(.float_16).?.data),
-            .float_32 => std.math.isNan(val.castTag(.float_32).?.data),
-            .float_64 => std.math.isNan(val.castTag(.float_64).?.data),
-            .float_80 => std.math.isNan(val.castTag(.float_80).?.data),
-            .float_128 => std.math.isNan(val.castTag(.float_128).?.data),
+            .float_16 => std.math.isNan(val.castTag(.float_16) orelse unreachable.data),
+            .float_32 => std.math.isNan(val.castTag(.float_32) orelse unreachable.data),
+            .float_64 => std.math.isNan(val.castTag(.float_64) orelse unreachable.data),
+            .float_80 => std.math.isNan(val.castTag(.float_80) orelse unreachable.data),
+            .float_128 => std.math.isNan(val.castTag(.float_128) orelse unreachable.data),
             else => false,
         };
     }

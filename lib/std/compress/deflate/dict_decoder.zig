@@ -47,8 +47,8 @@ pub const DictDecoder = struct {
         self.wr_pos = 0;
 
         if (dict != null) {
-            mem.copy(u8, self.hist, dict.?[dict.?.len -| self.hist.len..]);
-            self.wr_pos = @intCast(u32, dict.?.len);
+            mem.copy(u8, self.hist, dict orelse unreachable[dict orelse unreachable.len -| self.hist.len..]);
+            self.wr_pos = @intCast(u32, dict orelse unreachable.len);
         }
 
         if (self.wr_pos == self.hist.len) {

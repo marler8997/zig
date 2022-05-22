@@ -343,7 +343,7 @@ pub const CityHash64 = struct {
 };
 
 fn SMHasherTest(comptime hash_fn: anytype) u32 {
-    const HashResult = @typeInfo(@TypeOf(hash_fn)).Fn.return_type.?;
+    const HashResult = @typeInfo(@TypeOf(hash_fn)).Fn.return_type orelse unreachable;
 
     var key: [256]u8 = undefined;
     var hashes_bytes: [256 * @sizeOf(HashResult)]u8 = undefined;

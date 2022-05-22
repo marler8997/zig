@@ -53,7 +53,7 @@ pub fn openPath(gpa: Allocator, sub_path: []const u8, options: link.Options) !*C
     if (options.use_llvm) return error.LLVMHasNoCBackend;
     if (options.use_lld) return error.LLDHasNoCBackend;
 
-    const file = try options.emit.?.directory.handle.createFile(sub_path, .{
+    const file = try options.emit orelse unreachable.directory.handle.createFile(sub_path, .{
         // Truncation is done on `flush`.
         .truncate = false,
         .mode = link.determineMode(options),
@@ -151,7 +151,7 @@ pub fn updateFunc(self: *C, module: *Module, func: *Module.Fn, air: Air, livenes
 
     codegen.genFunc(&function) catch |err| switch (err) {
         error.AnalysisFail => {
-            try module.failed_decls.put(module.gpa, decl_index, function.object.dg.error_msg.?);
+            try module.failed_decls.put(module.gpa, decl_index, function.object.dg.error_msg orelse unreachable);
             return;
         },
         else => |e| return e,
@@ -215,7 +215,7 @@ pub fn updateDecl(self: *C, module: *Module, decl_index: Module.Decl.Index) !voi
 
     codegen.genDecl(&object) catch |err| switch (err) {
         error.AnalysisFail => {
-            try module.failed_decls.put(module.gpa, decl_index, object.dg.error_msg.?);
+            try module.failed_decls.put(module.gpa, decl_index, object.dg.error_msg orelse unreachable);
             return;
         },
         else => |e| return e,
@@ -252,7 +252,7 @@ pub fn flushModule(self: *C, comp: *Compilation, prog_node: *std.Progress.Node) 
     defer sub_prog_node.end();
 
     const gpa = comp.gpa;
-    const module = self.base.options.module.?;
+    const module = self.base.options.module orelse unreachable;
 
     // This code path happens exclusively with -ofmt=c. The flush logic for
     // emit-h is in `flushEmitH` below.
@@ -324,7 +324,7 @@ pub fn flushModule(self: *C, comp: *Compilation, prog_node: *std.Progress.Node) 
         }
     }
 
-    const file = self.base.file.?;
+    const file = self.base.file orelse unreachable;
     try file.setEndPos(f.file_size);
     try file.pwritevAll(f.all_buffers.items, 0);
 }
@@ -360,7 +360,7 @@ const FlushDeclError = error{
 
 /// Assumes `decl` was in the `remaining_decls` set, and has already been removed.
 fn flushDecl(self: *C, f: *Flush, decl_index: Module.Decl.Index) FlushDeclError!void {
-    const module = self.base.options.module.?;
+    const module = self.base.options.module orelse unreachable;
     const decl = module.declPtr(decl_index);
     // Before flushing any particular Decl we must ensure its
     // dependencies are already flushed, so that the order in the .c
@@ -371,7 +371,7 @@ fn flushDecl(self: *C, f: *Flush, decl_index: Module.Decl.Index) FlushDeclError!
         }
     }
 
-    const decl_block = self.decl_table.getPtr(decl_index).?;
+    const decl_block = self.decl_table.getPtr(decl_index) orelse unreachable;
     const gpa = self.base.allocator;
 
     if (decl_block.typedefs.count() != 0) {

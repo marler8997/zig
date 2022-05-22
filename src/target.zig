@@ -131,7 +131,7 @@ pub fn canBuildLibC(target: std.Target) bool {
         if (target.cpu.arch == libc.arch and target.os.tag == libc.os and target.abi == libc.abi) {
             if (target.os.tag == .macos) {
                 const ver = target.os.version_range.semver;
-                if (ver.min.major != libc.os_ver.?.major) continue; // no match, keep going
+                if (ver.min.major != libc.os_ver orelse unreachable.major) continue; // no match, keep going
             }
             return true;
         }

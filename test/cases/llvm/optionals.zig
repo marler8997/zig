@@ -6,10 +6,10 @@ pub fn main() void {
     var opt_val: ?i32 = 10;
     var null_val: ?i32 = null;
 
-    var val1: i32 = opt_val.?;
-    const val1_1: i32 = opt_val.?;
-    var ptr_val1 = &(opt_val.?);
-    const ptr_val1_1 = &(opt_val.?);
+    var val1: i32 = opt_val orelse unreachable;
+    const val1_1: i32 = opt_val orelse unreachable;
+    var ptr_val1 = &(opt_val orelse unreachable);
+    const ptr_val1_1 = &(opt_val orelse unreachable);
 
     var val2: i32 = null_val orelse 20;
     const val2_2: i32 = null_val orelse 20;
@@ -36,7 +36,7 @@ pub fn main() void {
     assert(val2 == 1234);
 
     (opt_val orelse val2) = 5678;
-    assert(opt_val.? == 5678);
+    assert(opt_val orelse unreachable == 5678);
 }
 
 // run

@@ -17,4 +17,4 @@ const ExpectedVarDeclOrFn = struct {};
 // target=native
 // is_test=1
 //
-// tmp.zig:4:9: error: expected type '@typeInfo(Error).Union.tag_type.?', found 'type'
+// tmp.zig:4:9: error: expected type '@typeInfo(Error).Union.tag_type orelse unreachable', found 'type'

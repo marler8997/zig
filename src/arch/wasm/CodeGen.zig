@@ -205,30 +205,30 @@ fn buildOpcode(args: OpcodeBuildArguments) wasm.Opcode {
         .global_set => return .global_set,
 
         .load => if (args.width) |width| switch (width) {
-            8 => switch (args.valtype1.?) {
-                .i32 => if (args.signedness.? == .signed) return .i32_load8_s else return .i32_load8_u,
-                .i64 => if (args.signedness.? == .signed) return .i64_load8_s else return .i64_load8_u,
+            8 => switch (args.valtype1 orelse unreachable) {
+                .i32 => if (args.signedness orelse unreachable == .signed) return .i32_load8_s else return .i32_load8_u,
+                .i64 => if (args.signedness orelse unreachable == .signed) return .i64_load8_s else return .i64_load8_u,
                 .f32, .f64 => unreachable,
             },
-            16 => switch (args.valtype1.?) {
-                .i32 => if (args.signedness.? == .signed) return .i32_load16_s else return .i32_load16_u,
-                .i64 => if (args.signedness.? == .signed) return .i64_load16_s else return .i64_load16_u,
+            16 => switch (args.valtype1 orelse unreachable) {
+                .i32 => if (args.signedness orelse unreachable == .signed) return .i32_load16_s else return .i32_load16_u,
+                .i64 => if (args.signedness orelse unreachable == .signed) return .i64_load16_s else return .i64_load16_u,
                 .f32 => return .f32_load,
                 .f64 => unreachable,
             },
-            32 => switch (args.valtype1.?) {
-                .i64 => if (args.signedness.? == .signed) return .i64_load32_s else return .i64_load32_u,
+            32 => switch (args.valtype1 orelse unreachable) {
+                .i64 => if (args.signedness orelse unreachable == .signed) return .i64_load32_s else return .i64_load32_u,
                 .i32 => return .i32_load,
                 .f32 => return .f32_load,
                 .f64 => unreachable,
             },
-            64 => switch (args.valtype1.?) {
+            64 => switch (args.valtype1 orelse unreachable) {
                 .i64 => return .i64_load,
                 .f64 => return .f64_load,
                 else => unreachable,
             },
             else => unreachable,
-        } else switch (args.valtype1.?) {
+        } else switch (args.valtype1 orelse unreachable) {
             .i32 => return .i32_load,
             .i64 => return .i64_load,
             .f32 => return .f32_load,
@@ -236,24 +236,24 @@ fn buildOpcode(args: OpcodeBuildArguments) wasm.Opcode {
         },
         .store => if (args.width) |width| {
             switch (width) {
-                8 => switch (args.valtype1.?) {
+                8 => switch (args.valtype1 orelse unreachable) {
                     .i32 => return .i32_store8,
                     .i64 => return .i64_store8,
                     .f32, .f64 => unreachable,
                 },
-                16 => switch (args.valtype1.?) {
+                16 => switch (args.valtype1 orelse unreachable) {
                     .i32 => return .i32_store16,
                     .i64 => return .i64_store16,
                     .f32 => return .f32_store,
                     .f64 => unreachable,
                 },
-                32 => switch (args.valtype1.?) {
+                32 => switch (args.valtype1 orelse unreachable) {
                     .i64 => return .i64_store32,
                     .i32 => return .i32_store,
                     .f32 => return .f32_store,
                     .f64 => unreachable,
                 },
-                64 => switch (args.valtype1.?) {
+                64 => switch (args.valtype1 orelse unreachable) {
                     .i64 => return .i64_store,
                     .f64 => return .f64_store,
                     else => unreachable,
@@ -261,7 +261,7 @@ fn buildOpcode(args: OpcodeBuildArguments) wasm.Opcode {
                 else => unreachable,
             }
         } else {
-            switch (args.valtype1.?) {
+            switch (args.valtype1 orelse unreachable) {
                 .i32 => return .i32_store,
                 .i64 => return .i64_store,
                 .f32 => return .f32_store,
@@ -272,236 +272,236 @@ fn buildOpcode(args: OpcodeBuildArguments) wasm.Opcode {
         .memory_size => return .memory_size,
         .memory_grow => return .memory_grow,
 
-        .@"const" => switch (args.valtype1.?) {
+        .@"const" => switch (args.valtype1 orelse unreachable) {
             .i32 => return .i32_const,
             .i64 => return .i64_const,
             .f32 => return .f32_const,
             .f64 => return .f64_const,
         },
 
-        .eqz => switch (args.valtype1.?) {
+        .eqz => switch (args.valtype1 orelse unreachable) {
             .i32 => return .i32_eqz,
             .i64 => return .i64_eqz,
             .f32, .f64 => unreachable,
         },
-        .eq => switch (args.valtype1.?) {
+        .eq => switch (args.valtype1 orelse unreachable) {
             .i32 => return .i32_eq,
             .i64 => return .i64_eq,
             .f32 => return .f32_eq,
             .f64 => return .f64_eq,
         },
-        .ne => switch (args.valtype1.?) {
+        .ne => switch (args.valtype1 orelse unreachable) {
             .i32 => return .i32_ne,
             .i64 => return .i64_ne,
             .f32 => return .f32_ne,
             .f64 => return .f64_ne,
         },
 
-        .lt => switch (args.valtype1.?) {
-            .i32 => if (args.signedness.? == .signed) return .i32_lt_s else return .i32_lt_u,
-            .i64 => if (args.signedness.? == .signed) return .i64_lt_s else return .i64_lt_u,
+        .lt => switch (args.valtype1 orelse unreachable) {
+            .i32 => if (args.signedness orelse unreachable == .signed) return .i32_lt_s else return .i32_lt_u,
+            .i64 => if (args.signedness orelse unreachable == .signed) return .i64_lt_s else return .i64_lt_u,
             .f32 => return .f32_lt,
             .f64 => return .f64_lt,
         },
-        .gt => switch (args.valtype1.?) {
-            .i32 => if (args.signedness.? == .signed) return .i32_gt_s else return .i32_gt_u,
-            .i64 => if (args.signedness.? == .signed) return .i64_gt_s else return .i64_gt_u,
+        .gt => switch (args.valtype1 orelse unreachable) {
+            .i32 => if (args.signedness orelse unreachable == .signed) return .i32_gt_s else return .i32_gt_u,
+            .i64 => if (args.signedness orelse unreachable == .signed) return .i64_gt_s else return .i64_gt_u,
             .f32 => return .f32_gt,
             .f64 => return .f64_gt,
         },
-        .le => switch (args.valtype1.?) {
-            .i32 => if (args.signedness.? == .signed) return .i32_le_s else return .i32_le_u,
-            .i64 => if (args.signedness.? == .signed) return .i64_le_s else return .i64_le_u,
+        .le => switch (args.valtype1 orelse unreachable) {
+            .i32 => if (args.signedness orelse unreachable == .signed) return .i32_le_s else return .i32_le_u,
+            .i64 => if (args.signedness orelse unreachable == .signed) return .i64_le_s else return .i64_le_u,
             .f32 => return .f32_le,
             .f64 => return .f64_le,
         },
-        .ge => switch (args.valtype1.?) {
-            .i32 => if (args.signedness.? == .signed) return .i32_ge_s else return .i32_ge_u,
-            .i64 => if (args.signedness.? == .signed) return .i64_ge_s else return .i64_ge_u,
+        .ge => switch (args.valtype1 orelse unreachable) {
+            .i32 => if (args.signedness orelse unreachable == .signed) return .i32_ge_s else return .i32_ge_u,
+            .i64 => if (args.signedness orelse unreachable == .signed) return .i64_ge_s else return .i64_ge_u,
             .f32 => return .f32_ge,
             .f64 => return .f64_ge,
         },
 
-        .clz => switch (args.valtype1.?) {
+        .clz => switch (args.valtype1 orelse unreachable) {
             .i32 => return .i32_clz,
             .i64 => return .i64_clz,
             .f32, .f64 => unreachable,
         },
-        .ctz => switch (args.valtype1.?) {
+        .ctz => switch (args.valtype1 orelse unreachable) {
             .i32 => return .i32_ctz,
             .i64 => return .i64_ctz,
             .f32, .f64 => unreachable,
         },
-        .popcnt => switch (args.valtype1.?) {
+        .popcnt => switch (args.valtype1 orelse unreachable) {
             .i32 => return .i32_popcnt,
             .i64 => return .i64_popcnt,
             .f32, .f64 => unreachable,
         },
 
-        .add => switch (args.valtype1.?) {
+        .add => switch (args.valtype1 orelse unreachable) {
             .i32 => return .i32_add,
             .i64 => return .i64_add,
             .f32 => return .f32_add,
             .f64 => return .f64_add,
         },
-        .sub => switch (args.valtype1.?) {
+        .sub => switch (args.valtype1 orelse unreachable) {
             .i32 => return .i32_sub,
             .i64 => return .i64_sub,
             .f32 => return .f32_sub,
             .f64 => return .f64_sub,
         },
-        .mul => switch (args.valtype1.?) {
+        .mul => switch (args.valtype1 orelse unreachable) {
             .i32 => return .i32_mul,
             .i64 => return .i64_mul,
             .f32 => return .f32_mul,
             .f64 => return .f64_mul,
         },
 
-        .div => switch (args.valtype1.?) {
-            .i32 => if (args.signedness.? == .signed) return .i32_div_s else return .i32_div_u,
-            .i64 => if (args.signedness.? == .signed) return .i64_div_s else return .i64_div_u,
+        .div => switch (args.valtype1 orelse unreachable) {
+            .i32 => if (args.signedness orelse unreachable == .signed) return .i32_div_s else return .i32_div_u,
+            .i64 => if (args.signedness orelse unreachable == .signed) return .i64_div_s else return .i64_div_u,
             .f32 => return .f32_div,
             .f64 => return .f64_div,
         },
-        .rem => switch (args.valtype1.?) {
-            .i32 => if (args.signedness.? == .signed) return .i32_rem_s else return .i32_rem_u,
-            .i64 => if (args.signedness.? == .signed) return .i64_rem_s else return .i64_rem_u,
+        .rem => switch (args.valtype1 orelse unreachable) {
+            .i32 => if (args.signedness orelse unreachable == .signed) return .i32_rem_s else return .i32_rem_u,
+            .i64 => if (args.signedness orelse unreachable == .signed) return .i64_rem_s else return .i64_rem_u,
             .f32, .f64 => unreachable,
         },
 
-        .@"and" => switch (args.valtype1.?) {
+        .@"and" => switch (args.valtype1 orelse unreachable) {
             .i32 => return .i32_and,
             .i64 => return .i64_and,
             .f32, .f64 => unreachable,
         },
-        .@"or" => switch (args.valtype1.?) {
+        .@"or" => switch (args.valtype1 orelse unreachable) {
             .i32 => return .i32_or,
             .i64 => return .i64_or,
             .f32, .f64 => unreachable,
         },
-        .xor => switch (args.valtype1.?) {
+        .xor => switch (args.valtype1 orelse unreachable) {
             .i32 => return .i32_xor,
             .i64 => return .i64_xor,
             .f32, .f64 => unreachable,
         },
 
-        .shl => switch (args.valtype1.?) {
+        .shl => switch (args.valtype1 orelse unreachable) {
             .i32 => return .i32_shl,
             .i64 => return .i64_shl,
             .f32, .f64 => unreachable,
         },
-        .shr => switch (args.valtype1.?) {
-            .i32 => if (args.signedness.? == .signed) return .i32_shr_s else return .i32_shr_u,
-            .i64 => if (args.signedness.? == .signed) return .i64_shr_s else return .i64_shr_u,
+        .shr => switch (args.valtype1 orelse unreachable) {
+            .i32 => if (args.signedness orelse unreachable == .signed) return .i32_shr_s else return .i32_shr_u,
+            .i64 => if (args.signedness orelse unreachable == .signed) return .i64_shr_s else return .i64_shr_u,
             .f32, .f64 => unreachable,
         },
-        .rotl => switch (args.valtype1.?) {
+        .rotl => switch (args.valtype1 orelse unreachable) {
             .i32 => return .i32_rotl,
             .i64 => return .i64_rotl,
             .f32, .f64 => unreachable,
         },
-        .rotr => switch (args.valtype1.?) {
+        .rotr => switch (args.valtype1 orelse unreachable) {
             .i32 => return .i32_rotr,
             .i64 => return .i64_rotr,
             .f32, .f64 => unreachable,
         },
 
-        .abs => switch (args.valtype1.?) {
+        .abs => switch (args.valtype1 orelse unreachable) {
             .i32, .i64 => unreachable,
             .f32 => return .f32_abs,
             .f64 => return .f64_abs,
         },
-        .neg => switch (args.valtype1.?) {
+        .neg => switch (args.valtype1 orelse unreachable) {
             .i32, .i64 => unreachable,
             .f32 => return .f32_neg,
             .f64 => return .f64_neg,
         },
-        .ceil => switch (args.valtype1.?) {
+        .ceil => switch (args.valtype1 orelse unreachable) {
             .i32, .i64 => unreachable,
             .f32 => return .f32_ceil,
             .f64 => return .f64_ceil,
         },
-        .floor => switch (args.valtype1.?) {
+        .floor => switch (args.valtype1 orelse unreachable) {
             .i32, .i64 => unreachable,
             .f32 => return .f32_floor,
             .f64 => return .f64_floor,
         },
-        .trunc => switch (args.valtype1.?) {
-            .i32 => switch (args.valtype2.?) {
+        .trunc => switch (args.valtype1 orelse unreachable) {
+            .i32 => switch (args.valtype2 orelse unreachable) {
                 .i32 => unreachable,
                 .i64 => unreachable,
-                .f32 => if (args.signedness.? == .signed) return .i32_trunc_f32_s else return .i32_trunc_f32_u,
-                .f64 => if (args.signedness.? == .signed) return .i32_trunc_f64_s else return .i32_trunc_f64_u,
+                .f32 => if (args.signedness orelse unreachable == .signed) return .i32_trunc_f32_s else return .i32_trunc_f32_u,
+                .f64 => if (args.signedness orelse unreachable == .signed) return .i32_trunc_f64_s else return .i32_trunc_f64_u,
             },
             .i64 => unreachable,
             .f32 => return .f32_trunc,
             .f64 => return .f64_trunc,
         },
-        .nearest => switch (args.valtype1.?) {
+        .nearest => switch (args.valtype1 orelse unreachable) {
             .i32, .i64 => unreachable,
             .f32 => return .f32_nearest,
             .f64 => return .f64_nearest,
         },
-        .sqrt => switch (args.valtype1.?) {
+        .sqrt => switch (args.valtype1 orelse unreachable) {
             .i32, .i64 => unreachable,
             .f32 => return .f32_sqrt,
             .f64 => return .f64_sqrt,
         },
-        .min => switch (args.valtype1.?) {
+        .min => switch (args.valtype1 orelse unreachable) {
             .i32, .i64 => unreachable,
             .f32 => return .f32_min,
             .f64 => return .f64_min,
         },
-        .max => switch (args.valtype1.?) {
+        .max => switch (args.valtype1 orelse unreachable) {
             .i32, .i64 => unreachable,
             .f32 => return .f32_max,
             .f64 => return .f64_max,
         },
-        .copysign => switch (args.valtype1.?) {
+        .copysign => switch (args.valtype1 orelse unreachable) {
             .i32, .i64 => unreachable,
             .f32 => return .f32_copysign,
             .f64 => return .f64_copysign,
         },
 
-        .wrap => switch (args.valtype1.?) {
-            .i32 => switch (args.valtype2.?) {
+        .wrap => switch (args.valtype1 orelse unreachable) {
+            .i32 => switch (args.valtype2 orelse unreachable) {
                 .i32 => unreachable,
                 .i64 => return .i32_wrap_i64,
                 .f32, .f64 => unreachable,
             },
             .i64, .f32, .f64 => unreachable,
         },
-        .convert => switch (args.valtype1.?) {
+        .convert => switch (args.valtype1 orelse unreachable) {
             .i32, .i64 => unreachable,
-            .f32 => switch (args.valtype2.?) {
-                .i32 => if (args.signedness.? == .signed) return .f32_convert_i32_s else return .f32_convert_i32_u,
-                .i64 => if (args.signedness.? == .signed) return .f32_convert_i64_s else return .f32_convert_i64_u,
+            .f32 => switch (args.valtype2 orelse unreachable) {
+                .i32 => if (args.signedness orelse unreachable == .signed) return .f32_convert_i32_s else return .f32_convert_i32_u,
+                .i64 => if (args.signedness orelse unreachable == .signed) return .f32_convert_i64_s else return .f32_convert_i64_u,
                 .f32, .f64 => unreachable,
             },
-            .f64 => switch (args.valtype2.?) {
-                .i32 => if (args.signedness.? == .signed) return .f64_convert_i32_s else return .f64_convert_i32_u,
-                .i64 => if (args.signedness.? == .signed) return .f64_convert_i64_s else return .f64_convert_i64_u,
+            .f64 => switch (args.valtype2 orelse unreachable) {
+                .i32 => if (args.signedness orelse unreachable == .signed) return .f64_convert_i32_s else return .f64_convert_i32_u,
+                .i64 => if (args.signedness orelse unreachable == .signed) return .f64_convert_i64_s else return .f64_convert_i64_u,
                 .f32, .f64 => unreachable,
             },
         },
-        .demote => if (args.valtype1.? == .f32 and args.valtype2.? == .f64) return .f32_demote_f64 else unreachable,
-        .promote => if (args.valtype1.? == .f64 and args.valtype2.? == .f32) return .f64_promote_f32 else unreachable,
-        .reinterpret => switch (args.valtype1.?) {
-            .i32 => if (args.valtype2.? == .f32) return .i32_reinterpret_f32 else unreachable,
-            .i64 => if (args.valtype2.? == .f64) return .i64_reinterpret_f64 else unreachable,
-            .f32 => if (args.valtype2.? == .i32) return .f32_reinterpret_i32 else unreachable,
-            .f64 => if (args.valtype2.? == .i64) return .f64_reinterpret_i64 else unreachable,
+        .demote => if (args.valtype1 orelse unreachable == .f32 and args.valtype2 orelse unreachable == .f64) return .f32_demote_f64 else unreachable,
+        .promote => if (args.valtype1 orelse unreachable == .f64 and args.valtype2 orelse unreachable == .f32) return .f64_promote_f32 else unreachable,
+        .reinterpret => switch (args.valtype1 orelse unreachable) {
+            .i32 => if (args.valtype2 orelse unreachable == .f32) return .i32_reinterpret_f32 else unreachable,
+            .i64 => if (args.valtype2 orelse unreachable == .f64) return .i64_reinterpret_f64 else unreachable,
+            .f32 => if (args.valtype2 orelse unreachable == .i32) return .f32_reinterpret_i32 else unreachable,
+            .f64 => if (args.valtype2 orelse unreachable == .i64) return .f64_reinterpret_i64 else unreachable,
         },
-        .extend => switch (args.valtype1.?) {
-            .i32 => switch (args.width.?) {
-                8 => if (args.signedness.? == .signed) return .i32_extend8_s else unreachable,
-                16 => if (args.signedness.? == .signed) return .i32_extend16_s else unreachable,
+        .extend => switch (args.valtype1 orelse unreachable) {
+            .i32 => switch (args.width orelse unreachable) {
+                8 => if (args.signedness orelse unreachable == .signed) return .i32_extend8_s else unreachable,
+                16 => if (args.signedness orelse unreachable == .signed) return .i32_extend16_s else unreachable,
                 else => unreachable,
             },
-            .i64 => switch (args.width.?) {
-                8 => if (args.signedness.? == .signed) return .i64_extend8_s else unreachable,
-                16 => if (args.signedness.? == .signed) return .i64_extend16_s else unreachable,
-                32 => if (args.signedness.? == .signed) return .i64_extend32_s else unreachable,
+            .i64 => switch (args.width orelse unreachable) {
+                8 => if (args.signedness orelse unreachable == .signed) return .i64_extend8_s else unreachable,
+                16 => if (args.signedness orelse unreachable == .signed) return .i64_extend16_s else unreachable,
+                32 => if (args.signedness orelse unreachable == .signed) return .i64_extend32_s else unreachable,
                 else => unreachable,
             },
             .f32, .f64 => unreachable,
@@ -634,7 +634,7 @@ fn resolveInst(self: *Self, ref: Air.Inst.Ref) InnerError!WValue {
 
     // when we did not find an existing instruction, it
     // means we must generate it from a constant.
-    const val = self.air.value(ref).?;
+    const val = self.air.value(ref) orelse unreachable;
     const ty = self.air.typeOf(ref);
     if (!ty.hasRuntimeBitsIgnoreComptime() and !ty.isInt()) {
         gop.value_ptr.* = WValue{ .none = {} };
@@ -855,11 +855,11 @@ pub fn generate(
         .values = .{},
         .code = code,
         .decl_index = func.owner_decl,
-        .decl = bin_file.options.module.?.declPtr(func.owner_decl),
+        .decl = bin_file.options.module orelse unreachable.declPtr(func.owner_decl),
         .err_msg = undefined,
         .locals = .{},
         .target = bin_file.options.target,
-        .bin_file = bin_file.cast(link.File.Wasm).?,
+        .bin_file = bin_file.cast(link.File.Wasm) orelse unreachable,
         .debug_output = debug_output,
         .mod_fn = func,
     };
@@ -956,7 +956,7 @@ fn genFunc(self: *Self) InnerError!void {
 
     emit.emitMir() catch |err| switch (err) {
         error.EmitFail => {
-            self.err_msg = emit.error_msg.?;
+            self.err_msg = emit.error_msg orelse unreachable;
             return error.CodegenFail;
         },
         else => |e| return e,
@@ -1160,7 +1160,7 @@ fn allocStack(self: *Self, ty: Type) !WValue {
     }
 
     const abi_size = std.math.cast(u32, ty.abiSize(self.target)) catch {
-        const module = self.bin_file.base.options.module.?;
+        const module = self.bin_file.base.options.module orelse unreachable;
         return self.fail("Type {} with ABI size of {d} exceeds stack frame size", .{
             ty.fmt(module), ty.abiSize(self.target),
         });
@@ -1195,7 +1195,7 @@ fn allocStackPtr(self: *Self, inst: Air.Inst.Index) !WValue {
 
     const abi_alignment = ptr_ty.ptrAlignment(self.target);
     const abi_size = std.math.cast(u32, pointee_ty.abiSize(self.target)) catch {
-        const module = self.bin_file.base.options.module.?;
+        const module = self.bin_file.base.options.module orelse unreachable;
         return self.fail("Type {} with ABI size of {d} exceeds stack frame size", .{
             pointee_ty.fmt(module), pointee_ty.abiSize(self.target),
         });
@@ -1704,7 +1704,7 @@ fn airCall(self: *Self, inst: Air.Inst.Index, modifier: std.builtin.CallOptions.
 
     const callee: ?*Decl = blk: {
         const func_val = self.air.value(pl_op.operand) orelse break :blk null;
-        const module = self.bin_file.base.options.module.?;
+        const module = self.bin_file.base.options.module orelse unreachable;
 
         if (func_val.castTag(.function)) |func| {
             break :blk module.declPtr(func.data.owner_decl);
@@ -1920,7 +1920,7 @@ fn airArg(self: *Self, inst: Air.Inst.Index) InnerError!WValue {
             if (arg_ty.zigTypeTag() != .Int) {
                 return self.fail(
                     "TODO: Implement C-ABI argument for type '{}'",
-                    .{arg_ty.fmt(self.bin_file.base.options.module.?)},
+                    .{arg_ty.fmt(self.bin_file.base.options.module orelse unreachable)},
                 );
             }
             const result = try self.allocStack(arg_ty);
@@ -1978,7 +1978,7 @@ fn binOp(self: *Self, lhs: WValue, rhs: WValue, ty: Type, op: Op) InnerError!WVa
         } else {
             return self.fail(
                 "TODO: Implement binary operation for type: {}",
-                .{ty.fmt(self.bin_file.base.options.module.?)},
+                .{ty.fmt(self.bin_file.base.options.module orelse unreachable)},
             );
         }
     }
@@ -2113,19 +2113,19 @@ fn wrapOperand(self: *Self, operand: WValue, ty: Type) InnerError!WValue {
 fn lowerParentPtr(self: *Self, ptr_val: Value, ptr_child_ty: Type) InnerError!WValue {
     switch (ptr_val.tag()) {
         .decl_ref_mut => {
-            const decl_index = ptr_val.castTag(.decl_ref_mut).?.data.decl_index;
+            const decl_index = ptr_val.castTag(.decl_ref_mut) orelse unreachable.data.decl_index;
             return self.lowerParentPtrDecl(ptr_val, decl_index);
         },
         .decl_ref => {
-            const decl_index = ptr_val.castTag(.decl_ref).?.data;
+            const decl_index = ptr_val.castTag(.decl_ref) orelse unreachable.data;
             return self.lowerParentPtrDecl(ptr_val, decl_index);
         },
         .variable => {
-            const decl_index = ptr_val.castTag(.variable).?.data.owner_decl;
+            const decl_index = ptr_val.castTag(.variable) orelse unreachable.data.owner_decl;
             return self.lowerParentPtrDecl(ptr_val, decl_index);
         },
         .field_ptr => {
-            const field_ptr = ptr_val.castTag(.field_ptr).?.data;
+            const field_ptr = ptr_val.castTag(.field_ptr) orelse unreachable.data;
             const parent_ty = field_ptr.container_ty;
             const parent_ptr = try self.lowerParentPtr(field_ptr.container_ptr, parent_ty);
 
@@ -2163,7 +2163,7 @@ fn lowerParentPtr(self: *Self, ptr_val: Value, ptr_child_ty: Type) InnerError!WV
             };
         },
         .elem_ptr => {
-            const elem_ptr = ptr_val.castTag(.elem_ptr).?.data;
+            const elem_ptr = ptr_val.castTag(.elem_ptr) orelse unreachable.data;
             const index = elem_ptr.index;
             const offset = index * ptr_child_ty.abiSize(self.target);
             const array_ptr = try self.lowerParentPtr(elem_ptr.array_ptr, elem_ptr.elem_ty);
@@ -2174,7 +2174,7 @@ fn lowerParentPtr(self: *Self, ptr_val: Value, ptr_child_ty: Type) InnerError!WV
             } };
         },
         .opt_payload_ptr => {
-            const payload_ptr = ptr_val.castTag(.opt_payload_ptr).?.data;
+            const payload_ptr = ptr_val.castTag(.opt_payload_ptr) orelse unreachable.data;
             const parent_ptr = try self.lowerParentPtr(payload_ptr.container_ptr, payload_ptr.container_ty);
             var buf: Type.Payload.ElemType = undefined;
             const payload_ty = payload_ptr.container_ty.optionalChild(&buf);
@@ -2195,7 +2195,7 @@ fn lowerParentPtr(self: *Self, ptr_val: Value, ptr_child_ty: Type) InnerError!WV
 }
 
 fn lowerParentPtrDecl(self: *Self, ptr_val: Value, decl_index: Module.Decl.Index) InnerError!WValue {
-    const module = self.bin_file.base.options.module.?;
+    const module = self.bin_file.base.options.module orelse unreachable;
     const decl = module.declPtr(decl_index);
     module.markDeclAlive(decl);
     var ptr_ty_payload: Type.Payload.ElemType = .{
@@ -2211,7 +2211,7 @@ fn lowerDeclRefValue(self: *Self, tv: TypedValue, decl_index: Module.Decl.Index)
         return WValue{ .memory = try self.bin_file.lowerUnnamedConst(tv, decl_index) };
     }
 
-    const module = self.bin_file.base.options.module.?;
+    const module = self.bin_file.base.options.module orelse unreachable;
     const decl = module.declPtr(decl_index);
     if (decl.ty.zigTypeTag() != .Fn and !decl.ty.hasRuntimeBitsIgnoreComptime()) {
         return WValue{ .imm32 = 0xaaaaaaaa };
@@ -2293,7 +2293,7 @@ fn lowerConstant(self: *Self, val: Value, ty: Type) InnerError!WValue {
                 switch (ty.tag()) {
                     .enum_simple => return WValue{ .imm32 = field_index.data },
                     .enum_full, .enum_nonexhaustive => {
-                        const enum_full = ty.cast(Type.Payload.EnumFull).?.data;
+                        const enum_full = ty.cast(Type.Payload.EnumFull) orelse unreachable.data;
                         if (enum_full.values.count() != 0) {
                             const tag_val = enum_full.values.keys()[field_index.data];
                             return self.lowerConstant(tag_val, enum_full.tag_ty);
@@ -2303,7 +2303,7 @@ fn lowerConstant(self: *Self, val: Value, ty: Type) InnerError!WValue {
                     },
                     .enum_numbered => {
                         const index = field_index.data;
-                        const enum_data = ty.castTag(.enum_numbered).?.data;
+                        const enum_data = ty.castTag(.enum_numbered) orelse unreachable.data;
                         const enum_val = enum_data.values.keys()[index];
                         return self.lowerConstant(enum_val, enum_data.tag_ty);
                     },
@@ -2317,7 +2317,7 @@ fn lowerConstant(self: *Self, val: Value, ty: Type) InnerError!WValue {
         },
         .ErrorSet => switch (val.tag()) {
             .@"error" => {
-                const kv = try self.bin_file.base.options.module.?.getErrorValue(val.getError().?);
+                const kv = try self.bin_file.base.options.module orelse unreachable.getErrorValue(val.getError() orelse unreachable);
                 return WValue{ .imm32 = kv.value };
             },
             else => return WValue{ .imm32 = 0 },
@@ -2390,7 +2390,7 @@ fn valueAsI32(self: Self, val: Value, ty: Type) i32 {
                 switch (ty.tag()) {
                     .enum_simple => return @bitCast(i32, field_index.data),
                     .enum_full, .enum_nonexhaustive => {
-                        const enum_full = ty.cast(Type.Payload.EnumFull).?.data;
+                        const enum_full = ty.cast(Type.Payload.EnumFull) orelse unreachable.data;
                         if (enum_full.values.count() != 0) {
                             const tag_val = enum_full.values.keys()[field_index.data];
                             return self.valueAsI32(tag_val, enum_full.tag_ty);
@@ -2398,7 +2398,7 @@ fn valueAsI32(self: Self, val: Value, ty: Type) i32 {
                     },
                     .enum_numbered => {
                         const index = field_index.data;
-                        const enum_data = ty.castTag(.enum_numbered).?.data;
+                        const enum_data = ty.castTag(.enum_numbered) orelse unreachable.data;
                         return self.valueAsI32(enum_data.values.keys()[index], enum_data.tag_ty);
                     },
                     else => unreachable,
@@ -2414,7 +2414,7 @@ fn valueAsI32(self: Self, val: Value, ty: Type) i32 {
             .unsigned => return @bitCast(i32, @truncate(u32, val.toUnsignedInt(target))),
         },
         .ErrorSet => {
-            const kv = self.bin_file.base.options.module.?.getErrorValue(val.getError().?) catch unreachable; // passed invalid `Value` to function
+            const kv = self.bin_file.base.options.module orelse unreachable.getErrorValue(val.getError() orelse unreachable) catch unreachable; // passed invalid `Value` to function
             return @bitCast(i32, kv.value);
         },
         .Bool => return @intCast(i32, val.toSignedInt()),
@@ -2578,7 +2578,7 @@ fn airCmpLtErrorsLen(self: *Self, inst: Air.Inst.Index) InnerError!WValue {
 
 fn airBr(self: *Self, inst: Air.Inst.Index) InnerError!WValue {
     const br = self.air.instructions.items(.data)[inst].br;
-    const block = self.blocks.get(br.block_inst).?;
+    const block = self.blocks.get(br.block_inst) orelse unreachable;
 
     // if operand has codegen bits we should break with a value
     if (self.air.typeOf(br.operand).hasRuntimeBitsIgnoreComptime()) {
@@ -2666,7 +2666,7 @@ fn airStructFieldPtr(self: *Self, inst: Air.Inst.Index) InnerError!WValue {
     const struct_ptr = try self.resolveInst(extra.data.struct_operand);
     const struct_ty = self.air.typeOf(extra.data.struct_operand).childType();
     const offset = std.math.cast(u32, struct_ty.structFieldOffset(extra.data.field_index, self.target)) catch {
-        const module = self.bin_file.base.options.module.?;
+        const module = self.bin_file.base.options.module orelse unreachable;
         return self.fail("Field type '{}' too big to fit into stack frame", .{
             struct_ty.structFieldType(extra.data.field_index).fmt(module),
         });
@@ -2680,7 +2680,7 @@ fn airStructFieldPtrIndex(self: *Self, inst: Air.Inst.Index, index: u32) InnerEr
     const struct_ty = self.air.typeOf(ty_op.operand).childType();
     const field_ty = struct_ty.structFieldType(index);
     const offset = std.math.cast(u32, struct_ty.structFieldOffset(index, self.target)) catch {
-        const module = self.bin_file.base.options.module.?;
+        const module = self.bin_file.base.options.module orelse unreachable;
         return self.fail("Field type '{}' too big to fit into stack frame", .{
             field_ty.fmt(module),
         });
@@ -2708,7 +2708,7 @@ fn airStructFieldVal(self: *Self, inst: Air.Inst.Index) InnerError!WValue {
     const field_ty = struct_ty.structFieldType(field_index);
     if (!field_ty.hasRuntimeBitsIgnoreComptime()) return WValue{ .none = {} };
     const offset = std.math.cast(u32, struct_ty.structFieldOffset(field_index, self.target)) catch {
-        const module = self.bin_file.base.options.module.?;
+        const module = self.bin_file.base.options.module orelse unreachable;
         return self.fail("Field type '{}' too big to fit into stack frame", .{field_ty.fmt(module)});
     };
 
@@ -2755,12 +2755,12 @@ fn airSwitchBr(self: *Self, inst: Air.Inst.Index) InnerError!WValue {
         errdefer self.gpa.free(values);
 
         for (items) |ref, i| {
-            const item_val = self.air.value(ref).?;
+            const item_val = self.air.value(ref) orelse unreachable;
             const int_val = self.valueAsI32(item_val, target_ty);
-            if (lowest_maybe == null or int_val < lowest_maybe.?) {
+            if (lowest_maybe == null or int_val < lowest_maybe orelse unreachable) {
                 lowest_maybe = int_val;
             }
-            if (highest_maybe == null or int_val > highest_maybe.?) {
+            if (highest_maybe == null or int_val > highest_maybe orelse unreachable) {
                 highest_maybe = int_val;
             }
             values[i] = .{ .integer = int_val, .value = item_val };
@@ -3016,8 +3016,8 @@ fn intcast(self: *Self, operand: WValue, given: Type, wanted: Type) InnerError!W
     assert(given_info.bits <= 128);
     assert(wanted_info.bits <= 128);
 
-    const op_bits = toWasmBits(given_info.bits).?;
-    const wanted_bits = toWasmBits(wanted_info.bits).?;
+    const op_bits = toWasmBits(given_info.bits) orelse unreachable;
+    const wanted_bits = toWasmBits(wanted_info.bits) orelse unreachable;
     if (op_bits == wanted_bits) return operand;
 
     if (op_bits > 32 and op_bits <= 64 and wanted_bits == 32) {
@@ -3143,7 +3143,7 @@ fn airOptionalPayloadPtrSet(self: *Self, inst: Air.Inst.Index) InnerError!WValue
     }
 
     const offset = std.math.cast(u32, opt_ty.abiSize(self.target) - payload_ty.abiSize(self.target)) catch {
-        const module = self.bin_file.base.options.module.?;
+        const module = self.bin_file.base.options.module orelse unreachable;
         return self.fail("Optional type {} too big to fit into stack frame", .{opt_ty.fmt(module)});
     };
 
@@ -3173,7 +3173,7 @@ fn airWrapOptional(self: *Self, inst: Air.Inst.Index) InnerError!WValue {
         return operand;
     }
     const offset = std.math.cast(u32, op_ty.abiSize(self.target) - payload_ty.abiSize(self.target)) catch {
-        const module = self.bin_file.base.options.module.?;
+        const module = self.bin_file.base.options.module orelse unreachable;
         return self.fail("Optional type {} too big to fit into stack frame", .{op_ty.fmt(module)});
     };
 
@@ -3288,7 +3288,7 @@ fn airTrunc(self: *Self, inst: Air.Inst.Index) InnerError!WValue {
 
     const result = try self.intcast(operand, op_ty, wanted_ty);
     const wanted_bits = wanted_ty.intInfo(self.target).bits;
-    const wasm_bits = toWasmBits(wanted_bits).?;
+    const wasm_bits = toWasmBits(wanted_bits) orelse unreachable;
     if (wasm_bits != wanted_bits) {
         return self.wrapOperand(result, wanted_ty);
     }
@@ -3717,7 +3717,7 @@ fn airUnionInit(self: *Self, inst: Air.Inst.Index) InnerError!WValue {
 
     const result_ptr = try self.allocStack(union_ty);
     const payload = try self.resolveInst(extra.init);
-    const union_obj = union_ty.cast(Type.Payload.Union).?.data;
+    const union_obj = union_ty.cast(Type.Payload.Union) orelse unreachable.data;
     assert(union_obj.haveFieldTypes());
     const field = union_obj.fields.values()[extra.field_index];
 

@@ -1109,7 +1109,7 @@ pub fn create(gpa: Allocator, options: InitOptions) !*Compilation {
 
         const libc_dirs = try detectLibCIncludeDirs(
             arena,
-            options.zig_lib_directory.path.?,
+            options.zig_lib_directory.path orelse unreachable,
             options.target,
             options.is_native_abi,
             link_libc,
@@ -1534,7 +1534,7 @@ pub fn create(gpa: Allocator, options: InitOptions) !*Compilation {
             // Use the same directory as the bin. The CLI already emits an
             // error if -fno-emit-bin is combined with -femit-implib.
             break :blk link.Emit{
-                .directory = bin_file_emit.?.directory,
+                .directory = bin_file_emit orelse unreachable.directory,
                 .sub_path = emit_implib.basename,
             };
         };
@@ -1938,7 +1938,7 @@ fn restorePrevZigCacheArtifactDirectory(comp: *Compilation, directory: *Director
     // This is only for cleanup purposes; Module.deinit calls close
     // on the handle of zig_cache_artifact_directory.
     if (comp.bin_file.options.module) |module| {
-        const builtin_pkg = module.main_pkg.table.get("builtin").?;
+        const builtin_pkg = module.main_pkg.table.get("builtin") orelse unreachable;
         module.zig_cache_artifact_directory = builtin_pkg.root_src_directory;
     }
 }
@@ -2020,7 +2020,7 @@ pub fn update(comp: *Compilation) !void {
 
         // This updates the output directory for stage1 backend and linker outputs.
         if (comp.bin_file.options.module) |module| {
-            module.zig_cache_artifact_directory = tmp_artifact_directory.?;
+            module.zig_cache_artifact_directory = tmp_artifact_directory orelse unreachable;
         }
 
         // This resets the link.File to operate as if we called openPath() in create()
@@ -2028,13 +2028,13 @@ pub fn update(comp: *Compilation) !void {
         var options = comp.bin_file.options.move();
         if (comp.whole_bin_sub_path) |sub_path| {
             options.emit = .{
-                .directory = tmp_artifact_directory.?,
+                .directory = tmp_artifact_directory orelse unreachable,
                 .sub_path = std.fs.path.basename(sub_path),
             };
         }
         if (comp.whole_implib_sub_path) |sub_path| {
             options.implib_emit = .{
-                .directory = tmp_artifact_directory.?,
+                .directory = tmp_artifact_directory orelse unreachable,
                 .sub_path = std.fs.path.basename(sub_path),
             };
         }
@@ -2057,7 +2057,7 @@ pub fn update(comp: *Compilation) !void {
 
         // Make sure std.zig is inside the import_table. We unconditionally need
         // it for start.zig.
-        const std_pkg = module.main_pkg.table.get("std").?;
+        const std_pkg = module.main_pkg.table.get("std") orelse unreachable;
         _ = try module.importPkg(std_pkg);
 
         // Normally we rely on importing std to in turn import the root source file
@@ -2152,7 +2152,7 @@ pub fn update(comp: *Compilation) !void {
         const digest = man.final();
 
         // Rename the temporary directory into place.
-        var directory = tmp_artifact_directory.?;
+        var directory = tmp_artifact_directory orelse unreachable;
         tmp_artifact_directory = null;
 
         directory.handle.close();
@@ -2279,7 +2279,7 @@ fn addNonIncrementalStuffToCacheManifest(comp: *Compilation, man: *Cache.Manifes
 
             // Skip builtin.zig; it is useless as an input, and we don't want to have to
             // write it before checking for a cache hit.
-            const builtin_pkg = mod.main_pkg.table.get("builtin").?;
+            const builtin_pkg = mod.main_pkg.table.get("builtin") orelse unreachable;
             try seen_table.put(builtin_pkg, {});
 
             try addPackageTableToCacheHash(&man.hash, &arena_allocator, mod.main_pkg.table, &seen_table, .{ .files = man });
@@ -2344,10 +2344,10 @@ fn addNonIncrementalStuffToCacheManifest(comp: *Compilation, man: *Cache.Manifes
     if (comp.bin_file.options.link_libc) {
         man.hash.add(comp.bin_file.options.libc_installation != null);
         if (comp.bin_file.options.libc_installation) |libc_installation| {
-            man.hash.addBytes(libc_installation.crt_dir.?);
+            man.hash.addBytes(libc_installation.crt_dir orelse unreachable);
             if (target.abi == .msvc) {
-                man.hash.addBytes(libc_installation.msvc_lib_dir.?);
-                man.hash.addBytes(libc_installation.kernel32_lib_dir.?);
+                man.hash.addBytes(libc_installation.msvc_lib_dir orelse unreachable);
+                man.hash.addBytes(libc_installation.kernel32_lib_dir orelse unreachable);
             }
         }
         man.hash.addOptionalBytes(comp.bin_file.options.dynamic_linker);
@@ -2734,7 +2734,7 @@ fn processOneJob(comp: *Compilation, job: Job) !void {
             if (build_options.omit_stage2)
                 @panic("sadly stage2 is omitted from this build to save memory on the CI server");
 
-            const module = comp.bin_file.options.module.?;
+            const module = comp.bin_file.options.module orelse unreachable;
             const decl = module.declPtr(decl_index);
 
             switch (decl.analysis) {
@@ -2774,7 +2774,7 @@ fn processOneJob(comp: *Compilation, job: Job) !void {
             const named_frame = tracy.namedFrame("codegen_func");
             defer named_frame.end();
 
-            const module = comp.bin_file.options.module.?;
+            const module = comp.bin_file.options.module orelse unreachable;
             module.ensureFuncBodyAnalyzed(func) catch |err| switch (err) {
                 error.OutOfMemory => return error.OutOfMemory,
                 error.AnalysisFail => return,
@@ -2784,7 +2784,7 @@ fn processOneJob(comp: *Compilation, job: Job) !void {
             if (build_options.omit_stage2)
                 @panic("sadly stage2 is omitted from this build to save memory on the CI server");
 
-            const module = comp.bin_file.options.module.?;
+            const module = comp.bin_file.options.module orelse unreachable;
             const decl = module.declPtr(decl_index);
 
             switch (decl.analysis) {
@@ -2805,7 +2805,7 @@ fn processOneJob(comp: *Compilation, job: Job) !void {
                     defer named_frame.end();
 
                     const gpa = comp.gpa;
-                    const emit_h = module.emit_h.?;
+                    const emit_h = module.emit_h orelse unreachable;
                     _ = try emit_h.decl_table.getOrPut(gpa, decl_index);
                     const decl_emit_h = emit_h.declPtr(decl_index);
                     const fwd_decl = &decl_emit_h.fwd_decl;
@@ -2830,7 +2830,7 @@ fn processOneJob(comp: *Compilation, job: Job) !void {
 
                     c_codegen.genHeader(&dg) catch |err| switch (err) {
                         error.AnalysisFail => {
-                            try emit_h.failed_decls.put(gpa, decl_index, dg.error_msg.?);
+                            try emit_h.failed_decls.put(gpa, decl_index, dg.error_msg orelse unreachable);
                             return;
                         },
                         else => |e| return e,
@@ -2845,7 +2845,7 @@ fn processOneJob(comp: *Compilation, job: Job) !void {
             if (build_options.omit_stage2)
                 @panic("sadly stage2 is omitted from this build to save memory on the CI server");
 
-            const module = comp.bin_file.options.module.?;
+            const module = comp.bin_file.options.module orelse unreachable;
             module.ensureDeclAnalyzed(decl_index) catch |err| switch (err) {
                 error.OutOfMemory => return error.OutOfMemory,
                 error.AnalysisFail => return,
@@ -2858,7 +2858,7 @@ fn processOneJob(comp: *Compilation, job: Job) !void {
             const named_frame = tracy.namedFrame("update_embed_file");
             defer named_frame.end();
 
-            const module = comp.bin_file.options.module.?;
+            const module = comp.bin_file.options.module orelse unreachable;
             module.updateEmbedFile(embed_file) catch |err| switch (err) {
                 error.OutOfMemory => return error.OutOfMemory,
                 error.AnalysisFail => return,
@@ -2872,7 +2872,7 @@ fn processOneJob(comp: *Compilation, job: Job) !void {
             defer named_frame.end();
 
             const gpa = comp.gpa;
-            const module = comp.bin_file.options.module.?;
+            const module = comp.bin_file.options.module orelse unreachable;
             const decl = module.declPtr(decl_index);
             comp.bin_file.updateDeclLineNumber(module, decl) catch |err| {
                 try module.failed_decls.ensureUnusedCapacity(gpa, 1);
@@ -2892,7 +2892,7 @@ fn processOneJob(comp: *Compilation, job: Job) !void {
             const named_frame = tracy.namedFrame("analyze_pkg");
             defer named_frame.end();
 
-            const module = comp.bin_file.options.module.?;
+            const module = comp.bin_file.options.module orelse unreachable;
             module.semaPkg(pkg) catch |err| switch (err) {
                 error.CurrentWorkingDirectoryUnlinked,
                 error.Unexpected,
@@ -3134,7 +3134,7 @@ fn workerAstGenFile(
     child_prog_node.activate();
     defer child_prog_node.end();
 
-    const mod = comp.bin_file.options.module.?;
+    const mod = comp.bin_file.options.module orelse unreachable;
     mod.astGenFile(file) catch |err| switch (err) {
         error.AnalysisFail => return,
         else => {
@@ -3227,7 +3227,7 @@ fn workerCheckEmbedFile(
     child_prog_node.activate();
     defer child_prog_node.end();
 
-    const mod = comp.bin_file.options.module.?;
+    const mod = comp.bin_file.options.module orelse unreachable;
     mod.detectEmbedFileUpdate(embed_file) catch |err| {
         comp.reportRetryableEmbedFileError(embed_file, err) catch |oom| switch (oom) {
             // Swallowing this error is OK because it's implied to be OOM when
@@ -3454,7 +3454,7 @@ fn reportRetryableAstGenError(
     file: *Module.File,
     err: anyerror,
 ) error{OutOfMemory}!void {
-    const mod = comp.bin_file.options.module.?;
+    const mod = comp.bin_file.options.module orelse unreachable;
     const gpa = mod.gpa;
 
     file.status = .retryable_failure;
@@ -3501,7 +3501,7 @@ fn reportRetryableEmbedFileError(
     embed_file: *Module.EmbedFile,
     err: anyerror,
 ) error{OutOfMemory}!void {
-    const mod = comp.bin_file.options.module.?;
+    const mod = comp.bin_file.options.module orelse unreachable;
     const gpa = mod.gpa;
 
     const src_loc: Module.SrcLoc = mod.declPtr(embed_file.owner_decl).srcLoc();
@@ -3662,7 +3662,7 @@ fn updateCObject(comp: *Compilation, c_object: *CObject, c_obj_prog_node: *std.P
 
                 try child.spawn();
 
-                const stderr_reader = child.stderr.?.reader();
+                const stderr_reader = child.stderr orelse unreachable.reader();
 
                 const stderr = try stderr_reader.readAllAlloc(arena, 10 * 1024 * 1024);
 
@@ -3795,10 +3795,10 @@ pub fn addCCArgs(
 
     if (comp.bin_file.options.link_libcpp) {
         const libcxx_include_path = try std.fs.path.join(arena, &[_][]const u8{
-            comp.zig_lib_directory.path.?, "libcxx", "include",
+            comp.zig_lib_directory.path orelse unreachable, "libcxx", "include",
         });
         const libcxxabi_include_path = try std.fs.path.join(arena, &[_][]const u8{
-            comp.zig_lib_directory.path.?, "libcxxabi", "include",
+            comp.zig_lib_directory.path orelse unreachable, "libcxxabi", "include",
         });
 
         try argv.append("-isystem");
@@ -3821,7 +3821,7 @@ pub fn addCCArgs(
 
     if (comp.bin_file.options.link_libunwind) {
         const libunwind_include_path = try std.fs.path.join(arena, &[_][]const u8{
-            comp.zig_lib_directory.path.?, "libunwind", "include",
+            comp.zig_lib_directory.path orelse unreachable, "libunwind", "include",
         });
 
         try argv.append("-isystem");
@@ -3856,7 +3856,7 @@ pub fn addCCArgs(
             // According to Rich Felker libc headers are supposed to go before C language headers.
             // However as noted by @dimenus, appending libc headers before c_headers breaks intrinsics
             // and other compiler specific items.
-            const c_headers_dir = try std.fs.path.join(arena, &[_][]const u8{ comp.zig_lib_directory.path.?, "include" });
+            const c_headers_dir = try std.fs.path.join(arena, &[_][]const u8{ comp.zig_lib_directory.path orelse unreachable, "include" });
             try argv.append("-isystem");
             try argv.append(c_headers_dir);
 
@@ -4211,7 +4211,7 @@ pub fn hasSharedLibraryExt(filename: []const u8) bool {
     }
     // Look for .so.X, .so.X.Y, .so.X.Y.Z
     var it = mem.split(u8, filename, ".");
-    _ = it.next().?;
+    _ = it.next() orelse unreachable;
     var so_txt = it.next() orelse return false;
     while (!mem.eql(u8, so_txt, "so")) {
         so_txt = it.next() orelse return false;
@@ -4438,13 +4438,13 @@ fn detectLibCIncludeDirs(
 fn detectLibCFromLibCInstallation(arena: Allocator, target: Target, lci: *const LibCInstallation) !LibCDirs {
     var list = try std.ArrayList([]const u8).initCapacity(arena, 5);
 
-    list.appendAssumeCapacity(lci.include_dir.?);
+    list.appendAssumeCapacity(lci.include_dir orelse unreachable);
 
-    const is_redundant = mem.eql(u8, lci.sys_include_dir.?, lci.include_dir.?);
-    if (!is_redundant) list.appendAssumeCapacity(lci.sys_include_dir.?);
+    const is_redundant = mem.eql(u8, lci.sys_include_dir orelse unreachable, lci.include_dir orelse unreachable);
+    if (!is_redundant) list.appendAssumeCapacity(lci.sys_include_dir orelse unreachable);
 
     if (target.os.tag == .windows) {
-        if (std.fs.path.dirname(lci.include_dir.?)) |include_dir_parent| {
+        if (std.fs.path.dirname(lci.include_dir orelse unreachable)) |include_dir_parent| {
             const um_dir = try std.fs.path.join(arena, &[_][]const u8{ include_dir_parent, "um" });
             list.appendAssumeCapacity(um_dir);
 
@@ -4476,7 +4476,7 @@ pub fn get_libc_crt_file(comp: *Compilation, arena: Allocator, basename: []const
         comp.wantBuildMinGWFromSource() or
         comp.wantBuildWasiLibcFromSource())
     {
-        return comp.crt_files.get(basename).?.full_object_path;
+        return comp.crt_files.get(basename) orelse unreachable.full_object_path;
     }
     const lci = comp.bin_file.options.libc_installation orelse return error.LibCInstallationNotAvailable;
     const crt_dir_path = lci.crt_dir orelse return error.LibCInstallationMissingCRTDir;
@@ -4887,8 +4887,8 @@ fn buildOutputFromZig(
 
     assert(out.* == null);
     out.* = Compilation.CRTFile{
-        .full_object_path = try sub_compilation.bin_file.options.emit.?.directory.join(comp.gpa, &[_][]const u8{
-            sub_compilation.bin_file.options.emit.?.sub_path,
+        .full_object_path = try sub_compilation.bin_file.options.emit orelse unreachable.directory.join(comp.gpa, &[_][]const u8{
+            sub_compilation.bin_file.options.emit orelse unreachable.sub_path,
         }),
         .lock = sub_compilation.bin_file.toOwnedLock(),
     };
@@ -4903,12 +4903,12 @@ fn updateStage1Module(comp: *Compilation, main_progress_node: *std.Progress.Node
     const arena = arena_allocator.allocator();
 
     // Here we use the legacy stage1 C++ compiler to compile Zig code.
-    const mod = comp.bin_file.options.module.?;
+    const mod = comp.bin_file.options.module orelse unreachable;
     const directory = mod.zig_cache_artifact_directory; // Just an alias to make it shorter to type.
     const main_zig_file = try mod.main_pkg.root_src_directory.join(arena, &[_][]const u8{
         mod.main_pkg.root_src_path,
     });
-    const zig_lib_dir = comp.zig_lib_directory.path.?;
+    const zig_lib_dir = comp.zig_lib_directory.path orelse unreachable;
     const target = comp.getTarget();
 
     // The include_compiler_rt stored in the bin file options here means that we need
@@ -4929,12 +4929,12 @@ fn updateStage1Module(comp: *Compilation, main_progress_node: *std.Progress.Node
         .is_native_os = comp.bin_file.options.is_native_os,
         .is_native_cpu = false, // Only true when bootstrapping the compiler.
         .llvm_cpu_name = if (target.cpu.model.llvm_name) |s| s.ptr else null,
-        .llvm_cpu_features = comp.bin_file.options.llvm_cpu_features.?,
+        .llvm_cpu_features = comp.bin_file.options.llvm_cpu_features orelse unreachable,
         .llvm_target_abi = if (target_util.llvmMachineAbi(target)) |s| s.ptr else null,
     };
 
     const main_pkg_path = mod.main_pkg.root_src_directory.path orelse "";
-    const builtin_pkg = mod.main_pkg.table.get("builtin").?;
+    const builtin_pkg = mod.main_pkg.table.get("builtin") orelse unreachable;
     const builtin_zig_path = try builtin_pkg.root_src_directory.join(arena, &.{builtin_pkg.root_src_path});
 
     const stage1_module = stage1.create(
@@ -5163,8 +5163,8 @@ pub fn build_crt_file(
     try comp.crt_files.ensureUnusedCapacity(comp.gpa, 1);
 
     comp.crt_files.putAssumeCapacityNoClobber(basename, .{
-        .full_object_path = try sub_compilation.bin_file.options.emit.?.directory.join(comp.gpa, &[_][]const u8{
-            sub_compilation.bin_file.options.emit.?.sub_path,
+        .full_object_path = try sub_compilation.bin_file.options.emit orelse unreachable.directory.join(comp.gpa, &[_][]const u8{
+            sub_compilation.bin_file.options.emit orelse unreachable.sub_path,
         }),
         .lock = sub_compilation.bin_file.toOwnedLock(),
     });

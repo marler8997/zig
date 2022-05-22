@@ -735,10 +735,10 @@ pub const Builder = struct {
         }) catch |err| switch (err) {
             error.UnknownCpuModel => {
                 warn("Unknown CPU: '{s}'\nAvailable CPUs for architecture '{s}':\n", .{
-                    diags.cpu_name.?,
-                    @tagName(diags.arch.?),
+                    diags.cpu_name orelse unreachable,
+                    @tagName(diags.arch orelse unreachable),
                 });
-                for (diags.arch.?.allCpuModels()) |cpu| {
+                for (diags.arch orelse unreachable.allCpuModels()) |cpu| {
                     warn(" {s}\n", .{cpu.name});
                 }
                 warn("\n", .{});
@@ -752,9 +752,9 @@ pub const Builder = struct {
                     \\
                 , .{
                     diags.unknown_feature_name,
-                    @tagName(diags.arch.?),
+                    @tagName(diags.arch orelse unreachable),
                 });
-                for (diags.arch.?.allFeaturesList()) |feature| {
+                for (diags.arch orelse unreachable.allFeaturesList()) |feature| {
                     warn(" {s}: {s}\n", .{ feature.name, feature.description });
                 }
                 warn("\n", .{});
@@ -1193,7 +1193,7 @@ pub const Builder = struct {
 
         try child.spawn();
 
-        const stdout = child.stdout.?.reader().readAllAlloc(self.allocator, max_output_size) catch {
+        const stdout = child.stdout orelse unreachable.reader().readAllAlloc(self.allocator, max_output_size) catch {
             return error.ReadFailure;
         };
         errdefer self.allocator.free(stdout);
@@ -1776,7 +1776,7 @@ pub const LibExeObjStep = struct {
         }) catch unreachable;
 
         if (self.kind == .lib) {
-            if (self.linkage != null and self.linkage.? == .static) {
+            if (self.linkage != null and self.linkage orelse unreachable == .static) {
                 self.out_lib_filename = self.out_filename;
             } else if (self.version) |version| {
                 if (target.isDarwin()) {
@@ -1804,7 +1804,7 @@ pub const LibExeObjStep = struct {
             }
             if (self.output_dir != null) {
                 self.output_lib_path_source.path = self.builder.pathJoin(
-                    &.{ self.output_dir.?, self.out_lib_filename },
+                    &.{ self.output_dir orelse unreachable, self.out_lib_filename },
                 );
             }
         }
@@ -1882,7 +1882,7 @@ pub const LibExeObjStep = struct {
     }
 
     pub fn isDynamicLibrary(self: *LibExeObjStep) bool {
-        return self.kind == .lib and self.linkage != null and self.linkage.? == .dynamic;
+        return self.kind == .lib and self.linkage != null and self.linkage orelse unreachable == .dynamic;
     }
 
     pub fn producesPdbFile(self: *LibExeObjStep) bool {
@@ -2425,7 +2425,7 @@ pub const LibExeObjStep = struct {
                         const full_path_lib = other.getOutputLibSource().getPath(builder);
                         try zig_args.append(full_path_lib);
 
-                        if (other.linkage != null and other.linkage.? == .dynamic and !self.target.isWindows()) {
+                        if (other.linkage != null and other.linkage orelse unreachable == .dynamic and !self.target.isWindows()) {
                             if (fs.path.dirname(full_path_lib)) |dirname| {
                                 try zig_args.append("-rpath");
                                 try zig_args.append(dirname);
@@ -2598,7 +2598,7 @@ pub const LibExeObjStep = struct {
             .dynamic => try zig_args.append("-dynamic"),
             .static => try zig_args.append("-static"),
         };
-        if (self.kind == .lib and self.linkage != null and self.linkage.? == .dynamic) {
+        if (self.kind == .lib and self.linkage != null and self.linkage orelse unreachable == .dynamic) {
             if (self.version) |version| {
                 zig_args.append("--version") catch unreachable;
                 zig_args.append(builder.fmt("{}", .{version})) catch unreachable;
@@ -2875,7 +2875,7 @@ pub const LibExeObjStep = struct {
                 .other_step => |other| if (other.emit_h) {
                     const h_path = other.getOutputHSource().getPath(self.builder);
                     try zig_args.append("-isystem");
-                    try zig_args.append(fs.path.dirname(h_path).?);
+                    try zig_args.append(fs.path.dirname(h_path) orelse unreachable);
                 },
             }
         }
@@ -3102,24 +3102,24 @@ pub const LibExeObjStep = struct {
         // Update generated files
         if (self.output_dir != null) {
             self.output_path_source.path = builder.pathJoin(
-                &.{ self.output_dir.?, self.out_filename },
+                &.{ self.output_dir orelse unreachable, self.out_filename },
             );
 
             if (self.emit_h) {
                 self.output_h_path_source.path = builder.pathJoin(
-                    &.{ self.output_dir.?, self.out_h_filename },
+                    &.{ self.output_dir orelse unreachable, self.out_h_filename },
                 );
             }
 
             if (self.target.isWindows() or self.target.isUefi()) {
                 self.output_pdb_path_source.path = builder.pathJoin(
-                    &.{ self.output_dir.?, self.out_pdb_filename },
+                    &.{ self.output_dir orelse unreachable, self.out_pdb_filename },
                 );
             }
         }
 
-        if (self.kind == .lib and self.linkage != null and self.linkage.? == .dynamic and self.version != null and self.target.wantSharedLibSymLinks()) {
-            try doAtomicSymLinks(builder.allocator, self.getOutputSource().getPath(builder), self.major_only_filename.?, self.name_only_filename.?);
+        if (self.kind == .lib and self.linkage != null and self.linkage orelse unreachable == .dynamic and self.version != null and self.target.wantSharedLibSymLinks()) {
+            try doAtomicSymLinks(builder.allocator, self.getOutputSource().getPath(builder), self.major_only_filename orelse unreachable, self.name_only_filename orelse unreachable);
         }
     }
 };
@@ -3206,7 +3206,7 @@ pub const InstallArtifactStep = struct {
         const full_dest_path = builder.getInstallPath(self.dest_dir, self.artifact.out_filename);
         try builder.updateFile(self.artifact.getOutputSource().getPath(builder), full_dest_path);
         if (self.artifact.isDynamicLibrary() and self.artifact.version != null and self.artifact.target.wantSharedLibSymLinks()) {
-            try doAtomicSymLinks(builder.allocator, full_dest_path, self.artifact.major_only_filename.?, self.artifact.name_only_filename.?);
+            try doAtomicSymLinks(builder.allocator, full_dest_path, self.artifact.major_only_filename orelse unreachable, self.artifact.name_only_filename orelse unreachable);
         }
         if (self.artifact.isDynamicLibrary() and self.artifact.target.isWindows() and self.artifact.emit_implib != .no_emit) {
             const full_implib_path = builder.getInstallPath(self.dest_dir, self.artifact.out_lib_filename);
@@ -3569,8 +3569,8 @@ test "Builder.dupePkg()" {
     };
     const dupe = builder.dupePkg(pkg_top);
 
-    const original_deps = pkg_top.dependencies.?;
-    const dupe_deps = dupe.dependencies.?;
+    const original_deps = pkg_top.dependencies orelse unreachable;
+    const dupe_deps = dupe.dependencies orelse unreachable;
 
     // probably the same top level package details
     try std.testing.expectEqualStrings(pkg_top.name, dupe.name);

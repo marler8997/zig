@@ -166,7 +166,7 @@ pub const ChildProcess = struct {
 
         try windows.TerminateProcess(self.handle, exit_code);
         try self.waitUnwrappedWindows();
-        return self.term.?;
+        return self.term orelse unreachable;
     }
 
     pub fn killPosix(self: *ChildProcess) !Term {
@@ -176,7 +176,7 @@ pub const ChildProcess = struct {
         }
         try os.kill(self.pid, os.SIG.TERM);
         try self.waitUnwrapped();
-        return self.term.?;
+        return self.term orelse unreachable;
     }
 
     /// Blocks until child process terminates and then cleans up all resources.
@@ -201,8 +201,8 @@ pub const ChildProcess = struct {
         max_output_bytes: usize,
     ) !void {
         var poll_fds = [_]os.pollfd{
-            .{ .fd = child.stdout.?.handle, .events = os.POLL.IN, .revents = undefined },
-            .{ .fd = child.stderr.?.handle, .events = os.POLL.IN, .revents = undefined },
+            .{ .fd = child.stdout orelse unreachable.handle, .events = os.POLL.IN, .revents = undefined },
+            .{ .fd = child.stderr orelse unreachable.handle, .events = os.POLL.IN, .revents = undefined },
         };
 
         var dead_fds: usize = 0;
@@ -297,8 +297,8 @@ pub const ChildProcess = struct {
     fn collectOutputWindows(child: ChildProcess, outs: [2]*std.ArrayList(u8), max_output_bytes: usize) !void {
         const bump_amt = 512;
         const handles = [_]windows.HANDLE{
-            child.stdout.?.handle,
-            child.stderr.?.handle,
+            child.stdout orelse unreachable.handle,
+            child.stderr orelse unreachable.handle,
         };
 
         var overlapped = [_]windows.OVERLAPPED{
@@ -391,8 +391,8 @@ pub const ChildProcess = struct {
         try child.spawn();
 
         if (builtin.os.tag == .haiku) {
-            const stdout_in = child.stdout.?.reader();
-            const stderr_in = child.stderr.?.reader();
+            const stdout_in = child.stdout orelse unreachable.reader();
+            const stderr_in = child.stderr orelse unreachable.reader();
 
             const stdout = try stdout_in.readAllAlloc(args.allocator, args.max_output_bytes);
             errdefer args.allocator.free(stdout);
@@ -433,7 +433,7 @@ pub const ChildProcess = struct {
         }
 
         try self.waitUnwrappedWindows();
-        return self.term.?;
+        return self.term orelse unreachable;
     }
 
     fn waitPosix(self: *ChildProcess) !Term {
@@ -443,7 +443,7 @@ pub const ChildProcess = struct {
         }
 
         try self.waitUnwrapped();
-        return self.term.?;
+        return self.term orelse unreachable;
     }
 
     fn waitUnwrappedWindows(self: *ChildProcess) !void {
@@ -773,8 +773,8 @@ pub const ChildProcess = struct {
             }
 
             const err = switch (self.expand_arg0) {
-                .expand => os.execvpeZ_expandArg0(.expand, argv_buf.ptr[0].?, argv_buf.ptr, envp),
-                .no_expand => os.execvpeZ_expandArg0(.no_expand, argv_buf.ptr[0].?, argv_buf.ptr, envp),
+                .expand => os.execvpeZ_expandArg0(.expand, argv_buf.ptr[0] orelse unreachable, argv_buf.ptr, envp),
+                .no_expand => os.execvpeZ_expandArg0(.no_expand, argv_buf.ptr[0] orelse unreachable, argv_buf.ptr, envp),
             };
             forkChildErrReport(err_pipe[1], err);
         }
@@ -1031,13 +1031,13 @@ pub const ChildProcess = struct {
         self.term = null;
 
         if (self.stdin_behavior == StdIo.Pipe) {
-            os.close(g_hChildStd_IN_Rd.?);
+            os.close(g_hChildStd_IN_Rd orelse unreachable);
         }
         if (self.stderr_behavior == StdIo.Pipe) {
-            os.close(g_hChildStd_ERR_Wr.?);
+            os.close(g_hChildStd_ERR_Wr orelse unreachable);
         }
         if (self.stdout_behavior == StdIo.Pipe) {
-            os.close(g_hChildStd_OUT_Wr.?);
+            os.close(g_hChildStd_OUT_Wr orelse unreachable);
         }
     }
 
@@ -1390,11 +1390,11 @@ test "creating a child process with stdin and stdout behavior set to StdIo.Pipe"
         \\ }
     ;
 
-    try child_process.stdin.?.writer().writeAll(input_program);
-    child_process.stdin.?.close();
+    try child_process.stdin orelse unreachable.writer().writeAll(input_program);
+    child_process.stdin orelse unreachable.close();
     child_process.stdin = null;
 
-    const out_bytes = try child_process.stdout.?.reader().readAllAlloc(allocator, std.math.maxInt(usize));
+    const out_bytes = try child_process.stdout orelse unreachable.reader().readAllAlloc(allocator, std.math.maxInt(usize));
     defer allocator.free(out_bytes);
 
     switch (try child_process.wait()) {

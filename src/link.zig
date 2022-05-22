@@ -270,7 +270,7 @@ pub const File = struct {
                 .raw => return error.RawObjectFormatUnimplemented,
             };
         }
-        const emit = options.emit.?;
+        const emit = options.emit orelse unreachable;
         const use_lld = build_options.have_llvm and options.use_lld; // comptime known false when !have_llvm
         const sub_path = if (use_lld) blk: {
             if (options.module == null) {
@@ -419,7 +419,7 @@ pub const File = struct {
     /// constant. Returns the symbol index of the lowered constant in the read-only section
     /// of the final binary.
     pub fn lowerUnnamedConst(base: *File, tv: TypedValue, decl_index: Module.Decl.Index) UpdateDeclError!u32 {
-        const decl = base.options.module.?.declPtr(decl_index);
+        const decl = base.options.module orelse unreachable.declPtr(decl_index);
         log.debug("lowerUnnamedConst {*} ({s})", .{ decl, decl.name });
         switch (base.tag) {
             // zig fmt: off
@@ -498,7 +498,7 @@ pub const File = struct {
     /// each linker backend notice the first time updateDecl or updateFunc is called, or
     /// a callee referenced from AIR.
     pub fn allocateDeclIndexes(base: *File, decl_index: Module.Decl.Index) error{OutOfMemory}!void {
-        const decl = base.options.module.?.declPtr(decl_index);
+        const decl = base.options.module orelse unreachable.declPtr(decl_index);
         log.debug("allocateDeclIndexes {*} ({s})", .{ decl, decl.name });
         switch (base.tag) {
             .coff => return @fieldParentPtr(Coff, "base", base).allocateDeclIndexes(decl_index),
@@ -523,7 +523,7 @@ pub const File = struct {
     }
 
     pub fn toOwnedLock(self: *File) Cache.Lock {
-        const lock = self.lock.?;
+        const lock = self.lock orelse unreachable;
         self.lock = null;
         return lock;
     }
@@ -768,8 +768,8 @@ pub const File = struct {
         defer arena_allocator.deinit();
         const arena = arena_allocator.allocator();
 
-        const directory = base.options.emit.?.directory; // Just an alias to make it shorter to type.
-        const full_out_path = try directory.join(arena, &[_][]const u8{base.options.emit.?.sub_path});
+        const directory = base.options.emit orelse unreachable.directory; // Just an alias to make it shorter to type.
+        const full_out_path = try directory.join(arena, &[_][]const u8{base.options.emit orelse unreachable.sub_path});
         const full_out_path_z = try arena.dupeZ(u8, full_out_path);
 
         // If there is no Zig code to compile, then we should skip flushing the output file
@@ -788,24 +788,24 @@ pub const File = struct {
                         &[_][]const u8{obj_basename},
                     ),
                     .whole => break :blk try fs.path.join(arena, &.{
-                        fs.path.dirname(full_out_path_z).?, obj_basename,
+                        fs.path.dirname(full_out_path_z) orelse unreachable, obj_basename,
                     }),
                 }
             }
             if (base.options.object_format == .macho) {
-                try base.cast(MachO).?.flushObject(comp, prog_node);
+                try base.cast(MachO) orelse unreachable.flushObject(comp, prog_node);
             } else {
                 try base.flushModule(comp, prog_node);
             }
             break :blk try fs.path.join(arena, &.{
-                fs.path.dirname(full_out_path_z).?, base.intermediary_basename.?,
+                fs.path.dirname(full_out_path_z) orelse unreachable, base.intermediary_basename orelse unreachable,
             });
         } else null;
 
         log.debug("module_obj_path={s}", .{if (module_obj_path) |s| s else "(null)"});
 
         const compiler_rt_path: ?[]const u8 = if (base.options.include_compiler_rt)
-            comp.compiler_rt_obj.?.full_object_path
+            comp.compiler_rt_obj orelse unreachable.full_object_path
         else
             null;
 

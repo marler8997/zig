@@ -538,13 +538,13 @@ test "Reader.readUntilDelimiterOrEofAlloc returns ArrayLists with bytes read unt
     const reader = std.io.fixedBufferStream("0000\n1234\n").reader();
 
     {
-        var result = (try reader.readUntilDelimiterOrEofAlloc(a, '\n', 5)).?;
+        var result = (try reader.readUntilDelimiterOrEofAlloc(a, '\n', 5)) orelse unreachable;
         defer a.free(result);
         try std.testing.expectEqualStrings("0000", result);
     }
 
     {
-        var result = (try reader.readUntilDelimiterOrEofAlloc(a, '\n', 5)).?;
+        var result = (try reader.readUntilDelimiterOrEofAlloc(a, '\n', 5)) orelse unreachable;
         defer a.free(result);
         try std.testing.expectEqualStrings("1234", result);
     }
@@ -558,7 +558,7 @@ test "Reader.readUntilDelimiterOrEofAlloc returns an empty ArrayList" {
     const reader = std.io.fixedBufferStream("\n").reader();
 
     {
-        var result = (try reader.readUntilDelimiterOrEofAlloc(a, '\n', 5)).?;
+        var result = (try reader.readUntilDelimiterOrEofAlloc(a, '\n', 5)) orelse unreachable;
         defer a.free(result);
         try std.testing.expectEqualStrings("", result);
     }
@@ -571,7 +571,7 @@ test "Reader.readUntilDelimiterOrEofAlloc returns StreamTooLong, then an ArrayLi
 
     try std.testing.expectError(error.StreamTooLong, reader.readUntilDelimiterOrEofAlloc(a, '\n', 5));
 
-    var result = (try reader.readUntilDelimiterOrEofAlloc(a, '\n', 5)).?;
+    var result = (try reader.readUntilDelimiterOrEofAlloc(a, '\n', 5)) orelse unreachable;
     defer a.free(result);
     try std.testing.expectEqualStrings("67", result);
 }
@@ -579,28 +579,28 @@ test "Reader.readUntilDelimiterOrEofAlloc returns StreamTooLong, then an ArrayLi
 test "Reader.readUntilDelimiterOrEof returns bytes read until the delimiter" {
     var buf: [5]u8 = undefined;
     const reader = std.io.fixedBufferStream("0000\n1234\n").reader();
-    try std.testing.expectEqualStrings("0000", (try reader.readUntilDelimiterOrEof(&buf, '\n')).?);
-    try std.testing.expectEqualStrings("1234", (try reader.readUntilDelimiterOrEof(&buf, '\n')).?);
+    try std.testing.expectEqualStrings("0000", (try reader.readUntilDelimiterOrEof(&buf, '\n')) orelse unreachable);
+    try std.testing.expectEqualStrings("1234", (try reader.readUntilDelimiterOrEof(&buf, '\n')) orelse unreachable);
 }
 
 test "Reader.readUntilDelimiterOrEof returns an empty string" {
     var buf: [5]u8 = undefined;
     const reader = std.io.fixedBufferStream("\n").reader();
-    try std.testing.expectEqualStrings("", (try reader.readUntilDelimiterOrEof(&buf, '\n')).?);
+    try std.testing.expectEqualStrings("", (try reader.readUntilDelimiterOrEof(&buf, '\n')) orelse unreachable);
 }
 
 test "Reader.readUntilDelimiterOrEof returns StreamTooLong, then an empty string" {
     var buf: [5]u8 = undefined;
     const reader = std.io.fixedBufferStream("12345\n").reader();
     try std.testing.expectError(error.StreamTooLong, reader.readUntilDelimiterOrEof(&buf, '\n'));
-    try std.testing.expectEqualStrings("", (try reader.readUntilDelimiterOrEof(&buf, '\n')).?);
+    try std.testing.expectEqualStrings("", (try reader.readUntilDelimiterOrEof(&buf, '\n')) orelse unreachable);
 }
 
 test "Reader.readUntilDelimiterOrEof returns StreamTooLong, then bytes read until the delimiter" {
     var buf: [5]u8 = undefined;
     const reader = std.io.fixedBufferStream("1234567\n").reader();
     try std.testing.expectError(error.StreamTooLong, reader.readUntilDelimiterOrEof(&buf, '\n'));
-    try std.testing.expectEqualStrings("67", (try reader.readUntilDelimiterOrEof(&buf, '\n')).?);
+    try std.testing.expectEqualStrings("67", (try reader.readUntilDelimiterOrEof(&buf, '\n')) orelse unreachable);
 }
 
 test "Reader.readUntilDelimiterOrEof returns null" {
@@ -612,21 +612,21 @@ test "Reader.readUntilDelimiterOrEof returns null" {
 test "Reader.readUntilDelimiterOrEof returns bytes read until delimiter, then null" {
     var buf: [5]u8 = undefined;
     const reader = std.io.fixedBufferStream("1234\n").reader();
-    try std.testing.expectEqualStrings("1234", (try reader.readUntilDelimiterOrEof(&buf, '\n')).?);
+    try std.testing.expectEqualStrings("1234", (try reader.readUntilDelimiterOrEof(&buf, '\n')) orelse unreachable);
     try std.testing.expect((try reader.readUntilDelimiterOrEof(&buf, '\n')) == null);
 }
 
 test "Reader.readUntilDelimiterOrEof returns bytes read until end-of-stream" {
     var buf: [5]u8 = undefined;
     const reader = std.io.fixedBufferStream("1234").reader();
-    try std.testing.expectEqualStrings("1234", (try reader.readUntilDelimiterOrEof(&buf, '\n')).?);
+    try std.testing.expectEqualStrings("1234", (try reader.readUntilDelimiterOrEof(&buf, '\n')) orelse unreachable);
 }
 
 test "Reader.readUntilDelimiterOrEof returns StreamTooLong, then bytes read until end-of-stream" {
     var buf: [5]u8 = undefined;
     const reader = std.io.fixedBufferStream("1234567").reader();
     try std.testing.expectError(error.StreamTooLong, reader.readUntilDelimiterOrEof(&buf, '\n'));
-    try std.testing.expectEqualStrings("67", (try reader.readUntilDelimiterOrEof(&buf, '\n')).?);
+    try std.testing.expectEqualStrings("67", (try reader.readUntilDelimiterOrEof(&buf, '\n')) orelse unreachable);
 }
 
 test "Reader.readUntilDelimiterOrEof writes all bytes read to the output buffer" {

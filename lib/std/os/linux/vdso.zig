@@ -71,7 +71,7 @@ pub fn lookup(vername: []const u8, name: []const u8) usize {
         const sym_name = std.meta.assumeSentinel(strings + syms[i].st_name, 0);
         if (!mem.eql(u8, name, mem.sliceTo(sym_name, 0))) continue;
         if (maybe_versym) |versym| {
-            if (!checkver(maybe_verdef.?, versym[i], vername, strings))
+            if (!checkver(maybe_verdef orelse unreachable, versym[i], vername, strings))
                 continue;
         }
         return base +% syms[i].st_value;

@@ -242,7 +242,7 @@ fn instructionSize(emit: *Emit, inst: Mir.Inst.Index) usize {
     const tag = emit.mir.instructions.items(.tag)[inst];
 
     if (isBranch(tag)) {
-        switch (emit.branch_types.get(inst).?) {
+        switch (emit.branch_types.get(inst) orelse unreachable) {
             .cbz,
             .unconditional_branch_immediate,
             .b_cond,
@@ -363,9 +363,9 @@ fn lowerBranches(emit: *Emit) !void {
             if (isBranch(tag)) {
                 const target_inst = emit.branchTarget(inst);
                 if (target_inst < inst) {
-                    const target_offset = emit.code_offset_mapping.get(target_inst).?;
+                    const target_offset = emit.code_offset_mapping.get(target_inst) orelse unreachable;
                     const offset = @intCast(i64, target_offset) - @intCast(i64, current_code_offset);
-                    const branch_type = emit.branch_types.getPtr(inst).?;
+                    const branch_type = emit.branch_types.getPtr(inst) orelse unreachable;
                     const optimal_branch_type = try emit.optimalBranchType(tag, offset);
                     if (branch_type.* != optimal_branch_type) {
                         branch_type.* = optimal_branch_type;
@@ -382,9 +382,9 @@ fn lowerBranches(emit: *Emit) !void {
             if (emit.branch_forward_origins.get(inst)) |origin_list| {
                 for (origin_list.items) |forward_branch_inst| {
                     const branch_tag = emit.mir.instructions.items(.tag)[forward_branch_inst];
-                    const forward_branch_inst_offset = emit.code_offset_mapping.get(forward_branch_inst).?;
+                    const forward_branch_inst_offset = emit.code_offset_mapping.get(forward_branch_inst) orelse unreachable;
                     const offset = @intCast(i64, current_code_offset) - @intCast(i64, forward_branch_inst_offset);
-                    const branch_type = emit.branch_types.getPtr(forward_branch_inst).?;
+                    const branch_type = emit.branch_types.getPtr(forward_branch_inst) orelse unreachable;
                     const optimal_branch_type = try emit.optimalBranchType(branch_tag, offset);
                     if (branch_type.* != optimal_branch_type) {
                         branch_type.* = optimal_branch_type;
@@ -538,8 +538,8 @@ fn mirConditionalBranchImmediate(emit: *Emit, inst: Mir.Inst.Index) !void {
     const tag = emit.mir.instructions.items(.tag)[inst];
     const inst_cond = emit.mir.instructions.items(.data)[inst].inst_cond;
 
-    const offset = @intCast(i64, emit.code_offset_mapping.get(inst_cond.inst).?) - @intCast(i64, emit.code.items.len);
-    const branch_type = emit.branch_types.get(inst).?;
+    const offset = @intCast(i64, emit.code_offset_mapping.get(inst_cond.inst) orelse unreachable) - @intCast(i64, emit.code.items.len);
+    const branch_type = emit.branch_types.get(inst) orelse unreachable;
     log.debug("mirConditionalBranchImmediate: {} offset={}", .{ inst, offset });
 
     switch (branch_type) {
@@ -562,8 +562,8 @@ fn mirBranch(emit: *Emit, inst: Mir.Inst.Index) !void {
         emit.mir.instructions.items(.tag)[target_inst],
     });
 
-    const offset = @intCast(i64, emit.code_offset_mapping.get(target_inst).?) - @intCast(i64, emit.code.items.len);
-    const branch_type = emit.branch_types.get(inst).?;
+    const offset = @intCast(i64, emit.code_offset_mapping.get(target_inst) orelse unreachable) - @intCast(i64, emit.code.items.len);
+    const branch_type = emit.branch_types.get(inst) orelse unreachable;
     log.debug("mirBranch: {} offset={}", .{ inst, offset });
 
     switch (branch_type) {
@@ -580,8 +580,8 @@ fn mirCompareAndBranch(emit: *Emit, inst: Mir.Inst.Index) !void {
     const tag = emit.mir.instructions.items(.tag)[inst];
     const r_inst = emit.mir.instructions.items(.data)[inst].r_inst;
 
-    const offset = @intCast(i64, emit.code_offset_mapping.get(r_inst.inst).?) - @intCast(i64, emit.code.items.len);
-    const branch_type = emit.branch_types.get(inst).?;
+    const offset = @intCast(i64, emit.code_offset_mapping.get(r_inst.inst) orelse unreachable) - @intCast(i64, emit.code.items.len);
+    const branch_type = emit.branch_types.get(inst) orelse unreachable;
     log.debug("mirCompareAndBranch: {} offset={}", .{ inst, offset });
 
     switch (branch_type) {
@@ -659,7 +659,7 @@ fn mirCallExtern(emit: *Emit, inst: Mir.Inst.Index) !void {
             break :blk offset;
         };
         // Add relocation to the decl.
-        const atom = macho_file.atom_by_index_table.get(extern_fn.atom_index).?;
+        const atom = macho_file.atom_by_index_table.get(extern_fn.atom_index) orelse unreachable;
         try atom.relocs.append(emit.bin_file.allocator, .{
             .offset = offset,
             .target = .{ .global = extern_fn.sym_name },
@@ -860,7 +860,7 @@ fn mirLoadMemoryPie(emit: *Emit, inst: Mir.Inst.Index) !void {
     }
 
     if (emit.bin_file.cast(link.File.MachO)) |macho_file| {
-        const atom = macho_file.atom_by_index_table.get(data.atom_index).?;
+        const atom = macho_file.atom_by_index_table.get(data.atom_index) orelse unreachable;
         // Page reloc for adrp instruction.
         try atom.relocs.append(emit.bin_file.allocator, .{
             .offset = offset,

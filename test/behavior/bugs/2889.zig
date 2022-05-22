@@ -31,5 +31,5 @@ test "fixed" {
     if (builtin.zig_backend == .stage2_aarch64) return error.SkipZigTest;
 
     const result = parseNote();
-    try std.testing.expect(result.? == 9);
+    try std.testing.expect(result orelse unreachable == 9);
 }

@@ -163,7 +163,7 @@ pub const Node = extern union {
         bit_not,
         not,
         address_of,
-        /// .?
+        ///  orelse unreachable
         unwrap,
         /// .*
         deref,
@@ -413,14 +413,14 @@ pub const Node = extern union {
     pub fn isNoreturn(node: Node, break_counts: bool) bool {
         switch (node.tag()) {
             .block => {
-                const block_node = node.castTag(.block).?;
+                const block_node = node.castTag(.block) orelse unreachable;
                 if (block_node.data.stmts.len == 0) return false;
 
                 const last = block_node.data.stmts[block_node.data.stmts.len - 1];
                 return last.isNoreturn(break_counts);
             },
             .@"switch" => {
-                const switch_node = node.castTag(.@"switch").?;
+                const switch_node = node.castTag(.@"switch") orelse unreachable;
 
                 for (switch_node.data.cases) |case| {
                     const body = if (case.castTag(.switch_else)) |some|
@@ -849,62 +849,62 @@ fn renderNode(c: *Context, node: Node) Allocator.Error!NodeIndex {
     switch (node.tag()) {
         .declaration => unreachable,
         .warning => {
-            const payload = node.castTag(.warning).?.data;
+            const payload = node.castTag(.warning) orelse unreachable.data;
             try c.buf.appendSlice(payload);
             try c.buf.append('\n');
             return @as(NodeIndex, 0); // error: integer value 0 cannot be coerced to type 'std.mem.Allocator.Error!u32'
         },
         .std_math_Log2Int => {
-            const payload = node.castTag(.std_math_Log2Int).?.data;
+            const payload = node.castTag(.std_math_Log2Int) orelse unreachable.data;
             const import_node = try renderStdImport(c, &.{ "math", "Log2Int" });
             return renderCall(c, import_node, &.{payload});
         },
         .helpers_cast => {
-            const payload = node.castTag(.helpers_cast).?.data;
+            const payload = node.castTag(.helpers_cast) orelse unreachable.data;
             const import_node = try renderStdImport(c, &.{ "zig", "c_translation", "cast" });
             return renderCall(c, import_node, &.{ payload.lhs, payload.rhs });
         },
         .helpers_promoteIntLiteral => {
-            const payload = node.castTag(.helpers_promoteIntLiteral).?.data;
+            const payload = node.castTag(.helpers_promoteIntLiteral) orelse unreachable.data;
             const import_node = try renderStdImport(c, &.{ "zig", "c_translation", "promoteIntLiteral" });
             return renderCall(c, import_node, &.{ payload.type, payload.value, payload.radix });
         },
         .std_meta_alignment => {
-            const payload = node.castTag(.std_meta_alignment).?.data;
+            const payload = node.castTag(.std_meta_alignment) orelse unreachable.data;
             const import_node = try renderStdImport(c, &.{ "meta", "alignment" });
             return renderCall(c, import_node, &.{payload});
         },
         .helpers_sizeof => {
-            const payload = node.castTag(.helpers_sizeof).?.data;
+            const payload = node.castTag(.helpers_sizeof) orelse unreachable.data;
             const import_node = try renderStdImport(c, &.{ "zig", "c_translation", "sizeof" });
             return renderCall(c, import_node, &.{payload});
         },
         .std_mem_zeroes => {
-            const payload = node.castTag(.std_mem_zeroes).?.data;
+            const payload = node.castTag(.std_mem_zeroes) orelse unreachable.data;
             const import_node = try renderStdImport(c, &.{ "mem", "zeroes" });
             return renderCall(c, import_node, &.{payload});
         },
         .std_mem_zeroinit => {
-            const payload = node.castTag(.std_mem_zeroinit).?.data;
+            const payload = node.castTag(.std_mem_zeroinit) orelse unreachable.data;
             const import_node = try renderStdImport(c, &.{ "mem", "zeroInit" });
             return renderCall(c, import_node, &.{ payload.lhs, payload.rhs });
         },
         .helpers_flexible_array_type => {
-            const payload = node.castTag(.helpers_flexible_array_type).?.data;
+            const payload = node.castTag(.helpers_flexible_array_type) orelse unreachable.data;
             const import_node = try renderStdImport(c, &.{ "zig", "c_translation", "FlexibleArrayType" });
             return renderCall(c, import_node, &.{ payload.lhs, payload.rhs });
         },
         .helpers_shuffle_vector_index => {
-            const payload = node.castTag(.helpers_shuffle_vector_index).?.data;
+            const payload = node.castTag(.helpers_shuffle_vector_index) orelse unreachable.data;
             const import_node = try renderStdImport(c, &.{ "zig", "c_translation", "shuffleVectorIndex" });
             return renderCall(c, import_node, &.{ payload.lhs, payload.rhs });
         },
         .vector => {
-            const payload = node.castTag(.vector).?.data;
+            const payload = node.castTag(.vector) orelse unreachable.data;
             return renderBuiltinCall(c, "@Vector", &.{ payload.lhs, payload.rhs });
         },
         .call => {
-            const payload = node.castTag(.call).?.data;
+            const payload = node.castTag(.call) orelse unreachable.data;
             const lhs = try renderNode(c, payload.lhs);
             return renderCall(c, lhs, payload.args);
         },
@@ -973,7 +973,7 @@ fn renderNode(c: *Context, node: Node) Allocator.Error!NodeIndex {
             },
         }),
         .break_val => {
-            const payload = node.castTag(.break_val).?.data;
+            const payload = node.castTag(.break_val) orelse unreachable.data;
             const tok = try c.addToken(.keyword_break, "break");
             const break_label = if (payload.label) |some| blk: {
                 _ = try c.addToken(.colon, ":");
@@ -989,7 +989,7 @@ fn renderNode(c: *Context, node: Node) Allocator.Error!NodeIndex {
             });
         },
         .@"return" => {
-            const payload = node.castTag(.@"return").?.data;
+            const payload = node.castTag(.@"return") orelse unreachable.data;
             return c.addNode(.{
                 .tag = .@"return",
                 .main_token = try c.addToken(.keyword_return, "return"),
@@ -1000,7 +1000,7 @@ fn renderNode(c: *Context, node: Node) Allocator.Error!NodeIndex {
             });
         },
         .@"comptime" => {
-            const payload = node.castTag(.@"comptime").?.data;
+            const payload = node.castTag(.@"comptime") orelse unreachable.data;
             return c.addNode(.{
                 .tag = .@"comptime",
                 .main_token = try c.addToken(.keyword_comptime, "comptime"),
@@ -1011,7 +1011,7 @@ fn renderNode(c: *Context, node: Node) Allocator.Error!NodeIndex {
             });
         },
         .@"defer" => {
-            const payload = node.castTag(.@"defer").?.data;
+            const payload = node.castTag(.@"defer") orelse unreachable.data;
             return c.addNode(.{
                 .tag = .@"defer",
                 .main_token = try c.addToken(.keyword_defer, "defer"),
@@ -1022,7 +1022,7 @@ fn renderNode(c: *Context, node: Node) Allocator.Error!NodeIndex {
             });
         },
         .asm_simple => {
-            const payload = node.castTag(.asm_simple).?.data;
+            const payload = node.castTag(.asm_simple) orelse unreachable.data;
             const asm_token = try c.addToken(.keyword_asm, "asm");
             _ = try c.addToken(.l_paren, "(");
             return c.addNode(.{
@@ -1035,7 +1035,7 @@ fn renderNode(c: *Context, node: Node) Allocator.Error!NodeIndex {
             });
         },
         .type => {
-            const payload = node.castTag(.type).?.data;
+            const payload = node.castTag(.type) orelse unreachable.data;
             return c.addNode(.{
                 .tag = .identifier,
                 .main_token = try c.addToken(.identifier, payload),
@@ -1043,7 +1043,7 @@ fn renderNode(c: *Context, node: Node) Allocator.Error!NodeIndex {
             });
         },
         .log2_int_type => {
-            const payload = node.castTag(.log2_int_type).?.data;
+            const payload = node.castTag(.log2_int_type) orelse unreachable.data;
             return c.addNode(.{
                 .tag = .identifier,
                 .main_token = try c.addTokenFmt(.identifier, "u{d}", .{payload}),
@@ -1051,7 +1051,7 @@ fn renderNode(c: *Context, node: Node) Allocator.Error!NodeIndex {
             });
         },
         .identifier => {
-            const payload = node.castTag(.identifier).?.data;
+            const payload = node.castTag(.identifier) orelse unreachable.data;
             return c.addNode(.{
                 .tag = .identifier,
                 .main_token = try c.addIdentifier(payload),
@@ -1059,7 +1059,7 @@ fn renderNode(c: *Context, node: Node) Allocator.Error!NodeIndex {
             });
         },
         .float_literal => {
-            const payload = node.castTag(.float_literal).?.data;
+            const payload = node.castTag(.float_literal) orelse unreachable.data;
             return c.addNode(.{
                 .tag = .float_literal,
                 .main_token = try c.addToken(.float_literal, payload),
@@ -1067,7 +1067,7 @@ fn renderNode(c: *Context, node: Node) Allocator.Error!NodeIndex {
             });
         },
         .integer_literal => {
-            const payload = node.castTag(.integer_literal).?.data;
+            const payload = node.castTag(.integer_literal) orelse unreachable.data;
             return c.addNode(.{
                 .tag = .integer_literal,
                 .main_token = try c.addToken(.integer_literal, payload),
@@ -1075,7 +1075,7 @@ fn renderNode(c: *Context, node: Node) Allocator.Error!NodeIndex {
             });
         },
         .string_literal => {
-            const payload = node.castTag(.string_literal).?.data;
+            const payload = node.castTag(.string_literal) orelse unreachable.data;
             return c.addNode(.{
                 .tag = .identifier,
                 .main_token = try c.addToken(.string_literal, payload),
@@ -1083,7 +1083,7 @@ fn renderNode(c: *Context, node: Node) Allocator.Error!NodeIndex {
             });
         },
         .char_literal => {
-            const payload = node.castTag(.char_literal).?.data;
+            const payload = node.castTag(.char_literal) orelse unreachable.data;
             return c.addNode(.{
                 .tag = .identifier,
                 .main_token = try c.addToken(.char_literal, payload),
@@ -1091,7 +1091,7 @@ fn renderNode(c: *Context, node: Node) Allocator.Error!NodeIndex {
             });
         },
         .enum_literal => {
-            const payload = node.castTag(.enum_literal).?.data;
+            const payload = node.castTag(.enum_literal) orelse unreachable.data;
             _ = try c.addToken(.period, ".");
             return c.addNode(.{
                 .tag = .enum_literal,
@@ -1100,7 +1100,7 @@ fn renderNode(c: *Context, node: Node) Allocator.Error!NodeIndex {
             });
         },
         .helpers_macro => {
-            const payload = node.castTag(.helpers_macro).?.data;
+            const payload = node.castTag(.helpers_macro) orelse unreachable.data;
             const chain = [_][]const u8{
                 "zig",
                 "c_translation",
@@ -1110,7 +1110,7 @@ fn renderNode(c: *Context, node: Node) Allocator.Error!NodeIndex {
             return renderStdImport(c, &chain);
         },
         .import_c_builtin => {
-            const payload = node.castTag(.import_c_builtin).?.data;
+            const payload = node.castTag(.import_c_builtin) orelse unreachable.data;
             const chain = [_][]const u8{
                 "zig",
                 "c_builtins",
@@ -1119,7 +1119,7 @@ fn renderNode(c: *Context, node: Node) Allocator.Error!NodeIndex {
             return renderStdImport(c, &chain);
         },
         .string_slice => {
-            const payload = node.castTag(.string_slice).?.data;
+            const payload = node.castTag(.string_slice) orelse unreachable.data;
 
             const string = try renderNode(c, payload.string);
             const l_bracket = try c.addToken(.l_bracket, "[");
@@ -1149,7 +1149,7 @@ fn renderNode(c: *Context, node: Node) Allocator.Error!NodeIndex {
             });
         },
         .fail_decl => {
-            const payload = node.castTag(.fail_decl).?.data;
+            const payload = node.castTag(.fail_decl) orelse unreachable.data;
             // pub const name = @compileError(msg);
             _ = try c.addToken(.keyword_pub, "pub");
             const const_tok = try c.addToken(.keyword_const, "const");
@@ -1204,7 +1204,7 @@ fn renderNode(c: *Context, node: Node) Allocator.Error!NodeIndex {
             });
         },
         .static_local_var => {
-            const payload = node.castTag(.static_local_var).?.data;
+            const payload = node.castTag(.static_local_var) orelse unreachable.data;
 
             const const_tok = try c.addToken(.keyword_const, "const");
             _ = try c.addIdentifier(payload.name);
@@ -1234,7 +1234,7 @@ fn renderNode(c: *Context, node: Node) Allocator.Error!NodeIndex {
             });
         },
         .mut_str => {
-            const payload = node.castTag(.mut_str).?.data;
+            const payload = node.castTag(.mut_str) orelse unreachable.data;
 
             const var_tok = try c.addToken(.keyword_var, "var");
             _ = try c.addIdentifier(payload.name);
@@ -1284,76 +1284,76 @@ fn renderNode(c: *Context, node: Node) Allocator.Error!NodeIndex {
             });
         },
         .int_cast => {
-            const payload = node.castTag(.int_cast).?.data;
+            const payload = node.castTag(.int_cast) orelse unreachable.data;
             return renderBuiltinCall(c, "@intCast", &.{ payload.lhs, payload.rhs });
         },
         .signed_remainder => {
-            const payload = node.castTag(.signed_remainder).?.data;
+            const payload = node.castTag(.signed_remainder) orelse unreachable.data;
             const import_node = try renderStdImport(c, &.{ "zig", "c_translation", "signedRemainder" });
             return renderCall(c, import_node, &.{ payload.lhs, payload.rhs });
         },
         .div_trunc => {
-            const payload = node.castTag(.div_trunc).?.data;
+            const payload = node.castTag(.div_trunc) orelse unreachable.data;
             return renderBuiltinCall(c, "@divTrunc", &.{ payload.lhs, payload.rhs });
         },
         .bool_to_int => {
-            const payload = node.castTag(.bool_to_int).?.data;
+            const payload = node.castTag(.bool_to_int) orelse unreachable.data;
             return renderBuiltinCall(c, "@boolToInt", &.{payload});
         },
         .as => {
-            const payload = node.castTag(.as).?.data;
+            const payload = node.castTag(.as) orelse unreachable.data;
             return renderBuiltinCall(c, "@as", &.{ payload.lhs, payload.rhs });
         },
         .truncate => {
-            const payload = node.castTag(.truncate).?.data;
+            const payload = node.castTag(.truncate) orelse unreachable.data;
             return renderBuiltinCall(c, "@truncate", &.{ payload.lhs, payload.rhs });
         },
         .bit_cast => {
-            const payload = node.castTag(.bit_cast).?.data;
+            const payload = node.castTag(.bit_cast) orelse unreachable.data;
             return renderBuiltinCall(c, "@bitCast", &.{ payload.lhs, payload.rhs });
         },
         .float_cast => {
-            const payload = node.castTag(.float_cast).?.data;
+            const payload = node.castTag(.float_cast) orelse unreachable.data;
             return renderBuiltinCall(c, "@floatCast", &.{ payload.lhs, payload.rhs });
         },
         .float_to_int => {
-            const payload = node.castTag(.float_to_int).?.data;
+            const payload = node.castTag(.float_to_int) orelse unreachable.data;
             return renderBuiltinCall(c, "@floatToInt", &.{ payload.lhs, payload.rhs });
         },
         .int_to_float => {
-            const payload = node.castTag(.int_to_float).?.data;
+            const payload = node.castTag(.int_to_float) orelse unreachable.data;
             return renderBuiltinCall(c, "@intToFloat", &.{ payload.lhs, payload.rhs });
         },
         .int_to_ptr => {
-            const payload = node.castTag(.int_to_ptr).?.data;
+            const payload = node.castTag(.int_to_ptr) orelse unreachable.data;
             return renderBuiltinCall(c, "@intToPtr", &.{ payload.lhs, payload.rhs });
         },
         .ptr_to_int => {
-            const payload = node.castTag(.ptr_to_int).?.data;
+            const payload = node.castTag(.ptr_to_int) orelse unreachable.data;
             return renderBuiltinCall(c, "@ptrToInt", &.{payload});
         },
         .align_cast => {
-            const payload = node.castTag(.align_cast).?.data;
+            const payload = node.castTag(.align_cast) orelse unreachable.data;
             return renderBuiltinCall(c, "@alignCast", &.{ payload.lhs, payload.rhs });
         },
         .ptr_cast => {
-            const payload = node.castTag(.ptr_cast).?.data;
+            const payload = node.castTag(.ptr_cast) orelse unreachable.data;
             return renderBuiltinCall(c, "@ptrCast", &.{ payload.lhs, payload.rhs });
         },
         .div_exact => {
-            const payload = node.castTag(.div_exact).?.data;
+            const payload = node.castTag(.div_exact) orelse unreachable.data;
             return renderBuiltinCall(c, "@divExact", &.{ payload.lhs, payload.rhs });
         },
         .offset_of => {
-            const payload = node.castTag(.offset_of).?.data;
+            const payload = node.castTag(.offset_of) orelse unreachable.data;
             return renderBuiltinCall(c, "@offsetOf", &.{ payload.lhs, payload.rhs });
         },
         .sizeof => {
-            const payload = node.castTag(.sizeof).?.data;
+            const payload = node.castTag(.sizeof) orelse unreachable.data;
             return renderBuiltinCall(c, "@sizeOf", &.{payload});
         },
         .shuffle => {
-            const payload = node.castTag(.shuffle).?.data;
+            const payload = node.castTag(.shuffle) orelse unreachable.data;
             return renderBuiltinCall(c, "@shuffle", &.{
                 payload.element_type,
                 payload.a,
@@ -1362,15 +1362,15 @@ fn renderNode(c: *Context, node: Node) Allocator.Error!NodeIndex {
             });
         },
         .alignof => {
-            const payload = node.castTag(.alignof).?.data;
+            const payload = node.castTag(.alignof) orelse unreachable.data;
             return renderBuiltinCall(c, "@alignOf", &.{payload});
         },
         .typeof => {
-            const payload = node.castTag(.typeof).?.data;
+            const payload = node.castTag(.typeof) orelse unreachable.data;
             return renderBuiltinCall(c, "@TypeOf", &.{payload});
         },
         .typeinfo => {
-            const payload = node.castTag(.typeinfo).?.data;
+            const payload = node.castTag(.typeinfo) orelse unreachable.data;
             return renderBuiltinCall(c, "@typeInfo", &.{payload});
         },
         .negate => return renderPrefixOp(c, node, .negation, .minus, "-"),
@@ -1380,7 +1380,7 @@ fn renderNode(c: *Context, node: Node) Allocator.Error!NodeIndex {
         .optional_type => return renderPrefixOp(c, node, .optional_type, .question_mark, "?"),
         .address_of => return renderPrefixOp(c, node, .address_of, .ampersand, "&"),
         .deref => {
-            const payload = node.castTag(.deref).?.data;
+            const payload = node.castTag(.deref) orelse unreachable.data;
             const operand = try renderNodeGrouped(c, payload);
             const deref_tok = try c.addToken(.period_asterisk, ".*");
             return c.addNode(.{
@@ -1393,7 +1393,7 @@ fn renderNode(c: *Context, node: Node) Allocator.Error!NodeIndex {
             });
         },
         .unwrap => {
-            const payload = node.castTag(.unwrap).?.data;
+            const payload = node.castTag(.unwrap) orelse unreachable.data;
             const operand = try renderNodeGrouped(c, payload);
             const period = try c.addToken(.period, ".");
             const question_mark = try c.addToken(.question_mark, "?");
@@ -1481,7 +1481,7 @@ fn renderNode(c: *Context, node: Node) Allocator.Error!NodeIndex {
             });
         },
         .block_single => {
-            const payload = node.castTag(.block_single).?.data;
+            const payload = node.castTag(.block_single) orelse unreachable.data;
             const l_brace = try c.addToken(.l_brace, "{");
 
             const stmt = try renderNode(c, payload);
@@ -1498,7 +1498,7 @@ fn renderNode(c: *Context, node: Node) Allocator.Error!NodeIndex {
             });
         },
         .block => {
-            const payload = node.castTag(.block).?.data;
+            const payload = node.castTag(.block) orelse unreachable.data;
             if (payload.label) |some| {
                 _ = try c.addIdentifier(some);
                 _ = try c.addToken(.colon, ":");
@@ -1529,7 +1529,7 @@ fn renderNode(c: *Context, node: Node) Allocator.Error!NodeIndex {
         .func => return renderFunc(c, node),
         .pub_inline_fn => return renderMacroFunc(c, node),
         .discard => {
-            const payload = node.castTag(.discard).?.data;
+            const payload = node.castTag(.discard) orelse unreachable.data;
             if (payload.should_skip) return @as(NodeIndex, 0);
 
             const lhs = try c.addNode(.{
@@ -1547,7 +1547,7 @@ fn renderNode(c: *Context, node: Node) Allocator.Error!NodeIndex {
             });
         },
         .@"while" => {
-            const payload = node.castTag(.@"while").?.data;
+            const payload = node.castTag(.@"while") orelse unreachable.data;
             const while_tok = try c.addToken(.keyword_while, "while");
             _ = try c.addToken(.l_paren, "(");
             const cond = try renderNode(c, payload.cond);
@@ -1586,7 +1586,7 @@ fn renderNode(c: *Context, node: Node) Allocator.Error!NodeIndex {
             }
         },
         .while_true => {
-            const payload = node.castTag(.while_true).?.data;
+            const payload = node.castTag(.while_true) orelse unreachable.data;
             const while_tok = try c.addToken(.keyword_while, "while");
             _ = try c.addToken(.l_paren, "(");
             const cond = try c.addNode(.{
@@ -1607,7 +1607,7 @@ fn renderNode(c: *Context, node: Node) Allocator.Error!NodeIndex {
             });
         },
         .@"if" => {
-            const payload = node.castTag(.@"if").?.data;
+            const payload = node.castTag(.@"if") orelse unreachable.data;
             const if_tok = try c.addToken(.keyword_if, "if");
             _ = try c.addToken(.l_paren, "(");
             const cond = try renderNode(c, payload.cond);
@@ -1638,7 +1638,7 @@ fn renderNode(c: *Context, node: Node) Allocator.Error!NodeIndex {
             });
         },
         .if_not_break => {
-            const payload = node.castTag(.if_not_break).?.data;
+            const payload = node.castTag(.if_not_break) orelse unreachable.data;
             const if_tok = try c.addToken(.keyword_if, "if");
             _ = try c.addToken(.l_paren, "(");
             const cond = try c.addNode(.{
@@ -1669,7 +1669,7 @@ fn renderNode(c: *Context, node: Node) Allocator.Error!NodeIndex {
             });
         },
         .@"switch" => {
-            const payload = node.castTag(.@"switch").?.data;
+            const payload = node.castTag(.@"switch") orelse unreachable.data;
             const switch_tok = try c.addToken(.keyword_switch, "switch");
             _ = try c.addToken(.l_paren, "(");
             const cond = try renderNode(c, payload.cond);
@@ -1697,7 +1697,7 @@ fn renderNode(c: *Context, node: Node) Allocator.Error!NodeIndex {
             });
         },
         .switch_else => {
-            const payload = node.castTag(.switch_else).?.data;
+            const payload = node.castTag(.switch_else) orelse unreachable.data;
             _ = try c.addToken(.keyword_else, "else");
             return c.addNode(.{
                 .tag = .switch_case_one,
@@ -1709,7 +1709,7 @@ fn renderNode(c: *Context, node: Node) Allocator.Error!NodeIndex {
             });
         },
         .switch_prong => {
-            const payload = node.castTag(.switch_prong).?.data;
+            const payload = node.castTag(.switch_prong) orelse unreachable.data;
             var items = try c.gpa.alloc(NodeIndex, std.math.max(payload.cases.len, 1));
             defer c.gpa.free(items);
             items[0] = 0;
@@ -1757,7 +1757,7 @@ fn renderNode(c: *Context, node: Node) Allocator.Error!NodeIndex {
             });
         },
         .array_access => {
-            const payload = node.castTag(.array_access).?.data;
+            const payload = node.castTag(.array_access) orelse unreachable.data;
             const lhs = try renderNodeGrouped(c, payload.lhs);
             const l_bracket = try c.addToken(.l_bracket, "[");
             const index_expr = try renderNode(c, payload.rhs);
@@ -1772,15 +1772,15 @@ fn renderNode(c: *Context, node: Node) Allocator.Error!NodeIndex {
             });
         },
         .array_type => {
-            const payload = node.castTag(.array_type).?.data;
+            const payload = node.castTag(.array_type) orelse unreachable.data;
             return renderArrayType(c, payload.len, payload.elem_type);
         },
         .null_sentinel_array_type => {
-            const payload = node.castTag(.null_sentinel_array_type).?.data;
+            const payload = node.castTag(.null_sentinel_array_type) orelse unreachable.data;
             return renderNullSentinelArrayType(c, payload.len, payload.elem_type);
         },
         .array_filler => {
-            const payload = node.castTag(.array_filler).?.data;
+            const payload = node.castTag(.array_filler) orelse unreachable.data;
 
             const type_expr = try renderArrayType(c, 1, payload.type);
             const l_brace = try c.addToken(.l_brace, "{");
@@ -1809,24 +1809,24 @@ fn renderNode(c: *Context, node: Node) Allocator.Error!NodeIndex {
             });
         },
         .empty_array => {
-            const payload = node.castTag(.empty_array).?.data;
+            const payload = node.castTag(.empty_array) orelse unreachable.data;
 
             const type_expr = try renderArrayType(c, 0, payload);
             return renderArrayInit(c, type_expr, &.{});
         },
         .array_init => {
-            const payload = node.castTag(.array_init).?.data;
+            const payload = node.castTag(.array_init) orelse unreachable.data;
             const type_expr = try renderNode(c, payload.cond);
             return renderArrayInit(c, type_expr, payload.cases);
         },
         .field_access => {
-            const payload = node.castTag(.field_access).?.data;
+            const payload = node.castTag(.field_access) orelse unreachable.data;
             const lhs = try renderNodeGrouped(c, payload.lhs);
             return renderFieldAccess(c, lhs, payload.field_name);
         },
         .@"struct", .@"union" => return renderRecord(c, node),
         .enum_constant => {
-            const payload = node.castTag(.enum_constant).?.data;
+            const payload = node.castTag(.enum_constant) orelse unreachable.data;
 
             if (payload.is_public) _ = try c.addToken(.keyword_pub, "pub");
             const const_tok = try c.addToken(.keyword_const, "const");
@@ -1852,7 +1852,7 @@ fn renderNode(c: *Context, node: Node) Allocator.Error!NodeIndex {
             });
         },
         .tuple => {
-            const payload = node.castTag(.tuple).?.data;
+            const payload = node.castTag(.tuple) orelse unreachable.data;
             _ = try c.addToken(.period, ".");
             const l_brace = try c.addToken(.l_brace, "{");
             var inits = try c.gpa.alloc(NodeIndex, std.math.max(payload.len, 2));
@@ -1886,7 +1886,7 @@ fn renderNode(c: *Context, node: Node) Allocator.Error!NodeIndex {
             }
         },
         .container_init_dot => {
-            const payload = node.castTag(.container_init_dot).?.data;
+            const payload = node.castTag(.container_init_dot) orelse unreachable.data;
             _ = try c.addToken(.period, ".");
             const l_brace = try c.addToken(.l_brace, "{");
             var inits = try c.gpa.alloc(NodeIndex, std.math.max(payload.len, 2));
@@ -1924,7 +1924,7 @@ fn renderNode(c: *Context, node: Node) Allocator.Error!NodeIndex {
             }
         },
         .container_init => {
-            const payload = node.castTag(.container_init).?.data;
+            const payload = node.castTag(.container_init) orelse unreachable.data;
             const lhs = try renderNode(c, payload.lhs);
 
             const l_brace = try c.addToken(.l_brace, "{");
@@ -2164,15 +2164,15 @@ fn addSemicolonIfNeeded(c: *Context, node: Node) !void {
         .warning => unreachable,
         .var_decl, .var_simple, .arg_redecl, .alias, .block, .empty_block, .block_single, .@"switch", .static_local_var, .mut_str => {},
         .while_true => {
-            const payload = node.castTag(.while_true).?.data;
+            const payload = node.castTag(.while_true) orelse unreachable.data;
             return addSemicolonIfNotBlock(c, payload);
         },
         .@"while" => {
-            const payload = node.castTag(.@"while").?.data;
+            const payload = node.castTag(.@"while") orelse unreachable.data;
             return addSemicolonIfNotBlock(c, payload.body);
         },
         .@"if" => {
-            const payload = node.castTag(.@"if").?.data;
+            const payload = node.castTag(.@"if") orelse unreachable.data;
             if (payload.@"else") |some|
                 return addSemicolonIfNeeded(c, some);
             return addSemicolonIfNotBlock(c, payload.then);
@@ -2522,7 +2522,7 @@ fn renderBuiltinCall(c: *Context, builtin: []const u8, args: []const Node) !Node
 }
 
 fn renderVar(c: *Context, node: Node) !NodeIndex {
-    const payload = node.castTag(.var_decl).?.data;
+    const payload = node.castTag(.var_decl) orelse unreachable.data;
     if (payload.is_pub) _ = try c.addToken(.keyword_pub, "pub");
     if (payload.is_extern) _ = try c.addToken(.keyword_extern, "extern");
     if (payload.is_export) _ = try c.addToken(.keyword_export, "export");
@@ -2606,7 +2606,7 @@ fn renderVar(c: *Context, node: Node) !NodeIndex {
 }
 
 fn renderFunc(c: *Context, node: Node) !NodeIndex {
-    const payload = node.castTag(.func).?.data;
+    const payload = node.castTag(.func) orelse unreachable.data;
     if (payload.is_pub) _ = try c.addToken(.keyword_pub, "pub");
     if (payload.is_extern) _ = try c.addToken(.keyword_extern, "extern");
     if (payload.is_export) _ = try c.addToken(.keyword_export, "export");
@@ -2733,7 +2733,7 @@ fn renderFunc(c: *Context, node: Node) !NodeIndex {
 }
 
 fn renderMacroFunc(c: *Context, node: Node) !NodeIndex {
-    const payload = node.castTag(.pub_inline_fn).?.data;
+    const payload = node.castTag(.pub_inline_fn) orelse unreachable.data;
     _ = try c.addToken(.keyword_pub, "pub");
     _ = try c.addToken(.keyword_inline, "inline");
     const fn_token = try c.addToken(.keyword_fn, "fn");

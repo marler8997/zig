@@ -455,16 +455,16 @@ pub fn main() !void {
         {
             var hash_it = path_kv.value_ptr.*.iterator();
             while (hash_it.next()) |hash_kv| {
-                const contents = hash_to_contents.getPtr(hash_kv.value_ptr.*).?;
+                const contents = hash_to_contents.getPtr(hash_kv.value_ptr.*) orelse unreachable;
                 try contents_list.append(contents);
             }
         }
         std.sort.sort(*Contents, contents_list.items, {}, Contents.hitCountLessThan);
-        const best_contents = contents_list.popOrNull().?;
+        const best_contents = contents_list.popOrNull() orelse unreachable;
         if (best_contents.hit_count > 1) {
             // worth it to make it generic
             const full_path = try std.fs.path.join(allocator, &[_][]const u8{ out_dir, generic_name, path_kv.key_ptr.* });
-            try std.fs.cwd().makePath(std.fs.path.dirname(full_path).?);
+            try std.fs.cwd().makePath(std.fs.path.dirname(full_path) orelse unreachable);
             try std.fs.cwd().writeFile(full_path, best_contents.bytes);
             best_contents.is_generic = true;
             while (contents_list.popOrNull()) |contender| {
@@ -480,7 +480,7 @@ pub fn main() !void {
         }
         var hash_it = path_kv.value_ptr.*.iterator();
         while (hash_it.next()) |hash_kv| {
-            const contents = hash_to_contents.get(hash_kv.value_ptr.*).?;
+            const contents = hash_to_contents.get(hash_kv.value_ptr.*) orelse unreachable;
             if (contents.is_generic) continue;
 
             const dest_target = hash_kv.key_ptr.*;
@@ -494,7 +494,7 @@ pub fn main() !void {
                 @tagName(dest_target.abi),
             });
             const full_path = try std.fs.path.join(allocator, &[_][]const u8{ out_dir, out_subpath, path_kv.key_ptr.* });
-            try std.fs.cwd().makePath(std.fs.path.dirname(full_path).?);
+            try std.fs.cwd().makePath(std.fs.path.dirname(full_path) orelse unreachable);
             try std.fs.cwd().writeFile(full_path, contents.bytes);
         }
     }

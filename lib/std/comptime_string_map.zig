@@ -130,11 +130,11 @@ test "ComptimeStringMap slice of structs" {
 }
 
 fn testMap(comptime map: anytype) !void {
-    try std.testing.expectEqual(TestEnum.A, map.get("have").?);
-    try std.testing.expectEqual(TestEnum.B, map.get("nothing").?);
+    try std.testing.expectEqual(TestEnum.A, map.get("have") orelse unreachable);
+    try std.testing.expectEqual(TestEnum.B, map.get("nothing") orelse unreachable);
     try std.testing.expect(null == map.get("missing"));
-    try std.testing.expectEqual(TestEnum.D, map.get("these").?);
-    try std.testing.expectEqual(TestEnum.E, map.get("samelen").?);
+    try std.testing.expectEqual(TestEnum.D, map.get("these") orelse unreachable);
+    try std.testing.expectEqual(TestEnum.E, map.get("samelen") orelse unreachable);
 
     try std.testing.expect(!map.has("missing"));
     try std.testing.expect(map.has("these"));
@@ -169,11 +169,11 @@ test "ComptimeStringMap void value type, list literal of list literals" {
 }
 
 fn testSet(comptime map: anytype) !void {
-    try std.testing.expectEqual({}, map.get("have").?);
-    try std.testing.expectEqual({}, map.get("nothing").?);
+    try std.testing.expectEqual({}, map.get("have") orelse unreachable);
+    try std.testing.expectEqual({}, map.get("nothing") orelse unreachable);
     try std.testing.expect(null == map.get("missing"));
-    try std.testing.expectEqual({}, map.get("these").?);
-    try std.testing.expectEqual({}, map.get("samelen").?);
+    try std.testing.expectEqual({}, map.get("these") orelse unreachable);
+    try std.testing.expectEqual({}, map.get("samelen") orelse unreachable);
 
     try std.testing.expect(!map.has("missing"));
     try std.testing.expect(map.has("these"));

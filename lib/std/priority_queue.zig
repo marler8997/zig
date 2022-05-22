@@ -336,8 +336,8 @@ test "std.PriorityQueue: peek" {
     try queue.add(9);
     try queue.add(3);
     try queue.add(2);
-    try expectEqual(@as(u32, 2), queue.peek().?);
-    try expectEqual(@as(u32, 2), queue.peek().?);
+    try expectEqual(@as(u32, 2), queue.peek() orelse unreachable);
+    try expectEqual(@as(u32, 2), queue.peek() orelse unreachable);
 }
 
 test "std.PriorityQueue: sift up with odd indices" {

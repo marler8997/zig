@@ -120,7 +120,7 @@ pub fn OpenFile(sub_path_w: []const u16, options: OpenFileOptions) OpenError!HAN
     switch (rc) {
         .SUCCESS => {
             if (std.io.is_async and options.io_mode == .evented) {
-                _ = CreateIoCompletionPort(result, std.event.Loop.instance.?.os_data.io_port, undefined, undefined) catch undefined;
+                _ = CreateIoCompletionPort(result, std.event.Loop.instance orelse unreachable.os_data.io_port, undefined, undefined) catch undefined;
             }
             return result;
         },
@@ -441,7 +441,7 @@ pub const ReadFileError = error{
 /// multiple non-atomic reads.
 pub fn ReadFile(in_hFile: HANDLE, buffer: []u8, offset: ?u64, io_mode: std.io.ModeOverride) ReadFileError!usize {
     if (io_mode != .blocking) {
-        const loop = std.event.Loop.instance.?;
+        const loop = std.event.Loop.instance orelse unreachable;
         // TODO make getting the file position non-blocking
         const off = if (offset) |o| o else try SetFilePointerEx_CURRENT_get(in_hFile);
         var resume_node = std.event.Loop.ResumeNode.Basic{
@@ -529,7 +529,7 @@ pub fn WriteFile(
     io_mode: std.io.ModeOverride,
 ) WriteFileError!usize {
     if (std.event.Loop.instance != null and io_mode != .blocking) {
-        const loop = std.event.Loop.instance.?;
+        const loop = std.event.Loop.instance orelse unreachable;
         // TODO make getting the file position non-blocking
         const off = if (offset) |o| o else try SetFilePointerEx_CURRENT_get(handle);
         var resume_node = std.event.Loop.ResumeNode.Basic{

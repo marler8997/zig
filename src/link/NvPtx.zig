@@ -113,7 +113,7 @@ pub fn flushModule(self: *NvPtx, comp: *Compilation, prog_node: *std.Progress.No
     if (comp.bin_file.options.emit) |emit| {
         hack_comp.emit_asm = .{
             .directory = emit.directory,
-            .basename = comp.bin_file.intermediary_basename.?,
+            .basename = comp.bin_file.intermediary_basename orelse unreachable,
         };
         hack_comp.bin_file.options.emit = null;
     }

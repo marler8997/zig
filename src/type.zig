@@ -299,7 +299,7 @@ pub const Type = extern union {
             .mut_slice,
             => true,
 
-            .pointer => ty.castTag(.pointer).?.data.mutable,
+            .pointer => ty.castTag(.pointer) orelse unreachable.data.mutable,
 
             else => unreachable,
         };
@@ -353,7 +353,7 @@ pub const Type = extern union {
                 .size = .Slice,
             } },
             .single_const_pointer => return .{ .data = .{
-                .pointee_type = self.castPointer().?.data,
+                .pointee_type = self.castPointer() orelse unreachable.data,
                 .sentinel = null,
                 .@"align" = 0,
                 .@"addrspace" = .generic,
@@ -365,7 +365,7 @@ pub const Type = extern union {
                 .size = .One,
             } },
             .single_mut_pointer => return .{ .data = .{
-                .pointee_type = self.castPointer().?.data,
+                .pointee_type = self.castPointer() orelse unreachable.data,
                 .sentinel = null,
                 .@"align" = 0,
                 .@"addrspace" = .generic,
@@ -377,7 +377,7 @@ pub const Type = extern union {
                 .size = .One,
             } },
             .many_const_pointer => return .{ .data = .{
-                .pointee_type = self.castPointer().?.data,
+                .pointee_type = self.castPointer() orelse unreachable.data,
                 .sentinel = null,
                 .@"align" = 0,
                 .@"addrspace" = .generic,
@@ -413,7 +413,7 @@ pub const Type = extern union {
                 .size = .Many,
             } },
             .many_mut_pointer => return .{ .data = .{
-                .pointee_type = self.castPointer().?.data,
+                .pointee_type = self.castPointer() orelse unreachable.data,
                 .sentinel = null,
                 .@"align" = 0,
                 .@"addrspace" = .generic,
@@ -437,7 +437,7 @@ pub const Type = extern union {
                 .size = .Many,
             } },
             .c_const_pointer => return .{ .data = .{
-                .pointee_type = self.castPointer().?.data,
+                .pointee_type = self.castPointer() orelse unreachable.data,
                 .sentinel = null,
                 .@"align" = 0,
                 .@"addrspace" = .generic,
@@ -449,7 +449,7 @@ pub const Type = extern union {
                 .size = .C,
             } },
             .c_mut_pointer => return .{ .data = .{
-                .pointee_type = self.castPointer().?.data,
+                .pointee_type = self.castPointer() orelse unreachable.data,
                 .sentinel = null,
                 .@"align" = 0,
                 .@"addrspace" = .generic,
@@ -461,7 +461,7 @@ pub const Type = extern union {
                 .size = .C,
             } },
             .const_slice => return .{ .data = .{
-                .pointee_type = self.castPointer().?.data,
+                .pointee_type = self.castPointer() orelse unreachable.data,
                 .sentinel = null,
                 .@"align" = 0,
                 .@"addrspace" = .generic,
@@ -473,7 +473,7 @@ pub const Type = extern union {
                 .size = .Slice,
             } },
             .mut_slice => return .{ .data = .{
-                .pointee_type = self.castPointer().?.data,
+                .pointee_type = self.castPointer() orelse unreachable.data,
                 .sentinel = null,
                 .@"align" = 0,
                 .@"addrspace" = .generic,
@@ -485,10 +485,10 @@ pub const Type = extern union {
                 .size = .Slice,
             } },
 
-            .pointer => return self.castTag(.pointer).?.*,
+            .pointer => return self.castTag(.pointer) orelse unreachable.*,
 
             .optional_single_mut_pointer => return .{ .data = .{
-                .pointee_type = self.castPointer().?.data,
+                .pointee_type = self.castPointer() orelse unreachable.data,
                 .sentinel = null,
                 .@"align" = 0,
                 .@"addrspace" = .generic,
@@ -500,7 +500,7 @@ pub const Type = extern union {
                 .size = .One,
             } },
             .optional_single_const_pointer => return .{ .data = .{
-                .pointee_type = self.castPointer().?.data,
+                .pointee_type = self.castPointer() orelse unreachable.data,
                 .sentinel = null,
                 .@"align" = 0,
                 .@"addrspace" = .generic,
@@ -590,7 +590,7 @@ pub const Type = extern union {
             .error_set_inferred => {
                 // Inferred error sets are only equal if both are inferred
                 // and they share the same pointer.
-                const a_ies = a.castTag(.error_set_inferred).?.data;
+                const a_ies = a.castTag(.error_set_inferred) orelse unreachable.data;
                 const b_ies = (b.castTag(.error_set_inferred) orelse return false).data;
                 return a_ies == b_ies;
             },
@@ -621,7 +621,7 @@ pub const Type = extern union {
             },
 
             .@"opaque" => {
-                const opaque_obj_a = a.castTag(.@"opaque").?.data;
+                const opaque_obj_a = a.castTag(.@"opaque") orelse unreachable.data;
                 const opaque_obj_b = (b.castTag(.@"opaque") orelse return false).data;
                 return opaque_obj_a == opaque_obj_b;
             },
@@ -785,12 +785,12 @@ pub const Type = extern union {
             },
 
             .empty_struct => {
-                const a_namespace = a.castTag(.empty_struct).?.data;
+                const a_namespace = a.castTag(.empty_struct) orelse unreachable.data;
                 const b_namespace = (b.castTag(.empty_struct) orelse return false).data;
                 return a_namespace == b_namespace;
             },
             .@"struct" => {
-                const a_struct_obj = a.castTag(.@"struct").?.data;
+                const a_struct_obj = a.castTag(.@"struct") orelse unreachable.data;
                 const b_struct_obj = (b.castTag(.@"struct") orelse return false).data;
                 return a_struct_obj == b_struct_obj;
             },
@@ -828,7 +828,7 @@ pub const Type = extern union {
                 return true;
             },
             .anon_struct => {
-                const a_struct_obj = a.castTag(.anon_struct).?.data;
+                const a_struct_obj = a.castTag(.anon_struct) orelse unreachable.data;
                 const b_struct_obj = (b.castTag(.anon_struct) orelse return false).data;
 
                 if (a_struct_obj.types.len != b_struct_obj.types.len) return false;
@@ -873,17 +873,17 @@ pub const Type = extern union {
             => unreachable, // needed to resolve the type before now
 
             .enum_full, .enum_nonexhaustive => {
-                const a_enum_obj = a.cast(Payload.EnumFull).?.data;
+                const a_enum_obj = a.cast(Payload.EnumFull) orelse unreachable.data;
                 const b_enum_obj = (b.cast(Payload.EnumFull) orelse return false).data;
                 return a_enum_obj == b_enum_obj;
             },
             .enum_simple => {
-                const a_enum_obj = a.cast(Payload.EnumSimple).?.data;
+                const a_enum_obj = a.cast(Payload.EnumSimple) orelse unreachable.data;
                 const b_enum_obj = (b.cast(Payload.EnumSimple) orelse return false).data;
                 return a_enum_obj == b_enum_obj;
             },
             .enum_numbered => {
-                const a_enum_obj = a.cast(Payload.EnumNumbered).?.data;
+                const a_enum_obj = a.cast(Payload.EnumNumbered) orelse unreachable.data;
                 const b_enum_obj = (b.cast(Payload.EnumNumbered) orelse return false).data;
                 return a_enum_obj == b_enum_obj;
             },
@@ -898,7 +898,7 @@ pub const Type = extern union {
             => unreachable, // needed to resolve the type before now
 
             .@"union", .union_tagged => {
-                const a_union_obj = a.cast(Payload.Union).?.data;
+                const a_union_obj = a.cast(Payload.Union) orelse unreachable.data;
                 const b_union_obj = (b.cast(Payload.Union) orelse return false).data;
                 return a_union_obj == b_union_obj;
             },
@@ -1015,7 +1015,7 @@ pub const Type = extern union {
 
             .error_set_inferred => {
                 // inferred error sets are compared using their data pointer
-                const ies: *Module.Fn.InferredErrorSet = ty.castTag(.error_set_inferred).?.data;
+                const ies: *Module.Fn.InferredErrorSet = ty.castTag(.error_set_inferred) orelse unreachable.data;
                 std.hash.autoHash(hasher, std.builtin.TypeId.ErrorSet);
                 std.hash.autoHash(hasher, Tag.error_set_inferred);
                 std.hash.autoHash(hasher, ies);
@@ -1023,7 +1023,7 @@ pub const Type = extern union {
 
             .@"opaque" => {
                 std.hash.autoHash(hasher, std.builtin.TypeId.Opaque);
-                const opaque_obj = ty.castTag(.@"opaque").?.data;
+                const opaque_obj = ty.castTag(.@"opaque") orelse unreachable.data;
                 std.hash.autoHash(hasher, opaque_obj);
             },
 
@@ -1131,11 +1131,11 @@ pub const Type = extern union {
 
             .empty_struct => {
                 std.hash.autoHash(hasher, std.builtin.TypeId.Struct);
-                const namespace: *const Module.Namespace = ty.castTag(.empty_struct).?.data;
+                const namespace: *const Module.Namespace = ty.castTag(.empty_struct) orelse unreachable.data;
                 std.hash.autoHash(hasher, namespace);
             },
             .@"struct" => {
-                const struct_obj: *const Module.Struct = ty.castTag(.@"struct").?.data;
+                const struct_obj: *const Module.Struct = ty.castTag(.@"struct") orelse unreachable.data;
                 std.hash.autoHash(hasher, struct_obj);
             },
             .tuple, .empty_struct_literal => {
@@ -1152,7 +1152,7 @@ pub const Type = extern union {
                 }
             },
             .anon_struct => {
-                const struct_obj = ty.castTag(.anon_struct).?.data;
+                const struct_obj = ty.castTag(.anon_struct) orelse unreachable.data;
                 std.hash.autoHash(hasher, std.builtin.TypeId.Struct);
                 std.hash.autoHash(hasher, struct_obj.types.len);
 
@@ -1174,17 +1174,17 @@ pub const Type = extern union {
             => unreachable, // needed to resolve the type before now
 
             .enum_full, .enum_nonexhaustive => {
-                const enum_obj: *const Module.EnumFull = ty.cast(Payload.EnumFull).?.data;
+                const enum_obj: *const Module.EnumFull = ty.cast(Payload.EnumFull) orelse unreachable.data;
                 std.hash.autoHash(hasher, std.builtin.TypeId.Enum);
                 std.hash.autoHash(hasher, enum_obj);
             },
             .enum_simple => {
-                const enum_obj: *const Module.EnumSimple = ty.cast(Payload.EnumSimple).?.data;
+                const enum_obj: *const Module.EnumSimple = ty.cast(Payload.EnumSimple) orelse unreachable.data;
                 std.hash.autoHash(hasher, std.builtin.TypeId.Enum);
                 std.hash.autoHash(hasher, enum_obj);
             },
             .enum_numbered => {
-                const enum_obj: *const Module.EnumNumbered = ty.cast(Payload.EnumNumbered).?.data;
+                const enum_obj: *const Module.EnumNumbered = ty.cast(Payload.EnumNumbered) orelse unreachable.data;
                 std.hash.autoHash(hasher, std.builtin.TypeId.Enum);
                 std.hash.autoHash(hasher, enum_obj);
             },
@@ -1198,7 +1198,7 @@ pub const Type = extern union {
             => unreachable, // needed to resolve the type before now
 
             .@"union", .union_tagged => {
-                const union_obj: *const Module.Union = ty.cast(Payload.Union).?.data;
+                const union_obj: *const Module.Union = ty.cast(Payload.Union) orelse unreachable.data;
                 std.hash.autoHash(hasher, std.builtin.TypeId.Union);
                 std.hash.autoHash(hasher, union_obj);
             },
@@ -1332,7 +1332,7 @@ pub const Type = extern union {
             .optional_single_const_pointer,
             .anyframe_T,
             => {
-                const payload = self.cast(Payload.ElemType).?;
+                const payload = self.cast(Payload.ElemType) orelse unreachable;
                 const new_payload = try allocator.create(Payload.ElemType);
                 new_payload.* = .{
                     .base = .{ .tag = payload.base.tag },
@@ -1346,21 +1346,21 @@ pub const Type = extern union {
             => return self.copyPayloadShallow(allocator, Payload.Bits),
 
             .vector => {
-                const payload = self.castTag(.vector).?.data;
+                const payload = self.castTag(.vector) orelse unreachable.data;
                 return Tag.vector.create(allocator, .{
                     .len = payload.len,
                     .elem_type = try payload.elem_type.copy(allocator),
                 });
             },
             .array => {
-                const payload = self.castTag(.array).?.data;
+                const payload = self.castTag(.array) orelse unreachable.data;
                 return Tag.array.create(allocator, .{
                     .len = payload.len,
                     .elem_type = try payload.elem_type.copy(allocator),
                 });
             },
             .array_sentinel => {
-                const payload = self.castTag(.array_sentinel).?.data;
+                const payload = self.castTag(.array_sentinel) orelse unreachable.data;
                 return Tag.array_sentinel.create(allocator, .{
                     .len = payload.len,
                     .sentinel = try payload.sentinel.copy(allocator),
@@ -1368,7 +1368,7 @@ pub const Type = extern union {
                 });
             },
             .tuple => {
-                const payload = self.castTag(.tuple).?.data;
+                const payload = self.castTag(.tuple) orelse unreachable.data;
                 const types = try allocator.alloc(Type, payload.types.len);
                 const values = try allocator.alloc(Value, payload.values.len);
                 for (payload.types) |ty, i| {
@@ -1383,7 +1383,7 @@ pub const Type = extern union {
                 });
             },
             .anon_struct => {
-                const payload = self.castTag(.anon_struct).?.data;
+                const payload = self.castTag(.anon_struct) orelse unreachable.data;
                 const names = try allocator.alloc([]const u8, payload.names.len);
                 const types = try allocator.alloc(Type, payload.types.len);
                 const values = try allocator.alloc(Value, payload.values.len);
@@ -1403,7 +1403,7 @@ pub const Type = extern union {
                 });
             },
             .function => {
-                const payload = self.castTag(.function).?.data;
+                const payload = self.castTag(.function) orelse unreachable.data;
                 const param_types = try allocator.alloc(Type, payload.param_types.len);
                 for (payload.param_types) |param_ty, i| {
                     param_types[i] = try param_ty.copy(allocator);
@@ -1421,7 +1421,7 @@ pub const Type = extern union {
                 });
             },
             .pointer => {
-                const payload = self.castTag(.pointer).?.data;
+                const payload = self.castTag(.pointer) orelse unreachable.data;
                 const sent: ?Value = if (payload.sentinel) |some|
                     try some.copy(allocator)
                 else
@@ -1440,14 +1440,14 @@ pub const Type = extern union {
                 });
             },
             .error_union => {
-                const payload = self.castTag(.error_union).?.data;
+                const payload = self.castTag(.error_union) orelse unreachable.data;
                 return Tag.error_union.create(allocator, .{
                     .error_set = try payload.error_set.copy(allocator),
                     .payload = try payload.payload.copy(allocator),
                 });
             },
             .error_set_merged => {
-                const names = self.castTag(.error_set_merged).?.data.keys();
+                const names = self.castTag(.error_set_merged) orelse unreachable.data.keys();
                 var duped_names = Module.ErrorSet.NameMap{};
                 try duped_names.ensureTotalCapacity(allocator, names.len);
                 for (names) |name| {
@@ -1469,7 +1469,7 @@ pub const Type = extern union {
     }
 
     fn copyPayloadShallow(self: Type, allocator: Allocator, comptime T: type) error{OutOfMemory}!Type {
-        const payload = self.cast(T).?;
+        const payload = self.cast(T) orelse unreachable;
         const new_payload = try allocator.create(T);
         new_payload.* = payload.*;
         return Type{ .ptr_otherwise = &new_payload.base };
@@ -1578,37 +1578,37 @@ pub const Type = extern union {
                 .empty_struct, .empty_struct_literal => return writer.writeAll("struct {}"),
 
                 .@"struct" => {
-                    const struct_obj = ty.castTag(.@"struct").?.data;
+                    const struct_obj = ty.castTag(.@"struct") orelse unreachable.data;
                     return writer.print("({s} decl={d})", .{
                         @tagName(t), struct_obj.owner_decl,
                     });
                 },
                 .@"union", .union_tagged => {
-                    const union_obj = ty.cast(Payload.Union).?.data;
+                    const union_obj = ty.cast(Payload.Union) orelse unreachable.data;
                     return writer.print("({s} decl={d})", .{
                         @tagName(t), union_obj.owner_decl,
                     });
                 },
                 .enum_full, .enum_nonexhaustive => {
-                    const enum_full = ty.cast(Payload.EnumFull).?.data;
+                    const enum_full = ty.cast(Payload.EnumFull) orelse unreachable.data;
                     return writer.print("({s} decl={d})", .{
                         @tagName(t), enum_full.owner_decl,
                     });
                 },
                 .enum_simple => {
-                    const enum_simple = ty.castTag(.enum_simple).?.data;
+                    const enum_simple = ty.castTag(.enum_simple) orelse unreachable.data;
                     return writer.print("({s} decl={d})", .{
                         @tagName(t), enum_simple.owner_decl,
                     });
                 },
                 .enum_numbered => {
-                    const enum_numbered = ty.castTag(.enum_numbered).?.data;
+                    const enum_numbered = ty.castTag(.enum_numbered) orelse unreachable.data;
                     return writer.print("({s} decl={d})", .{
                         @tagName(t), enum_numbered.owner_decl,
                     });
                 },
                 .@"opaque" => {
-                    const opaque_obj = ty.castTag(.@"opaque").?.data;
+                    const opaque_obj = ty.castTag(.@"opaque") orelse unreachable.data;
                     return writer.print("({s} decl={d})", .{
                         @tagName(t), opaque_obj.owner_decl,
                     });
@@ -1637,7 +1637,7 @@ pub const Type = extern union {
                 .extern_options => return writer.writeAll("std.builtin.ExternOptions"),
                 .type_info => return writer.writeAll("std.builtin.Type"),
                 .function => {
-                    const payload = ty.castTag(.function).?.data;
+                    const payload = ty.castTag(.function) orelse unreachable.data;
                     try writer.writeAll("fn(");
                     for (payload.param_types) |param_type, i| {
                         if (i != 0) try writer.writeAll(", ");
@@ -1663,33 +1663,33 @@ pub const Type = extern union {
                 },
 
                 .anyframe_T => {
-                    const return_type = ty.castTag(.anyframe_T).?.data;
+                    const return_type = ty.castTag(.anyframe_T) orelse unreachable.data;
                     try writer.print("anyframe->", .{});
                     ty = return_type;
                     continue;
                 },
                 .array_u8 => {
-                    const len = ty.castTag(.array_u8).?.data;
+                    const len = ty.castTag(.array_u8) orelse unreachable.data;
                     return writer.print("[{d}]u8", .{len});
                 },
                 .array_u8_sentinel_0 => {
-                    const len = ty.castTag(.array_u8_sentinel_0).?.data;
+                    const len = ty.castTag(.array_u8_sentinel_0) orelse unreachable.data;
                     return writer.print("[{d}:0]u8", .{len});
                 },
                 .vector => {
-                    const payload = ty.castTag(.vector).?.data;
+                    const payload = ty.castTag(.vector) orelse unreachable.data;
                     try writer.print("@Vector({d}, ", .{payload.len});
                     try payload.elem_type.dump("", .{}, writer);
                     return writer.writeAll(")");
                 },
                 .array => {
-                    const payload = ty.castTag(.array).?.data;
+                    const payload = ty.castTag(.array) orelse unreachable.data;
                     try writer.print("[{d}]", .{payload.len});
                     ty = payload.elem_type;
                     continue;
                 },
                 .array_sentinel => {
-                    const payload = ty.castTag(.array_sentinel).?.data;
+                    const payload = ty.castTag(.array_sentinel) orelse unreachable.data;
                     try writer.print("[{d}:{}]", .{
                         payload.len,
                         payload.sentinel.fmtDebug(),
@@ -1698,7 +1698,7 @@ pub const Type = extern union {
                     continue;
                 },
                 .tuple => {
-                    const tuple = ty.castTag(.tuple).?.data;
+                    const tuple = ty.castTag(.tuple) orelse unreachable.data;
                     try writer.writeAll("tuple{");
                     for (tuple.types) |field_ty, i| {
                         if (i != 0) try writer.writeAll(", ");
@@ -1715,7 +1715,7 @@ pub const Type = extern union {
                     return;
                 },
                 .anon_struct => {
-                    const anon_struct = ty.castTag(.anon_struct).?.data;
+                    const anon_struct = ty.castTag(.anon_struct) orelse unreachable.data;
                     try writer.writeAll("struct{");
                     for (anon_struct.types) |field_ty, i| {
                         if (i != 0) try writer.writeAll(", ");
@@ -1734,82 +1734,82 @@ pub const Type = extern union {
                     return;
                 },
                 .single_const_pointer => {
-                    const pointee_type = ty.castTag(.single_const_pointer).?.data;
+                    const pointee_type = ty.castTag(.single_const_pointer) orelse unreachable.data;
                     try writer.writeAll("*const ");
                     ty = pointee_type;
                     continue;
                 },
                 .single_mut_pointer => {
-                    const pointee_type = ty.castTag(.single_mut_pointer).?.data;
+                    const pointee_type = ty.castTag(.single_mut_pointer) orelse unreachable.data;
                     try writer.writeAll("*");
                     ty = pointee_type;
                     continue;
                 },
                 .many_const_pointer => {
-                    const pointee_type = ty.castTag(.many_const_pointer).?.data;
+                    const pointee_type = ty.castTag(.many_const_pointer) orelse unreachable.data;
                     try writer.writeAll("[*]const ");
                     ty = pointee_type;
                     continue;
                 },
                 .many_mut_pointer => {
-                    const pointee_type = ty.castTag(.many_mut_pointer).?.data;
+                    const pointee_type = ty.castTag(.many_mut_pointer) orelse unreachable.data;
                     try writer.writeAll("[*]");
                     ty = pointee_type;
                     continue;
                 },
                 .c_const_pointer => {
-                    const pointee_type = ty.castTag(.c_const_pointer).?.data;
+                    const pointee_type = ty.castTag(.c_const_pointer) orelse unreachable.data;
                     try writer.writeAll("[*c]const ");
                     ty = pointee_type;
                     continue;
                 },
                 .c_mut_pointer => {
-                    const pointee_type = ty.castTag(.c_mut_pointer).?.data;
+                    const pointee_type = ty.castTag(.c_mut_pointer) orelse unreachable.data;
                     try writer.writeAll("[*c]");
                     ty = pointee_type;
                     continue;
                 },
                 .const_slice => {
-                    const pointee_type = ty.castTag(.const_slice).?.data;
+                    const pointee_type = ty.castTag(.const_slice) orelse unreachable.data;
                     try writer.writeAll("[]const ");
                     ty = pointee_type;
                     continue;
                 },
                 .mut_slice => {
-                    const pointee_type = ty.castTag(.mut_slice).?.data;
+                    const pointee_type = ty.castTag(.mut_slice) orelse unreachable.data;
                     try writer.writeAll("[]");
                     ty = pointee_type;
                     continue;
                 },
                 .int_signed => {
-                    const bits = ty.castTag(.int_signed).?.data;
+                    const bits = ty.castTag(.int_signed) orelse unreachable.data;
                     return writer.print("i{d}", .{bits});
                 },
                 .int_unsigned => {
-                    const bits = ty.castTag(.int_unsigned).?.data;
+                    const bits = ty.castTag(.int_unsigned) orelse unreachable.data;
                     return writer.print("u{d}", .{bits});
                 },
                 .optional => {
-                    const child_type = ty.castTag(.optional).?.data;
+                    const child_type = ty.castTag(.optional) orelse unreachable.data;
                     try writer.writeByte('?');
                     ty = child_type;
                     continue;
                 },
                 .optional_single_const_pointer => {
-                    const pointee_type = ty.castTag(.optional_single_const_pointer).?.data;
+                    const pointee_type = ty.castTag(.optional_single_const_pointer) orelse unreachable.data;
                     try writer.writeAll("?*const ");
                     ty = pointee_type;
                     continue;
                 },
                 .optional_single_mut_pointer => {
-                    const pointee_type = ty.castTag(.optional_single_mut_pointer).?.data;
+                    const pointee_type = ty.castTag(.optional_single_mut_pointer) orelse unreachable.data;
                     try writer.writeAll("?*");
                     ty = pointee_type;
                     continue;
                 },
 
                 .pointer => {
-                    const payload = ty.castTag(.pointer).?.data;
+                    const payload = ty.castTag(.pointer) orelse unreachable.data;
                     if (payload.sentinel) |some| switch (payload.size) {
                         .One, .C => unreachable,
                         .Many => try writer.print("[*:{}]", .{some.fmtDebug()}),
@@ -1839,14 +1839,14 @@ pub const Type = extern union {
                     continue;
                 },
                 .error_union => {
-                    const payload = ty.castTag(.error_union).?.data;
+                    const payload = ty.castTag(.error_union) orelse unreachable.data;
                     try payload.error_set.dump("", .{}, writer);
                     try writer.writeAll("!");
                     ty = payload.payload;
                     continue;
                 },
                 .error_set => {
-                    const names = ty.castTag(.error_set).?.data.names.keys();
+                    const names = ty.castTag(.error_set) orelse unreachable.data.names.keys();
                     try writer.writeAll("error{");
                     for (names) |name, i| {
                         if (i != 0) try writer.writeByte(',');
@@ -1856,13 +1856,13 @@ pub const Type = extern union {
                     return;
                 },
                 .error_set_inferred => {
-                    const func = ty.castTag(.error_set_inferred).?.data.func;
+                    const func = ty.castTag(.error_set_inferred) orelse unreachable.data.func;
                     return writer.print("({s} func={d})", .{
                         @tagName(t), func.owner_decl,
                     });
                 },
                 .error_set_merged => {
-                    const names = ty.castTag(.error_set_merged).?.data.keys();
+                    const names = ty.castTag(.error_set_merged) orelse unreachable.data.keys();
                     try writer.writeAll("error{");
                     for (names) |name, i| {
                         if (i != 0) try writer.writeByte(',');
@@ -1872,7 +1872,7 @@ pub const Type = extern union {
                     return;
                 },
                 .error_set_single => {
-                    const name = ty.castTag(.error_set_single).?.data;
+                    const name = ty.castTag(.error_set_single) orelse unreachable.data;
                     return writer.print("error{{{s}}}", .{name});
                 },
                 .inferred_alloc_const => return writer.writeAll("(inferred_alloc_const)"),
@@ -1959,37 +1959,37 @@ pub const Type = extern union {
             .empty_struct_literal => try writer.writeAll("@TypeOf(.{})"),
 
             .empty_struct => {
-                const namespace = ty.castTag(.empty_struct).?.data;
+                const namespace = ty.castTag(.empty_struct) orelse unreachable.data;
                 try namespace.renderFullyQualifiedName(mod, "", writer);
             },
 
             .@"struct" => {
-                const struct_obj = ty.castTag(.@"struct").?.data;
+                const struct_obj = ty.castTag(.@"struct") orelse unreachable.data;
                 const decl = mod.declPtr(struct_obj.owner_decl);
                 try decl.renderFullyQualifiedName(mod, writer);
             },
             .@"union", .union_tagged => {
-                const union_obj = ty.cast(Payload.Union).?.data;
+                const union_obj = ty.cast(Payload.Union) orelse unreachable.data;
                 const decl = mod.declPtr(union_obj.owner_decl);
                 try decl.renderFullyQualifiedName(mod, writer);
             },
             .enum_full, .enum_nonexhaustive => {
-                const enum_full = ty.cast(Payload.EnumFull).?.data;
+                const enum_full = ty.cast(Payload.EnumFull) orelse unreachable.data;
                 const decl = mod.declPtr(enum_full.owner_decl);
                 try decl.renderFullyQualifiedName(mod, writer);
             },
             .enum_simple => {
-                const enum_simple = ty.castTag(.enum_simple).?.data;
+                const enum_simple = ty.castTag(.enum_simple) orelse unreachable.data;
                 const decl = mod.declPtr(enum_simple.owner_decl);
                 try decl.renderFullyQualifiedName(mod, writer);
             },
             .enum_numbered => {
-                const enum_numbered = ty.castTag(.enum_numbered).?.data;
+                const enum_numbered = ty.castTag(.enum_numbered) orelse unreachable.data;
                 const decl = mod.declPtr(enum_numbered.owner_decl);
                 try decl.renderFullyQualifiedName(mod, writer);
             },
             .@"opaque" => {
-                const opaque_obj = ty.cast(Payload.Opaque).?.data;
+                const opaque_obj = ty.cast(Payload.Opaque) orelse unreachable.data;
                 const decl = mod.declPtr(opaque_obj.owner_decl);
                 try decl.renderFullyQualifiedName(mod, writer);
             },
@@ -2007,12 +2007,12 @@ pub const Type = extern union {
             .manyptr_const_u8_sentinel_0 => try writer.writeAll("[*:0]const u8"),
 
             .error_set_inferred => {
-                const func = ty.castTag(.error_set_inferred).?.data.func;
+                const func = ty.castTag(.error_set_inferred) orelse unreachable.data.func;
 
                 try writer.writeAll("@typeInfo(@typeInfo(@TypeOf(");
                 const owner_decl = mod.declPtr(func.owner_decl);
                 try owner_decl.renderFullyQualifiedName(mod, writer);
-                try writer.writeAll(")).Fn.return_type.?).ErrorUnion.error_set");
+                try writer.writeAll(")).Fn.return_type orelse unreachable).ErrorUnion.error_set");
             },
 
             .function => {
@@ -2041,33 +2041,33 @@ pub const Type = extern union {
             },
 
             .error_union => {
-                const error_union = ty.castTag(.error_union).?.data;
+                const error_union = ty.castTag(.error_union) orelse unreachable.data;
                 try print(error_union.error_set, writer, mod);
                 try writer.writeAll("!");
                 try print(error_union.payload, writer, mod);
             },
 
             .array_u8 => {
-                const len = ty.castTag(.array_u8).?.data;
+                const len = ty.castTag(.array_u8) orelse unreachable.data;
                 try writer.print("[{d}]u8", .{len});
             },
             .array_u8_sentinel_0 => {
-                const len = ty.castTag(.array_u8_sentinel_0).?.data;
+                const len = ty.castTag(.array_u8_sentinel_0) orelse unreachable.data;
                 try writer.print("[{d}:0]u8", .{len});
             },
             .vector => {
-                const payload = ty.castTag(.vector).?.data;
+                const payload = ty.castTag(.vector) orelse unreachable.data;
                 try writer.print("@Vector({d}, ", .{payload.len});
                 try print(payload.elem_type, writer, mod);
                 try writer.writeAll(")");
             },
             .array => {
-                const payload = ty.castTag(.array).?.data;
+                const payload = ty.castTag(.array) orelse unreachable.data;
                 try writer.print("[{d}]", .{payload.len});
                 try print(payload.elem_type, writer, mod);
             },
             .array_sentinel => {
-                const payload = ty.castTag(.array_sentinel).?.data;
+                const payload = ty.castTag(.array_sentinel) orelse unreachable.data;
                 try writer.print("[{d}:{}]", .{
                     payload.len,
                     payload.sentinel.fmtValue(payload.elem_type, mod),
@@ -2075,7 +2075,7 @@ pub const Type = extern union {
                 try print(payload.elem_type, writer, mod);
             },
             .tuple => {
-                const tuple = ty.castTag(.tuple).?.data;
+                const tuple = ty.castTag(.tuple) orelse unreachable.data;
 
                 try writer.writeAll("tuple{");
                 for (tuple.types) |field_ty, i| {
@@ -2092,7 +2092,7 @@ pub const Type = extern union {
                 try writer.writeAll("}");
             },
             .anon_struct => {
-                const anon_struct = ty.castTag(.anon_struct).?.data;
+                const anon_struct = ty.castTag(.anon_struct) orelse unreachable.data;
 
                 try writer.writeAll("struct{");
                 for (anon_struct.types) |field_ty, i| {
@@ -2154,35 +2154,35 @@ pub const Type = extern union {
             },
 
             .int_signed => {
-                const bits = ty.castTag(.int_signed).?.data;
+                const bits = ty.castTag(.int_signed) orelse unreachable.data;
                 return writer.print("i{d}", .{bits});
             },
             .int_unsigned => {
-                const bits = ty.castTag(.int_unsigned).?.data;
+                const bits = ty.castTag(.int_unsigned) orelse unreachable.data;
                 return writer.print("u{d}", .{bits});
             },
             .optional => {
-                const child_type = ty.castTag(.optional).?.data;
+                const child_type = ty.castTag(.optional) orelse unreachable.data;
                 try writer.writeByte('?');
                 try print(child_type, writer, mod);
             },
             .optional_single_mut_pointer => {
-                const pointee_type = ty.castTag(.optional_single_mut_pointer).?.data;
+                const pointee_type = ty.castTag(.optional_single_mut_pointer) orelse unreachable.data;
                 try writer.writeAll("?*");
                 try print(pointee_type, writer, mod);
             },
             .optional_single_const_pointer => {
-                const pointee_type = ty.castTag(.optional_single_const_pointer).?.data;
+                const pointee_type = ty.castTag(.optional_single_const_pointer) orelse unreachable.data;
                 try writer.writeAll("?*const ");
                 try print(pointee_type, writer, mod);
             },
             .anyframe_T => {
-                const return_type = ty.castTag(.anyframe_T).?.data;
+                const return_type = ty.castTag(.anyframe_T) orelse unreachable.data;
                 try writer.print("anyframe->", .{});
                 try print(return_type, writer, mod);
             },
             .error_set => {
-                const names = ty.castTag(.error_set).?.data.names.keys();
+                const names = ty.castTag(.error_set) orelse unreachable.data.names.keys();
                 try writer.writeAll("error{");
                 for (names) |name, i| {
                     if (i != 0) try writer.writeByte(',');
@@ -2191,11 +2191,11 @@ pub const Type = extern union {
                 try writer.writeAll("}");
             },
             .error_set_single => {
-                const name = ty.castTag(.error_set_single).?.data;
+                const name = ty.castTag(.error_set_single) orelse unreachable.data;
                 return writer.print("error{{{s}}}", .{name});
             },
             .error_set_merged => {
-                const names = ty.castTag(.error_set_merged).?.data.keys();
+                const names = ty.castTag(.error_set_merged) orelse unreachable.data.keys();
                 try writer.writeAll("error{");
                 for (names) |name, i| {
                     if (i != 0) try writer.writeByte(',');
@@ -2389,7 +2389,7 @@ pub const Type = extern union {
             },
 
             .@"struct" => {
-                const struct_obj = ty.castTag(.@"struct").?.data;
+                const struct_obj = ty.castTag(.@"struct") orelse unreachable.data;
                 if (sema_kit) |sk| {
                     _ = try sk.sema.typeRequiresComptime(sk.block, sk.src, ty);
                 }
@@ -2417,11 +2417,11 @@ pub const Type = extern union {
             },
 
             .enum_full => {
-                const enum_full = ty.castTag(.enum_full).?.data;
+                const enum_full = ty.castTag(.enum_full) orelse unreachable.data;
                 return enum_full.fields.count() >= 2;
             },
             .enum_simple => {
-                const enum_simple = ty.castTag(.enum_simple).?.data;
+                const enum_simple = ty.castTag(.enum_simple) orelse unreachable.data;
                 return enum_simple.fields.count() >= 2;
             },
             .enum_numbered, .enum_nonexhaustive => {
@@ -2431,7 +2431,7 @@ pub const Type = extern union {
             },
 
             .@"union" => {
-                const union_obj = ty.castTag(.@"union").?.data;
+                const union_obj = ty.castTag(.@"union") orelse unreachable.data;
                 if (sema_kit) |sk| {
                     _ = try sk.sema.resolveTypeFields(sk.block, sk.src, ty);
                 }
@@ -2444,7 +2444,7 @@ pub const Type = extern union {
                 }
             },
             .union_tagged => {
-                const union_obj = ty.castTag(.union_tagged).?.data;
+                const union_obj = ty.castTag(.union_tagged) orelse unreachable.data;
                 if (try union_obj.tag_ty.hasRuntimeBitsAdvanced(ignore_comptime_only, sema_kit)) {
                     return true;
                 }
@@ -2465,10 +2465,10 @@ pub const Type = extern union {
             .array_u8 => return ty.arrayLen() != 0,
             .array_sentinel => return ty.childType().hasRuntimeBitsAdvanced(ignore_comptime_only, sema_kit),
 
-            .int_signed, .int_unsigned => return ty.cast(Payload.Bits).?.data != 0,
+            .int_signed, .int_unsigned => return ty.cast(Payload.Bits) orelse unreachable.data != 0,
 
             .error_union => {
-                const payload = ty.castTag(.error_union).?.data;
+                const payload = ty.castTag(.error_union) orelse unreachable.data;
                 return (try payload.error_set.hasRuntimeBitsAdvanced(ignore_comptime_only, sema_kit)) or
                     (try payload.payload.hasRuntimeBitsAdvanced(ignore_comptime_only, sema_kit));
             },
@@ -2594,7 +2594,7 @@ pub const Type = extern union {
 
             .enum_full,
             .enum_nonexhaustive,
-            => !ty.cast(Payload.EnumFull).?.data.tag_ty_inferred,
+            => !ty.cast(Payload.EnumFull) orelse unreachable.data.tag_ty_inferred,
 
             .var_args_param => unreachable,
             .inferred_alloc_mut => unreachable,
@@ -2606,8 +2606,8 @@ pub const Type = extern union {
             => ty.childType().hasWellDefinedLayout(),
 
             .optional => ty.isPtrLikeOptional(),
-            .@"struct" => ty.castTag(.@"struct").?.data.layout != .Auto,
-            .@"union" => ty.castTag(.@"union").?.data.layout != .Auto,
+            .@"struct" => ty.castTag(.@"struct") orelse unreachable.data.layout != .Auto,
+            .@"union" => ty.castTag(.@"union") orelse unreachable.data.layout != .Auto,
             .union_tagged => false,
         };
     }
@@ -2670,7 +2670,7 @@ pub const Type = extern union {
             .optional_single_const_pointer,
             .optional_single_mut_pointer,
             => {
-                const child_type = self.cast(Payload.ElemType).?.data;
+                const child_type = self.cast(Payload.ElemType) orelse unreachable.data;
                 return child_type.abiAlignment(target);
             },
 
@@ -2682,14 +2682,14 @@ pub const Type = extern union {
             => return 1,
 
             .pointer => {
-                const ptr_info = self.castTag(.pointer).?.data;
+                const ptr_info = self.castTag(.pointer) orelse unreachable.data;
                 if (ptr_info.@"align" != 0) {
                     return ptr_info.@"align";
                 } else {
                     return ptr_info.pointee_type.abiAlignment(target);
                 }
             },
-            .optional => return self.castTag(.optional).?.data.ptrAlignment(target),
+            .optional => return self.castTag(.optional) orelse unreachable.data.ptrAlignment(target),
 
             else => unreachable,
         }
@@ -2715,7 +2715,7 @@ pub const Type = extern union {
             .manyptr_const_u8_sentinel_0,
             => .generic,
 
-            .pointer => self.castTag(.pointer).?.data.@"addrspace",
+            .pointer => self.castTag(.pointer) orelse unreachable.data.@"addrspace",
 
             else => unreachable,
         };
@@ -2789,7 +2789,7 @@ pub const Type = extern union {
 
             // represents machine code; not a pointer
             .function => {
-                const alignment = ty.castTag(.function).?.data.alignment;
+                const alignment = ty.castTag(.function) orelse unreachable.data.alignment;
                 if (alignment != 0) return AbiAlignmentAdvanced{ .scalar = alignment };
                 return AbiAlignmentAdvanced{ .scalar = target_util.defaultFunctionAlignment(target) };
             },
@@ -2872,7 +2872,7 @@ pub const Type = extern union {
             .u128, .i128 => return AbiAlignmentAdvanced{ .scalar = intAbiAlignment(128, target) },
 
             .int_signed, .int_unsigned => {
-                const bits: u16 = ty.cast(Payload.Bits).?.data;
+                const bits: u16 = ty.cast(Payload.Bits) orelse unreachable.data;
                 if (bits == 0) return AbiAlignmentAdvanced{ .scalar = 0 };
                 return AbiAlignmentAdvanced{ .scalar = intAbiAlignment(bits, target) };
             },
@@ -2900,7 +2900,7 @@ pub const Type = extern union {
             },
 
             .error_union => {
-                const data = ty.castTag(.error_union).?.data;
+                const data = ty.castTag(.error_union) orelse unreachable.data;
                 switch (strat) {
                     .eager, .sema_kit => {
                         if (!(try data.error_set.hasRuntimeBitsAdvanced(false, sema_kit))) {
@@ -2934,7 +2934,7 @@ pub const Type = extern union {
             },
 
             .@"struct" => {
-                const struct_obj = ty.castTag(.@"struct").?.data;
+                const struct_obj = ty.castTag(.@"struct") orelse unreachable.data;
                 if (sema_kit) |sk| {
                     if (struct_obj.status == .field_types_wip) {
                         // We'll guess "pointer-aligned" and if we guess wrong, emit
@@ -2999,12 +2999,12 @@ pub const Type = extern union {
                 return AbiAlignmentAdvanced{ .scalar = int_tag_ty.abiAlignment(target) };
             },
             .@"union" => {
-                const union_obj = ty.castTag(.@"union").?.data;
+                const union_obj = ty.castTag(.@"union") orelse unreachable.data;
                 // TODO pass `true` for have_tag when unions have a safety tag
                 return abiAlignmentAdvancedUnion(ty, target, strat, union_obj, false);
             },
             .union_tagged => {
-                const union_obj = ty.castTag(.union_tagged).?.data;
+                const union_obj = ty.castTag(.union_tagged) orelse unreachable.data;
                 return abiAlignmentAdvancedUnion(ty, target, strat, union_obj, true);
             },
 
@@ -3140,7 +3140,7 @@ pub const Type = extern union {
 
             .@"struct", .tuple, .anon_struct => switch (ty.containerLayout()) {
                 .Packed => {
-                    const struct_obj = ty.castTag(.@"struct").?.data;
+                    const struct_obj = ty.castTag(.@"struct") orelse unreachable.data;
                     switch (strat) {
                         .sema_kit => |sk| _ = try sk.sema.resolveTypeFields(sk.block, sk.src, ty),
                         .lazy => |arena| {
@@ -3181,12 +3181,12 @@ pub const Type = extern union {
                 return AbiSizeAdvanced{ .scalar = int_tag_ty.abiSize(target) };
             },
             .@"union" => {
-                const union_obj = ty.castTag(.@"union").?.data;
+                const union_obj = ty.castTag(.@"union") orelse unreachable.data;
                 // TODO pass `true` for have_tag when unions have a safety tag
                 return abiSizeAdvancedUnion(ty, target, strat, union_obj, false);
             },
             .union_tagged => {
-                const union_obj = ty.castTag(.union_tagged).?.data;
+                const union_obj = ty.castTag(.union_tagged) orelse unreachable.data;
                 return abiSizeAdvancedUnion(ty, target, strat, union_obj, true);
             },
 
@@ -3202,10 +3202,10 @@ pub const Type = extern union {
             .reduce_op,
             => return AbiSizeAdvanced{ .scalar = 1 },
 
-            .array_u8 => return AbiSizeAdvanced{ .scalar = ty.castTag(.array_u8).?.data },
-            .array_u8_sentinel_0 => return AbiSizeAdvanced{ .scalar = ty.castTag(.array_u8_sentinel_0).?.data + 1 },
+            .array_u8 => return AbiSizeAdvanced{ .scalar = ty.castTag(.array_u8) orelse unreachable.data },
+            .array_u8_sentinel_0 => return AbiSizeAdvanced{ .scalar = ty.castTag(.array_u8_sentinel_0) orelse unreachable.data + 1 },
             .array, .vector => {
-                const payload = ty.cast(Payload.Array).?.data;
+                const payload = ty.cast(Payload.Array) orelse unreachable.data;
                 switch (try payload.elem_type.abiSizeAdvanced(target, strat)) {
                     .scalar => |elem_size| return AbiSizeAdvanced{ .scalar = payload.len * elem_size },
                     .val => switch (strat) {
@@ -3216,7 +3216,7 @@ pub const Type = extern union {
                 }
             },
             .array_sentinel => {
-                const payload = ty.castTag(.array_sentinel).?.data;
+                const payload = ty.castTag(.array_sentinel) orelse unreachable.data;
                 switch (try payload.elem_type.abiSizeAdvanced(target, strat)) {
                     .scalar => |elem_size| return AbiSizeAdvanced{ .scalar = (payload.len + 1) * elem_size },
                     .val => switch (strat) {
@@ -3250,7 +3250,7 @@ pub const Type = extern union {
             .const_slice_u8_sentinel_0,
             => return AbiSizeAdvanced{ .scalar = @divExact(target.cpu.arch.ptrBitWidth(), 8) * 2 },
 
-            .pointer => switch (ty.castTag(.pointer).?.data.size) {
+            .pointer => switch (ty.castTag(.pointer) orelse unreachable.data.size) {
                 .Slice => return AbiSizeAdvanced{ .scalar = @divExact(target.cpu.arch.ptrBitWidth(), 8) * 2 },
                 else => return AbiSizeAdvanced{ .scalar = @divExact(target.cpu.arch.ptrBitWidth(), 8) },
             },
@@ -3304,7 +3304,7 @@ pub const Type = extern union {
             .i64, .u64 => return AbiSizeAdvanced{ .scalar = intAbiSize(64, target) },
             .u128, .i128 => return AbiSizeAdvanced{ .scalar = intAbiSize(128, target) },
             .int_signed, .int_unsigned => {
-                const bits: u16 = ty.cast(Payload.Bits).?.data;
+                const bits: u16 = ty.cast(Payload.Bits) orelse unreachable.data;
                 if (bits == 0) return AbiSizeAdvanced{ .scalar = 0 };
                 return AbiSizeAdvanced{ .scalar = intAbiSize(bits, target) };
             },
@@ -3325,7 +3325,7 @@ pub const Type = extern union {
             },
 
             .error_union => {
-                const data = ty.castTag(.error_union).?.data;
+                const data = ty.castTag(.error_union) orelse unreachable.data;
                 if (!data.error_set.hasRuntimeBits() and !data.payload.hasRuntimeBits()) {
                     return AbiSizeAdvanced{ .scalar = 0 };
                 } else if (!data.error_set.hasRuntimeBits()) {
@@ -3418,7 +3418,7 @@ pub const Type = extern union {
                 const field_count = ty.structFieldCount();
                 if (field_count == 0) return 0;
 
-                const struct_obj = ty.castTag(.@"struct").?.data;
+                const struct_obj = ty.castTag(.@"struct") orelse unreachable.data;
                 assert(struct_obj.haveFieldTypes());
 
                 switch (struct_obj.layout) {
@@ -3449,7 +3449,7 @@ pub const Type = extern union {
             },
 
             .@"union", .union_tagged => {
-                const union_obj = ty.cast(Payload.Union).?.data;
+                const union_obj = ty.cast(Payload.Union) orelse unreachable.data;
 
                 const fields = union_obj.fields;
                 if (fields.count() == 0) return 0;
@@ -3464,21 +3464,21 @@ pub const Type = extern union {
             },
 
             .vector => {
-                const payload = ty.castTag(.vector).?.data;
+                const payload = ty.castTag(.vector) orelse unreachable.data;
                 const elem_bit_size = payload.elem_type.bitSize(target);
                 return elem_bit_size * payload.len;
             },
-            .array_u8 => 8 * ty.castTag(.array_u8).?.data,
-            .array_u8_sentinel_0 => 8 * (ty.castTag(.array_u8_sentinel_0).?.data + 1),
+            .array_u8 => 8 * ty.castTag(.array_u8) orelse unreachable.data,
+            .array_u8_sentinel_0 => 8 * (ty.castTag(.array_u8_sentinel_0) orelse unreachable.data + 1),
             .array => {
-                const payload = ty.castTag(.array).?.data;
+                const payload = ty.castTag(.array) orelse unreachable.data;
                 const elem_size = std.math.max(payload.elem_type.abiAlignment(target), payload.elem_type.abiSize(target));
                 if (elem_size == 0 or payload.len == 0)
                     return 0;
                 return (payload.len - 1) * 8 * elem_size + payload.elem_type.bitSize(target);
             },
             .array_sentinel => {
-                const payload = ty.castTag(.array_sentinel).?.data;
+                const payload = ty.castTag(.array_sentinel) orelse unreachable.data;
                 const elem_size = std.math.max(
                     payload.elem_type.abiAlignment(target),
                     payload.elem_type.abiSize(target),
@@ -3516,7 +3516,7 @@ pub const Type = extern union {
                 return target.cpu.arch.ptrBitWidth();
             },
 
-            .pointer => switch (ty.castTag(.pointer).?.data.size) {
+            .pointer => switch (ty.castTag(.pointer) orelse unreachable.data.size) {
                 .Slice => target.cpu.arch.ptrBitWidth() * 2,
                 else => target.cpu.arch.ptrBitWidth(),
             },
@@ -3544,7 +3544,7 @@ pub const Type = extern union {
             .error_set_merged,
             => return 16, // TODO revisit this when we have the concept of the error tag type
 
-            .int_signed, .int_unsigned => ty.cast(Payload.Bits).?.data,
+            .int_signed, .int_unsigned => ty.cast(Payload.Bits) orelse unreachable.data,
 
             .optional => {
                 var buf: Payload.ElemType = undefined;
@@ -3562,7 +3562,7 @@ pub const Type = extern union {
             },
 
             .error_union => {
-                const payload = ty.castTag(.error_union).?.data;
+                const payload = ty.castTag(.error_union) orelse unreachable.data;
                 if (!payload.error_set.hasRuntimeBits() and !payload.payload.hasRuntimeBits()) {
                     return 0;
                 } else if (!payload.error_set.hasRuntimeBits()) {
@@ -3597,7 +3597,7 @@ pub const Type = extern union {
             .inferred_alloc_mut,
             => true,
 
-            .pointer => self.castTag(.pointer).?.data.size == .One,
+            .pointer => self.castTag(.pointer) orelse unreachable.data.size == .One,
 
             else => false,
         };
@@ -3630,7 +3630,7 @@ pub const Type = extern union {
             .inferred_alloc_mut,
             => .One,
 
-            .pointer => self.castTag(.pointer).?.data.size,
+            .pointer => self.castTag(.pointer) orelse unreachable.data.size,
 
             else => unreachable,
         };
@@ -3644,7 +3644,7 @@ pub const Type = extern union {
             .const_slice_u8_sentinel_0,
             => true,
 
-            .pointer => self.castTag(.pointer).?.data.size == .Slice,
+            .pointer => self.castTag(.pointer) orelse unreachable.data.size == .Slice,
 
             else => false,
         };
@@ -3661,7 +3661,7 @@ pub const Type = extern union {
             .const_slice_u8_sentinel_0 => return Type.initTag(.manyptr_const_u8_sentinel_0),
 
             .const_slice => {
-                const elem_type = self.castTag(.const_slice).?.data;
+                const elem_type = self.castTag(.const_slice) orelse unreachable.data;
                 buffer.* = .{
                     .elem_type = .{
                         .base = .{ .tag = .many_const_pointer },
@@ -3671,7 +3671,7 @@ pub const Type = extern union {
                 return Type.initPayload(&buffer.elem_type.base);
             },
             .mut_slice => {
-                const elem_type = self.castTag(.mut_slice).?.data;
+                const elem_type = self.castTag(.mut_slice) orelse unreachable.data;
                 buffer.* = .{
                     .elem_type = .{
                         .base = .{ .tag = .many_mut_pointer },
@@ -3682,7 +3682,7 @@ pub const Type = extern union {
             },
 
             .pointer => {
-                const payload = self.castTag(.pointer).?.data;
+                const payload = self.castTag(.pointer) orelse unreachable.data;
                 assert(payload.size == .Slice);
 
                 if (payload.sentinel != null or
@@ -3746,7 +3746,7 @@ pub const Type = extern union {
             .manyptr_const_u8_sentinel_0,
             => true,
 
-            .pointer => !self.castTag(.pointer).?.data.mutable,
+            .pointer => !self.castTag(.pointer) orelse unreachable.data.mutable,
 
             else => false,
         };
@@ -3755,7 +3755,7 @@ pub const Type = extern union {
     pub fn isVolatilePtr(self: Type) bool {
         return switch (self.tag()) {
             .pointer => {
-                const payload = self.castTag(.pointer).?.data;
+                const payload = self.castTag(.pointer) orelse unreachable.data;
                 return payload.@"volatile";
             },
             else => false,
@@ -3765,7 +3765,7 @@ pub const Type = extern union {
     pub fn isAllowzeroPtr(self: Type) bool {
         return switch (self.tag()) {
             .pointer => {
-                const payload = self.castTag(.pointer).?.data;
+                const payload = self.castTag(.pointer) orelse unreachable.data;
                 return payload.@"allowzero";
             },
             else => return self.zigTypeTag() == .Optional,
@@ -3778,7 +3778,7 @@ pub const Type = extern union {
             .c_mut_pointer,
             => return true,
 
-            .pointer => self.castTag(.pointer).?.data.size == .C,
+            .pointer => self.castTag(.pointer) orelse unreachable.data.size == .C,
 
             else => return false,
         };
@@ -3800,7 +3800,7 @@ pub const Type = extern union {
             .single_mut_pointer,
             => return true,
 
-            .pointer => switch (self.castTag(.pointer).?.data.size) {
+            .pointer => switch (self.castTag(.pointer) orelse unreachable.data.size) {
                 .Slice => return false,
                 .One, .Many, .C => return true,
             },
@@ -3843,7 +3843,7 @@ pub const Type = extern union {
             => return true,
 
             .optional => {
-                const child_ty = self.castTag(.optional).?.data;
+                const child_ty = self.castTag(.optional) orelse unreachable.data;
                 if (child_ty.zigTypeTag() != .Pointer) return false;
                 const info = child_ty.ptrInfo().data;
                 switch (info.size) {
@@ -3852,7 +3852,7 @@ pub const Type = extern union {
                 }
             },
 
-            .pointer => return self.castTag(.pointer).?.data.size == .C,
+            .pointer => return self.castTag(.pointer) orelse unreachable.data.size == .C,
 
             else => return false,
         }
@@ -3905,9 +3905,9 @@ pub const Type = extern union {
     /// For [*]T,   returns T.
     pub fn childType(ty: Type) Type {
         return switch (ty.tag()) {
-            .vector => ty.castTag(.vector).?.data.elem_type,
-            .array => ty.castTag(.array).?.data.elem_type,
-            .array_sentinel => ty.castTag(.array_sentinel).?.data.elem_type,
+            .vector => ty.castTag(.vector) orelse unreachable.data.elem_type,
+            .array => ty.castTag(.array) orelse unreachable.data.elem_type,
+            .array_sentinel => ty.castTag(.array_sentinel) orelse unreachable.data.elem_type,
             .optional_single_mut_pointer,
             .optional_single_const_pointer,
             .single_const_pointer,
@@ -3918,7 +3918,7 @@ pub const Type = extern union {
             .c_mut_pointer,
             .const_slice,
             .mut_slice,
-            => ty.castPointer().?.data,
+            => ty.castPointer() orelse unreachable.data,
 
             .array_u8,
             .array_u8_sentinel_0,
@@ -3930,7 +3930,7 @@ pub const Type = extern union {
             => Type.u8,
 
             .single_const_pointer_to_comptime_int => Type.initTag(.comptime_int),
-            .pointer => ty.castTag(.pointer).?.data.pointee_type,
+            .pointer => ty.castTag(.pointer) orelse unreachable.data.pointee_type,
 
             .var_args_param => ty,
 
@@ -3952,20 +3952,20 @@ pub const Type = extern union {
     /// For []T,    returns T.
     pub fn elemType2(ty: Type) Type {
         return switch (ty.tag()) {
-            .vector => ty.castTag(.vector).?.data.elem_type,
-            .array => ty.castTag(.array).?.data.elem_type,
-            .array_sentinel => ty.castTag(.array_sentinel).?.data.elem_type,
+            .vector => ty.castTag(.vector) orelse unreachable.data.elem_type,
+            .array => ty.castTag(.array) orelse unreachable.data.elem_type,
+            .array_sentinel => ty.castTag(.array_sentinel) orelse unreachable.data.elem_type,
             .many_const_pointer,
             .many_mut_pointer,
             .c_const_pointer,
             .c_mut_pointer,
             .const_slice,
             .mut_slice,
-            => ty.castPointer().?.data,
+            => ty.castPointer() orelse unreachable.data,
 
             .single_const_pointer,
             .single_mut_pointer,
-            => ty.castPointer().?.data.shallowElemType(),
+            => ty.castPointer() orelse unreachable.data.shallowElemType(),
 
             .array_u8,
             .array_u8_sentinel_0,
@@ -3978,7 +3978,7 @@ pub const Type = extern union {
 
             .single_const_pointer_to_comptime_int => Type.initTag(.comptime_int),
             .pointer => {
-                const info = ty.castTag(.pointer).?.data;
+                const info = ty.castTag(.pointer) orelse unreachable.data;
                 const child_ty = info.pointee_type;
                 if (info.size == .One) {
                     return child_ty.shallowElemType();
@@ -3986,9 +3986,9 @@ pub const Type = extern union {
                     return child_ty;
                 }
             },
-            .optional => ty.castTag(.optional).?.data.childType(),
-            .optional_single_mut_pointer => ty.castPointer().?.data,
-            .optional_single_const_pointer => ty.castPointer().?.data,
+            .optional => ty.castTag(.optional) orelse unreachable.data.childType(),
+            .optional_single_mut_pointer => ty.castPointer() orelse unreachable.data,
+            .optional_single_const_pointer => ty.castPointer() orelse unreachable.data,
 
             else => unreachable,
         };
@@ -4028,18 +4028,18 @@ pub const Type = extern union {
     /// Note that for C pointers this returns the type unmodified.
     pub fn optionalChild(ty: Type, buf: *Payload.ElemType) Type {
         return switch (ty.tag()) {
-            .optional => ty.castTag(.optional).?.data,
+            .optional => ty.castTag(.optional) orelse unreachable.data,
             .optional_single_mut_pointer => {
                 buf.* = .{
                     .base = .{ .tag = .single_mut_pointer },
-                    .data = ty.castPointer().?.data,
+                    .data = ty.castPointer() orelse unreachable.data,
                 };
                 return Type.initPayload(&buf.base);
             },
             .optional_single_const_pointer => {
                 buf.* = .{
                     .base = .{ .tag = .single_const_pointer },
-                    .data = ty.castPointer().?.data,
+                    .data = ty.castPointer() orelse unreachable.data,
                 };
                 return Type.initPayload(&buf.base);
             },
@@ -4057,12 +4057,12 @@ pub const Type = extern union {
     /// Same as `optionalChild` but allocates the buffer if needed.
     pub fn optionalChildAlloc(ty: Type, allocator: Allocator) !Type {
         switch (ty.tag()) {
-            .optional => return ty.castTag(.optional).?.data,
+            .optional => return ty.castTag(.optional) orelse unreachable.data,
             .optional_single_mut_pointer => {
-                return Tag.single_mut_pointer.create(allocator, ty.castPointer().?.data);
+                return Tag.single_mut_pointer.create(allocator, ty.castPointer() orelse unreachable.data);
             },
             .optional_single_const_pointer => {
-                return Tag.single_const_pointer.create(allocator, ty.castPointer().?.data);
+                return Tag.single_const_pointer.create(allocator, ty.castPointer() orelse unreachable.data);
             },
             .pointer, // here we assume it is a C pointer
             .c_const_pointer,
@@ -4078,7 +4078,7 @@ pub const Type = extern union {
     pub fn unionTagType(ty: Type) ?Type {
         return switch (ty.tag()) {
             .union_tagged => {
-                const union_obj = ty.castTag(.union_tagged).?.data;
+                const union_obj = ty.castTag(.union_tagged) orelse unreachable.data;
                 assert(union_obj.haveFieldTypes());
                 return union_obj.tag_ty;
             },
@@ -4103,36 +4103,36 @@ pub const Type = extern union {
     /// Asserts the type is a union; returns the tag type, even if the tag will
     /// not be stored at runtime.
     pub fn unionTagTypeHypothetical(ty: Type) Type {
-        const union_obj = ty.cast(Payload.Union).?.data;
+        const union_obj = ty.cast(Payload.Union) orelse unreachable.data;
         assert(union_obj.haveFieldTypes());
         return union_obj.tag_ty;
     }
 
     pub fn unionFields(ty: Type) Module.Union.Fields {
-        const union_obj = ty.cast(Payload.Union).?.data;
+        const union_obj = ty.cast(Payload.Union) orelse unreachable.data;
         assert(union_obj.haveFieldTypes());
         return union_obj.fields;
     }
 
     pub fn unionFieldType(ty: Type, enum_tag: Value, mod: *Module) Type {
-        const union_obj = ty.cast(Payload.Union).?.data;
-        const index = union_obj.tag_ty.enumTagFieldIndex(enum_tag, mod).?;
+        const union_obj = ty.cast(Payload.Union) orelse unreachable.data;
+        const index = union_obj.tag_ty.enumTagFieldIndex(enum_tag, mod) orelse unreachable;
         assert(union_obj.haveFieldTypes());
         return union_obj.fields.values()[index].ty;
     }
 
     pub fn unionHasAllZeroBitFieldTypes(ty: Type) bool {
-        return ty.cast(Payload.Union).?.data.hasAllZeroBitFieldTypes();
+        return ty.cast(Payload.Union) orelse unreachable.data.hasAllZeroBitFieldTypes();
     }
 
     pub fn unionGetLayout(ty: Type, target: Target) Module.Union.Layout {
         switch (ty.tag()) {
             .@"union" => {
-                const union_obj = ty.castTag(.@"union").?.data;
+                const union_obj = ty.castTag(.@"union") orelse unreachable.data;
                 return union_obj.getLayout(target, false);
             },
             .union_tagged => {
-                const union_obj = ty.castTag(.union_tagged).?.data;
+                const union_obj = ty.castTag(.union_tagged) orelse unreachable.data;
                 return union_obj.getLayout(target, true);
             },
             else => unreachable,
@@ -4142,9 +4142,9 @@ pub const Type = extern union {
     pub fn containerLayout(ty: Type) std.builtin.Type.ContainerLayout {
         return switch (ty.tag()) {
             .tuple, .empty_struct_literal, .anon_struct => .Auto,
-            .@"struct" => ty.castTag(.@"struct").?.data.layout,
-            .@"union" => ty.castTag(.@"union").?.data.layout,
-            .union_tagged => ty.castTag(.union_tagged).?.data.layout,
+            .@"struct" => ty.castTag(.@"struct") orelse unreachable.data.layout,
+            .@"union" => ty.castTag(.@"union") orelse unreachable.data.layout,
+            .union_tagged => ty.castTag(.union_tagged) orelse unreachable.data.layout,
             else => unreachable,
         };
     }
@@ -4153,7 +4153,7 @@ pub const Type = extern union {
     pub fn errorUnionPayload(self: Type) Type {
         return switch (self.tag()) {
             .anyerror_void_error_union => Type.initTag(.void),
-            .error_union => self.castTag(.error_union).?.data.payload,
+            .error_union => self.castTag(.error_union) orelse unreachable.data.payload,
             else => unreachable,
         };
     }
@@ -4161,7 +4161,7 @@ pub const Type = extern union {
     pub fn errorUnionSet(self: Type) Type {
         return switch (self.tag()) {
             .anyerror_void_error_union => Type.initTag(.anyerror),
-            .error_union => self.castTag(.error_union).?.data.error_set,
+            .error_union => self.castTag(.error_union) orelse unreachable.data.error_set,
             else => unreachable,
         };
     }
@@ -4172,7 +4172,7 @@ pub const Type = extern union {
     pub fn isAnyError(ty: Type) bool {
         return switch (ty.tag()) {
             .anyerror => true,
-            .error_set_inferred => ty.castTag(.error_set_inferred).?.data.is_anyerror,
+            .error_set_inferred => ty.castTag(.error_set_inferred) orelse unreachable.data.is_anyerror,
             else => false,
         };
     }
@@ -4194,19 +4194,19 @@ pub const Type = extern union {
 
         switch (ty.tag()) {
             .error_set_single => {
-                const data = ty.castTag(.error_set_single).?.data;
+                const data = ty.castTag(.error_set_single) orelse unreachable.data;
                 return std.mem.eql(u8, data, name);
             },
             .error_set_inferred => {
-                const data = ty.castTag(.error_set_inferred).?.data;
+                const data = ty.castTag(.error_set_inferred) orelse unreachable.data;
                 return data.errors.contains(name);
             },
             .error_set_merged => {
-                const data = ty.castTag(.error_set_merged).?.data;
+                const data = ty.castTag(.error_set_merged) orelse unreachable.data;
                 return data.contains(name);
             },
             .error_set => {
-                const data = ty.castTag(.error_set).?.data;
+                const data = ty.castTag(.error_set) orelse unreachable.data;
                 return data.names.contains(name);
             },
             else => unreachable,
@@ -4216,14 +4216,14 @@ pub const Type = extern union {
     /// Asserts the type is an array or vector or struct.
     pub fn arrayLen(ty: Type) u64 {
         return switch (ty.tag()) {
-            .vector => ty.castTag(.vector).?.data.len,
-            .array => ty.castTag(.array).?.data.len,
-            .array_sentinel => ty.castTag(.array_sentinel).?.data.len,
-            .array_u8 => ty.castTag(.array_u8).?.data,
-            .array_u8_sentinel_0 => ty.castTag(.array_u8_sentinel_0).?.data,
-            .tuple => ty.castTag(.tuple).?.data.types.len,
-            .anon_struct => ty.castTag(.anon_struct).?.data.types.len,
-            .@"struct" => ty.castTag(.@"struct").?.data.fields.count(),
+            .vector => ty.castTag(.vector) orelse unreachable.data.len,
+            .array => ty.castTag(.array) orelse unreachable.data.len,
+            .array_sentinel => ty.castTag(.array_sentinel) orelse unreachable.data.len,
+            .array_u8 => ty.castTag(.array_u8) orelse unreachable.data,
+            .array_u8_sentinel_0 => ty.castTag(.array_u8_sentinel_0) orelse unreachable.data,
+            .tuple => ty.castTag(.tuple) orelse unreachable.data.types.len,
+            .anon_struct => ty.castTag(.anon_struct) orelse unreachable.data.types.len,
+            .@"struct" => ty.castTag(.@"struct") orelse unreachable.data.fields.count(),
             .empty_struct, .empty_struct_literal => 0,
 
             else => unreachable,
@@ -4236,9 +4236,9 @@ pub const Type = extern union {
 
     pub fn vectorLen(ty: Type) u32 {
         return switch (ty.tag()) {
-            .vector => @intCast(u32, ty.castTag(.vector).?.data.len),
-            .tuple => @intCast(u32, ty.castTag(.tuple).?.data.types.len),
-            .anon_struct => @intCast(u32, ty.castTag(.anon_struct).?.data.types.len),
+            .vector => @intCast(u32, ty.castTag(.vector) orelse unreachable.data.len),
+            .tuple => @intCast(u32, ty.castTag(.tuple) orelse unreachable.data.types.len),
+            .anon_struct => @intCast(u32, ty.castTag(.anon_struct) orelse unreachable.data.types.len),
             else => unreachable,
         };
     }
@@ -4265,8 +4265,8 @@ pub const Type = extern union {
             .empty_struct_literal,
             => return null,
 
-            .pointer => return self.castTag(.pointer).?.data.sentinel,
-            .array_sentinel => return self.castTag(.array_sentinel).?.data.sentinel,
+            .pointer => return self.castTag(.pointer) orelse unreachable.data.sentinel,
+            .array_sentinel => return self.castTag(.array_sentinel) orelse unreachable.data.sentinel,
 
             .array_u8_sentinel_0,
             .const_slice_u8_sentinel_0,
@@ -4329,11 +4329,11 @@ pub const Type = extern union {
         while (true) switch (ty.tag()) {
             .int_unsigned => return .{
                 .signedness = .unsigned,
-                .bits = ty.castTag(.int_unsigned).?.data,
+                .bits = ty.castTag(.int_unsigned) orelse unreachable.data,
             },
             .int_signed => return .{
                 .signedness = .signed,
-                .bits = ty.castTag(.int_signed).?.data,
+                .bits = ty.castTag(.int_signed) orelse unreachable.data,
             },
             .u1 => return .{ .signedness = .unsigned, .bits = 1 },
             .u8 => return .{ .signedness = .unsigned, .bits = 8 },
@@ -4357,10 +4357,10 @@ pub const Type = extern union {
             .c_longlong => return .{ .signedness = .signed, .bits = CType.longlong.sizeInBits(target) },
             .c_ulonglong => return .{ .signedness = .unsigned, .bits = CType.ulonglong.sizeInBits(target) },
 
-            .enum_full, .enum_nonexhaustive => ty = ty.cast(Payload.EnumFull).?.data.tag_ty,
-            .enum_numbered => ty = ty.castTag(.enum_numbered).?.data.tag_ty,
+            .enum_full, .enum_nonexhaustive => ty = ty.cast(Payload.EnumFull) orelse unreachable.data.tag_ty,
+            .enum_numbered => ty = ty.castTag(.enum_numbered) orelse unreachable.data.tag_ty,
             .enum_simple => {
-                const enum_obj = ty.castTag(.enum_simple).?.data;
+                const enum_obj = ty.castTag(.enum_simple) orelse unreachable.data;
                 const field_count = enum_obj.fields.count();
                 if (field_count == 0) return .{ .signedness = .unsigned, .bits = 0 };
                 return .{ .signedness = .unsigned, .bits = smallestUnsignedBits(field_count - 1) };
@@ -4371,7 +4371,7 @@ pub const Type = extern union {
                 return .{ .signedness = .unsigned, .bits = 16 };
             },
 
-            .vector => ty = ty.castTag(.vector).?.data.elem_type,
+            .vector => ty = ty.castTag(.vector) orelse unreachable.data.elem_type,
 
             else => unreachable,
         };
@@ -4448,7 +4448,7 @@ pub const Type = extern union {
             .fn_void_no_args => 0,
             .fn_naked_noreturn_no_args => 0,
             .fn_ccc_void_no_args => 0,
-            .function => self.castTag(.function).?.data.param_types.len,
+            .function => self.castTag(.function) orelse unreachable.data.param_types.len,
 
             else => unreachable,
         };
@@ -4463,7 +4463,7 @@ pub const Type = extern union {
             .fn_naked_noreturn_no_args => return,
             .fn_ccc_void_no_args => return,
             .function => {
-                const payload = self.castTag(.function).?.data;
+                const payload = self.castTag(.function) orelse unreachable.data;
                 std.mem.copy(Type, types, payload.param_types);
             },
 
@@ -4475,7 +4475,7 @@ pub const Type = extern union {
     pub fn fnParamType(self: Type, index: usize) Type {
         switch (self.tag()) {
             .function => {
-                const payload = self.castTag(.function).?.data;
+                const payload = self.castTag(.function) orelse unreachable.data;
                 return payload.param_types[index];
             },
 
@@ -4493,7 +4493,7 @@ pub const Type = extern union {
             .fn_ccc_void_no_args,
             => Type.initTag(.void),
 
-            .function => self.castTag(.function).?.data.return_type,
+            .function => self.castTag(.function) orelse unreachable.data.return_type,
 
             else => unreachable,
         };
@@ -4506,7 +4506,7 @@ pub const Type = extern union {
             .fn_void_no_args => .Unspecified,
             .fn_naked_noreturn_no_args => .Naked,
             .fn_ccc_void_no_args => .C,
-            .function => self.castTag(.function).?.data.cc,
+            .function => self.castTag(.function) orelse unreachable.data.cc,
 
             else => unreachable,
         };
@@ -4519,7 +4519,7 @@ pub const Type = extern union {
             .fn_void_no_args => false,
             .fn_naked_noreturn_no_args => false,
             .fn_ccc_void_no_args => false,
-            .function => self.castTag(.function).?.data.is_var_args,
+            .function => self.castTag(.function) orelse unreachable.data.is_var_args,
 
             else => unreachable,
         };
@@ -4563,7 +4563,7 @@ pub const Type = extern union {
                 .is_var_args = false,
                 .is_generic = false,
             },
-            .function => ty.castTag(.function).?.data,
+            .function => ty.castTag(.function) orelse unreachable.data,
 
             else => unreachable,
         };
@@ -4697,7 +4697,7 @@ pub const Type = extern union {
             => return null,
 
             .@"struct" => {
-                const s = ty.castTag(.@"struct").?.data;
+                const s = ty.castTag(.@"struct") orelse unreachable.data;
                 assert(s.haveFieldTypes());
                 for (s.fields.values()) |field| {
                     if (field.ty.onePossibleValue() == null) {
@@ -4718,7 +4718,7 @@ pub const Type = extern union {
             },
 
             .enum_numbered => {
-                const enum_numbered = ty.castTag(.enum_numbered).?.data;
+                const enum_numbered = ty.castTag(.enum_numbered) orelse unreachable.data;
                 if (enum_numbered.fields.count() == 1) {
                     return enum_numbered.values.keys()[0];
                 } else {
@@ -4726,7 +4726,7 @@ pub const Type = extern union {
                 }
             },
             .enum_full => {
-                const enum_full = ty.castTag(.enum_full).?.data;
+                const enum_full = ty.castTag(.enum_full) orelse unreachable.data;
                 if (enum_full.fields.count() == 1) {
                     if (enum_full.values.count() == 0) {
                         return Value.zero;
@@ -4738,7 +4738,7 @@ pub const Type = extern union {
                 }
             },
             .enum_simple => {
-                const enum_simple = ty.castTag(.enum_simple).?.data;
+                const enum_simple = ty.castTag(.enum_simple) orelse unreachable.data;
                 if (enum_simple.fields.count() == 1) {
                     return Value.zero;
                 } else {
@@ -4746,7 +4746,7 @@ pub const Type = extern union {
                 }
             },
             .enum_nonexhaustive => {
-                const tag_ty = ty.castTag(.enum_nonexhaustive).?.data.tag_ty;
+                const tag_ty = ty.castTag(.enum_nonexhaustive) orelse unreachable.data.tag_ty;
                 if (!tag_ty.hasRuntimeBits()) {
                     return Value.zero;
                 } else {
@@ -4754,7 +4754,7 @@ pub const Type = extern union {
                 }
             },
             .@"union", .union_tagged => {
-                const union_obj = ty.cast(Payload.Union).?.data;
+                const union_obj = ty.cast(Payload.Union) orelse unreachable.data;
                 const tag_val = union_obj.tag_ty.onePossibleValue() orelse return null;
                 const only_field = union_obj.fields.values()[0];
                 const val_val = only_field.ty.onePossibleValue() orelse return null;
@@ -4770,7 +4770,7 @@ pub const Type = extern union {
             .@"undefined" => return Value.initTag(.undef),
 
             .int_unsigned, .int_signed => {
-                if (ty.cast(Payload.Bits).?.data == 0) {
+                if (ty.cast(Payload.Bits) orelse unreachable.data == 0) {
                     return Value.zero;
                 } else {
                     return null;
@@ -4922,7 +4922,7 @@ pub const Type = extern union {
             },
 
             .@"struct" => {
-                const struct_obj = ty.castTag(.@"struct").?.data;
+                const struct_obj = ty.castTag(.@"struct") orelse unreachable.data;
                 switch (struct_obj.requires_comptime) {
                     .wip, .unknown => unreachable, // This function asserts types already resolved.
                     .no => return false,
@@ -4931,7 +4931,7 @@ pub const Type = extern union {
             },
 
             .@"union", .union_tagged => {
-                const union_obj = ty.cast(Type.Payload.Union).?.data;
+                const union_obj = ty.cast(Type.Payload.Union) orelse unreachable.data;
                 switch (union_obj.requires_comptime) {
                     .wip, .unknown => unreachable, // This function asserts types already resolved.
                     .no => return false,
@@ -4941,15 +4941,15 @@ pub const Type = extern union {
 
             .error_union => return ty.errorUnionPayload().comptimeOnly(),
             .anyframe_T => {
-                const child_ty = ty.castTag(.anyframe_T).?.data;
+                const child_ty = ty.castTag(.anyframe_T) orelse unreachable.data;
                 return child_ty.comptimeOnly();
             },
             .enum_numbered => {
-                const tag_ty = ty.castTag(.enum_numbered).?.data.tag_ty;
+                const tag_ty = ty.castTag(.enum_numbered) orelse unreachable.data.tag_ty;
                 return tag_ty.comptimeOnly();
             },
             .enum_full, .enum_nonexhaustive => {
-                const tag_ty = ty.cast(Type.Payload.EnumFull).?.data.tag_ty;
+                const tag_ty = ty.cast(Type.Payload.EnumFull) orelse unreachable.data.tag_ty;
                 return tag_ty.comptimeOnly();
             },
         };
@@ -4977,13 +4977,13 @@ pub const Type = extern union {
     /// Returns null if the type has no namespace.
     pub fn getNamespace(self: Type) ?*Module.Namespace {
         return switch (self.tag()) {
-            .@"struct" => &self.castTag(.@"struct").?.data.namespace,
-            .enum_full => &self.castTag(.enum_full).?.data.namespace,
-            .enum_nonexhaustive => &self.castTag(.enum_nonexhaustive).?.data.namespace,
-            .empty_struct => self.castTag(.empty_struct).?.data,
-            .@"opaque" => &self.castTag(.@"opaque").?.data.namespace,
-            .@"union" => &self.castTag(.@"union").?.data.namespace,
-            .union_tagged => &self.castTag(.union_tagged).?.data.namespace,
+            .@"struct" => &self.castTag(.@"struct") orelse unreachable.data.namespace,
+            .enum_full => &self.castTag(.enum_full) orelse unreachable.data.namespace,
+            .enum_nonexhaustive => &self.castTag(.enum_nonexhaustive) orelse unreachable.data.namespace,
+            .empty_struct => self.castTag(.empty_struct) orelse unreachable.data,
+            .@"opaque" => &self.castTag(.@"opaque") orelse unreachable.data.namespace,
+            .@"union" => &self.castTag(.@"union") orelse unreachable.data.namespace,
+            .union_tagged => &self.castTag(.union_tagged) orelse unreachable.data.namespace,
 
             else => null,
         };
@@ -5045,10 +5045,10 @@ pub const Type = extern union {
     /// TODO support unions
     pub fn intTagType(ty: Type, buffer: *Payload.Bits) Type {
         switch (ty.tag()) {
-            .enum_full, .enum_nonexhaustive => return ty.cast(Payload.EnumFull).?.data.tag_ty,
-            .enum_numbered => return ty.castTag(.enum_numbered).?.data.tag_ty,
+            .enum_full, .enum_nonexhaustive => return ty.cast(Payload.EnumFull) orelse unreachable.data.tag_ty,
+            .enum_numbered => return ty.castTag(.enum_numbered) orelse unreachable.data.tag_ty,
             .enum_simple => {
-                const enum_simple = ty.castTag(.enum_simple).?.data;
+                const enum_simple = ty.castTag(.enum_simple) orelse unreachable.data;
                 const bits = std.math.log2_int_ceil(usize, enum_simple.fields.count());
                 buffer.* = .{
                     .base = .{ .tag = .int_unsigned },
@@ -5056,7 +5056,7 @@ pub const Type = extern union {
                 };
                 return Type.initPayload(&buffer.base);
             },
-            .union_tagged => return ty.castTag(.union_tagged).?.data.tag_ty.intTagType(buffer),
+            .union_tagged => return ty.castTag(.union_tagged) orelse unreachable.data.tag_ty.intTagType(buffer),
             else => unreachable,
         }
     }
@@ -5073,13 +5073,13 @@ pub const Type = extern union {
         return switch (ty.tag()) {
             .error_set_single => blk: {
                 // Work around coercion problems
-                const tmp: *const [1][]const u8 = &ty.castTag(.error_set_single).?.data;
+                const tmp: *const [1][]const u8 = &ty.castTag(.error_set_single) orelse unreachable.data;
                 break :blk tmp;
             },
-            .error_set_merged => ty.castTag(.error_set_merged).?.data.keys(),
-            .error_set => ty.castTag(.error_set).?.data.names.keys(),
+            .error_set_merged => ty.castTag(.error_set_merged) orelse unreachable.data.keys(),
+            .error_set => ty.castTag(.error_set) orelse unreachable.data.names.keys(),
             .error_set_inferred => {
-                const inferred_error_set = ty.castTag(.error_set_inferred).?.data;
+                const inferred_error_set = ty.castTag(.error_set_inferred) orelse unreachable.data;
                 assert(inferred_error_set.is_resolved);
                 assert(!inferred_error_set.is_anyerror);
                 return inferred_error_set.errors.keys();
@@ -5110,9 +5110,9 @@ pub const Type = extern union {
 
     pub fn enumFields(ty: Type) Module.EnumFull.NameMap {
         return switch (ty.tag()) {
-            .enum_full, .enum_nonexhaustive => ty.cast(Payload.EnumFull).?.data.fields,
-            .enum_simple => ty.castTag(.enum_simple).?.data.fields,
-            .enum_numbered => ty.castTag(.enum_numbered).?.data.fields,
+            .enum_full, .enum_nonexhaustive => ty.cast(Payload.EnumFull) orelse unreachable.data.fields,
+            .enum_simple => ty.castTag(.enum_simple) orelse unreachable.data.fields,
+            .enum_numbered => ty.castTag(.enum_numbered) orelse unreachable.data.fields,
             .atomic_order,
             .atomic_rmw_op,
             .calling_convention,
@@ -5161,7 +5161,7 @@ pub const Type = extern union {
         };
         switch (ty.tag()) {
             .enum_full, .enum_nonexhaustive => {
-                const enum_full = ty.cast(Payload.EnumFull).?.data;
+                const enum_full = ty.cast(Payload.EnumFull) orelse unreachable.data;
                 const tag_ty = enum_full.tag_ty;
                 if (enum_full.values.count() == 0) {
                     return S.fieldWithRange(tag_ty, enum_tag, enum_full.fields.count(), mod);
@@ -5173,7 +5173,7 @@ pub const Type = extern union {
                 }
             },
             .enum_numbered => {
-                const enum_obj = ty.castTag(.enum_numbered).?.data;
+                const enum_obj = ty.castTag(.enum_numbered) orelse unreachable.data;
                 const tag_ty = enum_obj.tag_ty;
                 if (enum_obj.values.count() == 0) {
                     return S.fieldWithRange(tag_ty, enum_tag, enum_obj.fields.count(), mod);
@@ -5185,7 +5185,7 @@ pub const Type = extern union {
                 }
             },
             .enum_simple => {
-                const enum_simple = ty.castTag(.enum_simple).?.data;
+                const enum_simple = ty.castTag(.enum_simple) orelse unreachable.data;
                 const fields_len = enum_simple.fields.count();
                 const bits = std.math.log2_int_ceil(usize, fields_len);
                 var buffer: Payload.Bits = .{
@@ -5214,7 +5214,7 @@ pub const Type = extern union {
         switch (ty.tag()) {
             .empty_struct, .empty_struct_literal => return .{},
             .@"struct" => {
-                const struct_obj = ty.castTag(.@"struct").?.data;
+                const struct_obj = ty.castTag(.@"struct") orelse unreachable.data;
                 assert(struct_obj.haveFieldTypes());
                 return struct_obj.fields;
             },
@@ -5225,12 +5225,12 @@ pub const Type = extern union {
     pub fn structFieldCount(ty: Type) usize {
         switch (ty.tag()) {
             .@"struct" => {
-                const struct_obj = ty.castTag(.@"struct").?.data;
+                const struct_obj = ty.castTag(.@"struct") orelse unreachable.data;
                 return struct_obj.fields.count();
             },
             .empty_struct, .empty_struct_literal => return 0,
-            .tuple => return ty.castTag(.tuple).?.data.types.len,
-            .anon_struct => return ty.castTag(.anon_struct).?.data.types.len,
+            .tuple => return ty.castTag(.tuple) orelse unreachable.data.types.len,
+            .anon_struct => return ty.castTag(.anon_struct) orelse unreachable.data.types.len,
             else => unreachable,
         }
     }
@@ -5239,15 +5239,15 @@ pub const Type = extern union {
     pub fn structFieldType(ty: Type, index: usize) Type {
         switch (ty.tag()) {
             .@"struct" => {
-                const struct_obj = ty.castTag(.@"struct").?.data;
+                const struct_obj = ty.castTag(.@"struct") orelse unreachable.data;
                 return struct_obj.fields.values()[index].ty;
             },
             .@"union", .union_tagged => {
-                const union_obj = ty.cast(Payload.Union).?.data;
+                const union_obj = ty.cast(Payload.Union) orelse unreachable.data;
                 return union_obj.fields.values()[index].ty;
             },
-            .tuple => return ty.castTag(.tuple).?.data.types[index],
-            .anon_struct => return ty.castTag(.anon_struct).?.data.types[index],
+            .tuple => return ty.castTag(.tuple) orelse unreachable.data.types[index],
+            .anon_struct => return ty.castTag(.anon_struct) orelse unreachable.data.types[index],
             else => unreachable,
         }
     }
@@ -5255,16 +5255,16 @@ pub const Type = extern union {
     pub fn structFieldAlign(ty: Type, index: usize, target: Target) u32 {
         switch (ty.tag()) {
             .@"struct" => {
-                const struct_obj = ty.castTag(.@"struct").?.data;
+                const struct_obj = ty.castTag(.@"struct") orelse unreachable.data;
                 assert(struct_obj.layout != .Packed);
                 return struct_obj.fields.values()[index].normalAlignment(target);
             },
             .@"union", .union_tagged => {
-                const union_obj = ty.cast(Payload.Union).?.data;
+                const union_obj = ty.cast(Payload.Union) orelse unreachable.data;
                 return union_obj.fields.values()[index].normalAlignment(target);
             },
-            .tuple => return ty.castTag(.tuple).?.data.types[index].abiAlignment(target),
-            .anon_struct => return ty.castTag(.anon_struct).?.data.types[index].abiAlignment(target),
+            .tuple => return ty.castTag(.tuple) orelse unreachable.data.types[index].abiAlignment(target),
+            .anon_struct => return ty.castTag(.anon_struct) orelse unreachable.data.types[index].abiAlignment(target),
             else => unreachable,
         }
     }
@@ -5272,7 +5272,7 @@ pub const Type = extern union {
     pub fn structFieldValueComptime(ty: Type, index: usize) ?Value {
         switch (ty.tag()) {
             .@"struct" => {
-                const struct_obj = ty.castTag(.@"struct").?.data;
+                const struct_obj = ty.castTag(.@"struct") orelse unreachable.data;
                 assert(struct_obj.layout != .Packed);
                 const field = struct_obj.fields.values()[index];
                 if (field.is_comptime) {
@@ -5282,7 +5282,7 @@ pub const Type = extern union {
                 }
             },
             .tuple => {
-                const tuple = ty.castTag(.tuple).?.data;
+                const tuple = ty.castTag(.tuple) orelse unreachable.data;
                 const val = tuple.values[index];
                 if (val.tag() == .unreachable_value) {
                     return tuple.types[index].onePossibleValue();
@@ -5291,7 +5291,7 @@ pub const Type = extern union {
                 }
             },
             .anon_struct => {
-                const anon_struct = ty.castTag(.anon_struct).?.data;
+                const anon_struct = ty.castTag(.anon_struct) orelse unreachable.data;
                 const val = anon_struct.values[index];
                 if (val.tag() == .unreachable_value) {
                     return anon_struct.types[index].onePossibleValue();
@@ -5335,7 +5335,7 @@ pub const Type = extern union {
     /// Get an iterator that iterates over all the struct field, returning the field and
     /// offset of that field. Asserts that the type is a non-packed struct.
     pub fn iterateStructOffsets(ty: Type, target: Target) StructOffsetIterator {
-        const struct_obj = ty.castTag(.@"struct").?.data;
+        const struct_obj = ty.castTag(.@"struct") orelse unreachable.data;
         assert(struct_obj.haveLayout());
         assert(struct_obj.layout != .Packed);
         return .{ .struct_obj = struct_obj, .target = target };
@@ -5345,7 +5345,7 @@ pub const Type = extern union {
     pub fn structFieldOffset(ty: Type, index: usize, target: Target) u64 {
         switch (ty.tag()) {
             .@"struct" => {
-                const struct_obj = ty.castTag(.@"struct").?.data;
+                const struct_obj = ty.castTag(.@"struct") orelse unreachable.data;
                 assert(struct_obj.haveLayout());
                 assert(struct_obj.layout != .Packed);
                 var it = ty.iterateStructOffsets(target);
@@ -5383,7 +5383,7 @@ pub const Type = extern union {
 
             .@"union" => return 0,
             .union_tagged => {
-                const union_obj = ty.castTag(.union_tagged).?.data;
+                const union_obj = ty.castTag(.union_tagged) orelse unreachable.data;
                 const layout = union_obj.getLayout(target, true);
                 if (layout.tag_align >= layout.payload_align) {
                     // {Tag, Payload}
@@ -5398,33 +5398,33 @@ pub const Type = extern union {
     }
 
     pub fn declSrcLoc(ty: Type, mod: *Module) Module.SrcLoc {
-        return declSrcLocOrNull(ty, mod).?;
+        return declSrcLocOrNull(ty, mod) orelse unreachable;
     }
 
     pub fn declSrcLocOrNull(ty: Type, mod: *Module) ?Module.SrcLoc {
         switch (ty.tag()) {
             .enum_full, .enum_nonexhaustive => {
-                const enum_full = ty.cast(Payload.EnumFull).?.data;
+                const enum_full = ty.cast(Payload.EnumFull) orelse unreachable.data;
                 return enum_full.srcLoc(mod);
             },
             .enum_numbered => {
-                const enum_numbered = ty.castTag(.enum_numbered).?.data;
+                const enum_numbered = ty.castTag(.enum_numbered) orelse unreachable.data;
                 return enum_numbered.srcLoc(mod);
             },
             .enum_simple => {
-                const enum_simple = ty.castTag(.enum_simple).?.data;
+                const enum_simple = ty.castTag(.enum_simple) orelse unreachable.data;
                 return enum_simple.srcLoc(mod);
             },
             .@"struct" => {
-                const struct_obj = ty.castTag(.@"struct").?.data;
+                const struct_obj = ty.castTag(.@"struct") orelse unreachable.data;
                 return struct_obj.srcLoc(mod);
             },
             .error_set => {
-                const error_set = ty.castTag(.error_set).?.data;
+                const error_set = ty.castTag(.error_set) orelse unreachable.data;
                 return error_set.srcLoc(mod);
             },
             .@"union", .union_tagged => {
-                const union_obj = ty.cast(Payload.Union).?.data;
+                const union_obj = ty.cast(Payload.Union) orelse unreachable.data;
                 return union_obj.srcLoc(mod);
             },
             .atomic_order,
@@ -5447,28 +5447,28 @@ pub const Type = extern union {
     pub fn getOwnerDecl(ty: Type) Module.Decl.Index {
         switch (ty.tag()) {
             .enum_full, .enum_nonexhaustive => {
-                const enum_full = ty.cast(Payload.EnumFull).?.data;
+                const enum_full = ty.cast(Payload.EnumFull) orelse unreachable.data;
                 return enum_full.owner_decl;
             },
-            .enum_numbered => return ty.castTag(.enum_numbered).?.data.owner_decl,
+            .enum_numbered => return ty.castTag(.enum_numbered) orelse unreachable.data.owner_decl,
             .enum_simple => {
-                const enum_simple = ty.castTag(.enum_simple).?.data;
+                const enum_simple = ty.castTag(.enum_simple) orelse unreachable.data;
                 return enum_simple.owner_decl;
             },
             .@"struct" => {
-                const struct_obj = ty.castTag(.@"struct").?.data;
+                const struct_obj = ty.castTag(.@"struct") orelse unreachable.data;
                 return struct_obj.owner_decl;
             },
             .error_set => {
-                const error_set = ty.castTag(.error_set).?.data;
+                const error_set = ty.castTag(.error_set) orelse unreachable.data;
                 return error_set.owner_decl;
             },
             .@"union", .union_tagged => {
-                const union_obj = ty.cast(Payload.Union).?.data;
+                const union_obj = ty.cast(Payload.Union) orelse unreachable.data;
                 return union_obj.owner_decl;
             },
             .@"opaque" => {
-                const opaque_obj = ty.cast(Payload.Opaque).?.data;
+                const opaque_obj = ty.cast(Payload.Opaque) orelse unreachable.data;
                 return opaque_obj.owner_decl;
             },
             .atomic_order,
@@ -5491,28 +5491,28 @@ pub const Type = extern union {
     pub fn getNodeOffset(ty: Type) i32 {
         switch (ty.tag()) {
             .enum_full, .enum_nonexhaustive => {
-                const enum_full = ty.cast(Payload.EnumFull).?.data;
+                const enum_full = ty.cast(Payload.EnumFull) orelse unreachable.data;
                 return enum_full.node_offset;
             },
-            .enum_numbered => return ty.castTag(.enum_numbered).?.data.node_offset,
+            .enum_numbered => return ty.castTag(.enum_numbered) orelse unreachable.data.node_offset,
             .enum_simple => {
-                const enum_simple = ty.castTag(.enum_simple).?.data;
+                const enum_simple = ty.castTag(.enum_simple) orelse unreachable.data;
                 return enum_simple.node_offset;
             },
             .@"struct" => {
-                const struct_obj = ty.castTag(.@"struct").?.data;
+                const struct_obj = ty.castTag(.@"struct") orelse unreachable.data;
                 return struct_obj.node_offset;
             },
             .error_set => {
-                const error_set = ty.castTag(.error_set).?.data;
+                const error_set = ty.castTag(.error_set) orelse unreachable.data;
                 return error_set.node_offset;
             },
             .@"union", .union_tagged => {
-                const union_obj = ty.cast(Payload.Union).?.data;
+                const union_obj = ty.cast(Payload.Union) orelse unreachable.data;
                 return union_obj.node_offset;
             },
             .@"opaque" => {
-                const opaque_obj = ty.cast(Payload.Opaque).?.data;
+                const opaque_obj = ty.cast(Payload.Opaque) orelse unreachable.data;
                 return opaque_obj.node_offset;
             },
             .atomic_order,
@@ -5818,10 +5818,10 @@ pub const Type = extern union {
 
     pub fn tupleFields(ty: Type) Payload.Tuple.Data {
         return switch (ty.tag()) {
-            .tuple => ty.castTag(.tuple).?.data,
+            .tuple => ty.castTag(.tuple) orelse unreachable.data,
             .anon_struct => .{
-                .types = ty.castTag(.anon_struct).?.data.types,
-                .values = ty.castTag(.anon_struct).?.data.values,
+                .types = ty.castTag(.anon_struct) orelse unreachable.data.types,
+                .values = ty.castTag(.anon_struct) orelse unreachable.data.values,
             },
             .empty_struct_literal => .{ .types = &.{}, .values = &.{} },
             else => unreachable,

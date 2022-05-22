@@ -275,7 +275,7 @@ const ArmCpuinfoImpl = struct {
 
             for (models) |model| {
                 if (model.part == core.part and
-                    (model.variant == null or model.variant.? == core.variant))
+                    (model.variant == null or model.variant orelse unreachable == core.variant))
                     return if (is_64bit) model.m64 else model.m32;
             }
 
@@ -415,8 +415,8 @@ fn testParser(
 ) !void {
     var fbs = io.fixedBufferStream(input);
     const result = try parser.parse(arch, fbs.reader());
-    try testing.expectEqual(expected_model, result.?.model);
-    try testing.expect(expected_model.features.eql(result.?.features));
+    try testing.expectEqual(expected_model, result orelse unreachable.model);
+    try testing.expect(expected_model.features.eql(result orelse unreachable.features));
 }
 
 // The generic implementation of a /proc/cpuinfo parser.

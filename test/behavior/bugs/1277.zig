@@ -17,5 +17,5 @@ test "don't emit an LLVM global for a const function when it's in an optional in
     if (builtin.zig_backend == .stage2_arm) return error.SkipZigTest; // TODO
     if (builtin.zig_backend == .stage2_x86_64) return error.SkipZigTest; // TODO
 
-    try std.testing.expect(s.f.?() == 1234);
+    try std.testing.expect(s.f orelse unreachable() == 1234);
 }

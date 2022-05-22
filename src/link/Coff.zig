@@ -137,7 +137,7 @@ pub fn openPath(allocator: Allocator, sub_path: []const u8, options: link.Option
     const self = try createEmpty(allocator, options);
     errdefer self.base.destroy();
 
-    const file = try options.emit.?.directory.handle.createFile(sub_path, .{
+    const file = try options.emit orelse unreachable.directory.handle.createFile(sub_path, .{
         .truncate = false,
         .read = true,
         .mode = link.determineMode(options),
@@ -154,7 +154,7 @@ pub fn openPath(allocator: Allocator, sub_path: []const u8, options: link.Option
     var coff_file_header_offset: u32 = 0;
     if (options.output_mode == .Exe) {
         // Write the MS-DOS stub and the PE signature
-        try self.base.file.?.pwriteAll(msdos_stub ++ "PE\x00\x00", 0);
+        try self.base.file orelse unreachable.pwriteAll(msdos_stub ++ "PE\x00\x00", 0);
         coff_file_header_offset = msdos_stub.len + 4;
     }
 
@@ -216,7 +216,7 @@ pub fn openPath(allocator: Allocator, sub_path: []const u8, options: link.Option
     index += 2;
 
     assert(index == 20);
-    try self.base.file.?.pwriteAll(hdr_data[0..index], coff_file_header_offset);
+    try self.base.file orelse unreachable.pwriteAll(hdr_data[0..index], coff_file_header_offset);
 
     if (options.output_mode == .Exe) {
         self.optional_header_offset = coff_file_header_offset + 20;
@@ -386,8 +386,8 @@ pub fn openPath(allocator: Allocator, sub_path: []const u8, options: link.Option
     index += 4;
 
     assert(index == optional_header_size + section_table_size);
-    try self.base.file.?.pwriteAll(hdr_data[0..index], self.optional_header_offset);
-    try self.base.file.?.setEndPos(self.section_data_offset + default_offset_table_size + default_size_of_code);
+    try self.base.file orelse unreachable.pwriteAll(hdr_data[0..index], self.optional_header_offset);
+    try self.base.file orelse unreachable.setEndPos(self.section_data_offset + default_offset_table_size + default_size_of_code);
 
     return self;
 }
@@ -423,7 +423,7 @@ pub fn allocateDeclIndexes(self: *Coff, decl_index: Module.Decl.Index) !void {
 
     try self.offset_table.ensureUnusedCapacity(self.base.allocator, 1);
 
-    const decl = self.base.options.module.?.declPtr(decl_index);
+    const decl = self.base.options.module orelse unreachable.declPtr(decl_index);
     if (self.offset_table_free_list.popOrNull()) |i| {
         decl.link.coff.offset_table_index = i;
     } else {
@@ -483,7 +483,7 @@ fn allocateTextBlock(self: *Coff, text_block: *TextBlock, new_block_size: u64, a
         }
     };
 
-    const expand_text_section = block_placement == null or block_placement.?.next == null;
+    const expand_text_section = block_placement == null or block_placement orelse unreachable.next == null;
     if (expand_text_section) {
         const needed_size = @intCast(u32, mem.alignForwardGeneric(u64, vaddr + new_block_size - self.text_section_virtual_address, file_alignment));
         if (needed_size > self.text_section_size) {
@@ -494,7 +494,7 @@ fn allocateTextBlock(self: *Coff, text_block: *TextBlock, new_block_size: u64, a
                 // Write new virtual size
                 var buf: [4]u8 = undefined;
                 mem.writeIntLittle(u32, &buf, new_text_section_virtual_size);
-                try self.base.file.?.pwriteAll(&buf, self.section_table_offset + 40 + 8);
+                try self.base.file orelse unreachable.pwriteAll(&buf, self.section_table_offset + 40 + 8);
             }
 
             self.text_section_size = needed_size;
@@ -592,16 +592,16 @@ fn writeOffsetTableEntry(self: *Coff, index: usize) !void {
         const current_text_section_start = self.section_data_offset + current_raw_size;
         const new_text_section_start = self.section_data_offset + new_raw_size;
 
-        const amt = try self.base.file.?.copyRangeAll(current_text_section_start, self.base.file.?, new_text_section_start, self.text_section_size);
+        const amt = try self.base.file orelse unreachable.copyRangeAll(current_text_section_start, self.base.file orelse unreachable, new_text_section_start, self.text_section_size);
         if (amt != self.text_section_size) return error.InputOutput;
 
         // Write the new raw size in the .got header
         var buf: [8]u8 = undefined;
         mem.writeIntLittle(u32, buf[0..4], new_raw_size);
-        try self.base.file.?.pwriteAll(buf[0..4], self.section_table_offset + 16);
+        try self.base.file orelse unreachable.pwriteAll(buf[0..4], self.section_table_offset + 16);
         // Write the new .text section file offset in the .text section header
         mem.writeIntLittle(u32, buf[0..4], new_text_section_start);
-        try self.base.file.?.pwriteAll(buf[0..4], self.section_table_offset + 40 + 20);
+        try self.base.file orelse unreachable.pwriteAll(buf[0..4], self.section_table_offset + 40 + 20);
 
         const current_virtual_size = mem.alignForwardGeneric(u32, self.offset_table_size, section_alignment);
         const new_virtual_size = mem.alignForwardGeneric(u32, new_raw_size, section_alignment);
@@ -615,12 +615,12 @@ fn writeOffsetTableEntry(self: *Coff, index: usize) !void {
 
             // Write .got virtual size
             mem.writeIntLittle(u32, buf[0..4], new_virtual_size);
-            try self.base.file.?.pwriteAll(buf[0..4], self.section_table_offset + 8);
+            try self.base.file orelse unreachable.pwriteAll(buf[0..4], self.section_table_offset + 8);
 
             // Write .text new virtual address
             self.text_section_virtual_address = self.text_section_virtual_address + va_offset;
             mem.writeIntLittle(u32, buf[0..4], self.text_section_virtual_address - default_image_base);
-            try self.base.file.?.pwriteAll(buf[0..4], self.section_table_offset + 40 + 12);
+            try self.base.file orelse unreachable.pwriteAll(buf[0..4], self.section_table_offset + 40 + 12);
 
             // Fix the VAs in the offset table
             for (self.offset_table.items) |*va, idx| {
@@ -630,11 +630,11 @@ fn writeOffsetTableEntry(self: *Coff, index: usize) !void {
                     switch (entry_size) {
                         4 => {
                             mem.writeInt(u32, buf[0..4], @intCast(u32, va.*), endian);
-                            try self.base.file.?.pwriteAll(buf[0..4], offset_table_start + idx * entry_size);
+                            try self.base.file orelse unreachable.pwriteAll(buf[0..4], offset_table_start + idx * entry_size);
                         },
                         8 => {
                             mem.writeInt(u64, &buf, va.*, endian);
-                            try self.base.file.?.pwriteAll(&buf, offset_table_start + idx * entry_size);
+                            try self.base.file orelse unreachable.pwriteAll(&buf, offset_table_start + idx * entry_size);
                         },
                         else => unreachable,
                     }
@@ -649,12 +649,12 @@ fn writeOffsetTableEntry(self: *Coff, index: usize) !void {
         4 => {
             var buf: [4]u8 = undefined;
             mem.writeInt(u32, &buf, @intCast(u32, self.offset_table.items[index]), endian);
-            try self.base.file.?.pwriteAll(&buf, offset_table_start + index * entry_size);
+            try self.base.file orelse unreachable.pwriteAll(&buf, offset_table_start + index * entry_size);
         },
         8 => {
             var buf: [8]u8 = undefined;
             mem.writeInt(u64, &buf, self.offset_table.items[index], endian);
-            try self.base.file.?.pwriteAll(&buf, offset_table_start + index * entry_size);
+            try self.base.file orelse unreachable.pwriteAll(&buf, offset_table_start + index * entry_size);
         },
         else => unreachable,
     }
@@ -780,7 +780,7 @@ fn finishUpdateDecl(self: *Coff, module: *Module, decl_index: Module.Decl.Index,
     }
 
     // Write the code into the file
-    try self.base.file.?.pwriteAll(code, self.section_data_offset + self.offset_table_size + decl.link.coff.text_offset);
+    try self.base.file orelse unreachable.pwriteAll(code, self.section_data_offset + self.offset_table_size + decl.link.coff.text_offset);
 
     // Since we updated the vaddr and the size, each corresponding export symbol also needs to be updated.
     const decl_exports = module.decl_exports.get(decl_index) orelse &[0]*Module.Export{};
@@ -792,7 +792,7 @@ pub fn freeDecl(self: *Coff, decl_index: Module.Decl.Index) void {
         if (self.llvm_object) |llvm_object| return llvm_object.freeDecl(decl_index);
     }
 
-    const mod = self.base.options.module.?;
+    const mod = self.base.options.module orelse unreachable;
     const decl = mod.declPtr(decl_index);
 
     // Appending to free lists is allowed to fail because the free lists are heuristics based anyway.
@@ -876,8 +876,8 @@ pub fn flushModule(self: *Coff, comp: *Compilation, prog_node: *std.Progress.Nod
         // Write the new raw size in the .text header
         var buf: [4]u8 = undefined;
         mem.writeIntLittle(u32, &buf, self.text_section_size);
-        try self.base.file.?.pwriteAll(&buf, self.section_table_offset + 40 + 16);
-        try self.base.file.?.setEndPos(self.section_data_offset + self.offset_table_size + self.text_section_size);
+        try self.base.file orelse unreachable.pwriteAll(&buf, self.section_table_offset + 40 + 16);
+        try self.base.file orelse unreachable.setEndPos(self.section_data_offset + self.offset_table_size + self.text_section_size);
         self.text_section_size_dirty = false;
     }
 
@@ -885,7 +885,7 @@ pub fn flushModule(self: *Coff, comp: *Compilation, prog_node: *std.Progress.Nod
         const new_size_of_image = mem.alignForwardGeneric(u32, self.text_section_virtual_address - default_image_base + self.text_section_size, section_alignment);
         var buf: [4]u8 = undefined;
         mem.writeIntLittle(u32, &buf, new_size_of_image);
-        try self.base.file.?.pwriteAll(&buf, self.optional_header_offset + 56);
+        try self.base.file orelse unreachable.pwriteAll(&buf, self.optional_header_offset + 56);
         self.size_of_image_dirty = false;
     }
 
@@ -899,8 +899,8 @@ pub fn flushModule(self: *Coff, comp: *Compilation, prog_node: *std.Progress.Nod
         if (self.base.options.output_mode == .Exe) {
             // Write AddressOfEntryPoint
             var buf: [4]u8 = undefined;
-            mem.writeIntLittle(u32, &buf, self.entry_addr.?);
-            try self.base.file.?.pwriteAll(&buf, self.optional_header_offset + 16);
+            mem.writeIntLittle(u32, &buf, self.entry_addr orelse unreachable);
+            try self.base.file orelse unreachable.pwriteAll(&buf, self.optional_header_offset + 16);
         }
     }
 }
@@ -913,8 +913,8 @@ fn linkWithLLD(self: *Coff, comp: *Compilation, prog_node: *std.Progress.Node) !
     defer arena_allocator.deinit();
     const arena = arena_allocator.allocator();
 
-    const directory = self.base.options.emit.?.directory; // Just an alias to make it shorter to type.
-    const full_out_path = try directory.join(arena, &[_][]const u8{self.base.options.emit.?.sub_path});
+    const directory = self.base.options.emit orelse unreachable.directory; // Just an alias to make it shorter to type.
+    const full_out_path = try directory.join(arena, &[_][]const u8{self.base.options.emit orelse unreachable.sub_path});
 
     // If there is no Zig code to compile, then we should skip flushing the output file because it
     // will not be part of the linker line anyway.
@@ -932,7 +932,7 @@ fn linkWithLLD(self: *Coff, comp: *Compilation, prog_node: *std.Progress.Node) !
                     &[_][]const u8{obj_basename},
                 ),
                 .whole => break :blk try fs.path.join(arena, &.{
-                    fs.path.dirname(full_out_path).?, obj_basename,
+                    fs.path.dirname(full_out_path) orelse unreachable, obj_basename,
                 }),
             }
         }
@@ -940,9 +940,9 @@ fn linkWithLLD(self: *Coff, comp: *Compilation, prog_node: *std.Progress.Node) !
         try self.flushModule(comp, prog_node);
 
         if (fs.path.dirname(full_out_path)) |dirname| {
-            break :blk try fs.path.join(arena, &.{ dirname, self.base.intermediary_basename.? });
+            break :blk try fs.path.join(arena, &.{ dirname, self.base.intermediary_basename orelse unreachable });
         } else {
-            break :blk self.base.intermediary_basename.?;
+            break :blk self.base.intermediary_basename orelse unreachable;
         }
     } else null;
 
@@ -987,10 +987,10 @@ fn linkWithLLD(self: *Coff, comp: *Compilation, prog_node: *std.Progress.Node) !
         if (self.base.options.link_libc) {
             man.hash.add(self.base.options.libc_installation != null);
             if (self.base.options.libc_installation) |libc_installation| {
-                man.hash.addBytes(libc_installation.crt_dir.?);
+                man.hash.addBytes(libc_installation.crt_dir orelse unreachable);
                 if (target.abi == .msvc) {
-                    man.hash.addBytes(libc_installation.msvc_lib_dir.?);
-                    man.hash.addBytes(libc_installation.kernel32_lib_dir.?);
+                    man.hash.addBytes(libc_installation.msvc_lib_dir orelse unreachable);
+                    man.hash.addBytes(libc_installation.kernel32_lib_dir orelse unreachable);
                 }
             }
         }
@@ -1062,7 +1062,7 @@ fn linkWithLLD(self: *Coff, comp: *Compilation, prog_node: *std.Progress.Node) !
         // We will invoke ourselves as a child process to gain access to LLD.
         // This is necessary because LLD does not behave properly as a library -
         // it calls exit() and does not reset all global data between invocations.
-        try argv.appendSlice(&[_][]const u8{ comp.self_exe_path.?, "lld-link" });
+        try argv.appendSlice(&[_][]const u8{ comp.self_exe_path orelse unreachable, "lld-link" });
 
         try argv.append("-ERRORLIMIT:0");
         try argv.append("-NOLOGO");
@@ -1134,11 +1134,11 @@ fn linkWithLLD(self: *Coff, comp: *Compilation, prog_node: *std.Progress.Node) !
 
         if (self.base.options.link_libc) {
             if (self.base.options.libc_installation) |libc_installation| {
-                try argv.append(try allocPrint(arena, "-LIBPATH:{s}", .{libc_installation.crt_dir.?}));
+                try argv.append(try allocPrint(arena, "-LIBPATH:{s}", .{libc_installation.crt_dir orelse unreachable}));
 
                 if (target.abi == .msvc) {
-                    try argv.append(try allocPrint(arena, "-LIBPATH:{s}", .{libc_installation.msvc_lib_dir.?}));
-                    try argv.append(try allocPrint(arena, "-LIBPATH:{s}", .{libc_installation.kernel32_lib_dir.?}));
+                    try argv.append(try allocPrint(arena, "-LIBPATH:{s}", .{libc_installation.msvc_lib_dir orelse unreachable}));
+                    try argv.append(try allocPrint(arena, "-LIBPATH:{s}", .{libc_installation.kernel32_lib_dir orelse unreachable}));
                 }
             }
         }
@@ -1331,13 +1331,13 @@ fn linkWithLLD(self: *Coff, comp: *Compilation, prog_node: *std.Progress.Node) !
 
         // libc++ dep
         if (self.base.options.link_libcpp) {
-            try argv.append(comp.libcxxabi_static_lib.?.full_object_path);
-            try argv.append(comp.libcxx_static_lib.?.full_object_path);
+            try argv.append(comp.libcxxabi_static_lib orelse unreachable.full_object_path);
+            try argv.append(comp.libcxx_static_lib orelse unreachable.full_object_path);
         }
 
         // libunwind dep
         if (self.base.options.link_libunwind) {
-            try argv.append(comp.libunwind_static_lib.?.full_object_path);
+            try argv.append(comp.libunwind_static_lib orelse unreachable.full_object_path);
         }
 
         if (is_exe_or_dyn_lib and !self.base.options.skip_linker_dependencies) {
@@ -1415,7 +1415,7 @@ fn linkWithLLD(self: *Coff, comp: *Compilation, prog_node: *std.Progress.Node) !
 
                 try child.spawn();
 
-                const stderr = try child.stderr.?.reader().readAllAlloc(arena, 10 * 1024 * 1024);
+                const stderr = try child.stderr orelse unreachable.reader().readAllAlloc(arena, 10 * 1024 * 1024);
 
                 const term = child.wait() catch |err| {
                     log.err("unable to spawn {s}: {s}", .{ argv.items[0], @errorName(err) });
@@ -1487,7 +1487,7 @@ pub fn getDeclVAddr(
     reloc_info: link.File.RelocInfo,
 ) !u64 {
     _ = reloc_info;
-    const mod = self.base.options.module.?;
+    const mod = self.base.options.module orelse unreachable;
     const decl = mod.declPtr(decl_index);
     assert(self.llvm_object == null);
     return self.text_section_virtual_address + decl.link.coff.text_offset;

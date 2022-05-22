@@ -172,7 +172,7 @@ pub const BootServices = extern struct {
             uefi.tables.OpenProtocolAttributes{ .by_handle_protocol = true },
         ).err();
 
-        return ptr.?;
+        return ptr orelse unreachable;
     }
 
     pub const signature: u64 = 0x56524553544f4f42;

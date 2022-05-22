@@ -76,7 +76,7 @@ pub const Reloc = struct {
 /// has been called to get a viable debug symbols output.
 pub fn populateMissingMetadata(self: *DebugSymbols, allocator: Allocator) !void {
     if (self.uuid_cmd_index == null) {
-        const base_cmd = self.base.load_commands.items[self.base.uuid_cmd_index.?];
+        const base_cmd = self.base.load_commands.items[self.base.uuid_cmd_index orelse unreachable];
         self.uuid_cmd_index = @intCast(u16, self.load_commands.items.len);
         try self.load_commands.append(allocator, base_cmd);
         self.load_commands_dirty = true;
@@ -98,7 +98,7 @@ pub fn populateMissingMetadata(self: *DebugSymbols, allocator: Allocator) !void 
 
     if (self.pagezero_segment_cmd_index == null) {
         self.pagezero_segment_cmd_index = @intCast(u16, self.load_commands.items.len);
-        const base_cmd = self.base.load_commands.items[self.base.pagezero_segment_cmd_index.?].segment;
+        const base_cmd = self.base.load_commands.items[self.base.pagezero_segment_cmd_index orelse unreachable].segment;
         const cmd = try self.copySegmentCommand(allocator, base_cmd);
         try self.load_commands.append(allocator, .{ .segment = cmd });
         self.load_commands_dirty = true;
@@ -106,7 +106,7 @@ pub fn populateMissingMetadata(self: *DebugSymbols, allocator: Allocator) !void 
 
     if (self.text_segment_cmd_index == null) {
         self.text_segment_cmd_index = @intCast(u16, self.load_commands.items.len);
-        const base_cmd = self.base.load_commands.items[self.base.text_segment_cmd_index.?].segment;
+        const base_cmd = self.base.load_commands.items[self.base.text_segment_cmd_index orelse unreachable].segment;
         const cmd = try self.copySegmentCommand(allocator, base_cmd);
         try self.load_commands.append(allocator, .{ .segment = cmd });
         self.load_commands_dirty = true;
@@ -115,7 +115,7 @@ pub fn populateMissingMetadata(self: *DebugSymbols, allocator: Allocator) !void 
     if (self.data_const_segment_cmd_index == null) outer: {
         if (self.base.data_const_segment_cmd_index == null) break :outer; // __DATA_CONST is optional
         self.data_const_segment_cmd_index = @intCast(u16, self.load_commands.items.len);
-        const base_cmd = self.base.load_commands.items[self.base.data_const_segment_cmd_index.?].segment;
+        const base_cmd = self.base.load_commands.items[self.base.data_const_segment_cmd_index orelse unreachable].segment;
         const cmd = try self.copySegmentCommand(allocator, base_cmd);
         try self.load_commands.append(allocator, .{ .segment = cmd });
         self.load_commands_dirty = true;
@@ -124,7 +124,7 @@ pub fn populateMissingMetadata(self: *DebugSymbols, allocator: Allocator) !void 
     if (self.data_segment_cmd_index == null) outer: {
         if (self.base.data_segment_cmd_index == null) break :outer; // __DATA is optional
         self.data_segment_cmd_index = @intCast(u16, self.load_commands.items.len);
-        const base_cmd = self.base.load_commands.items[self.base.data_segment_cmd_index.?].segment;
+        const base_cmd = self.base.load_commands.items[self.base.data_segment_cmd_index orelse unreachable].segment;
         const cmd = try self.copySegmentCommand(allocator, base_cmd);
         try self.load_commands.append(allocator, .{ .segment = cmd });
         self.load_commands_dirty = true;
@@ -132,7 +132,7 @@ pub fn populateMissingMetadata(self: *DebugSymbols, allocator: Allocator) !void 
 
     if (self.linkedit_segment_cmd_index == null) {
         self.linkedit_segment_cmd_index = @intCast(u16, self.load_commands.items.len);
-        const base_cmd = self.base.load_commands.items[self.base.linkedit_segment_cmd_index.?].segment;
+        const base_cmd = self.base.load_commands.items[self.base.linkedit_segment_cmd_index orelse unreachable].segment;
         var cmd = try self.copySegmentCommand(allocator, base_cmd);
         // TODO this needs reworking
         cmd.inner.vmsize = self.base.page_size;
@@ -145,7 +145,7 @@ pub fn populateMissingMetadata(self: *DebugSymbols, allocator: Allocator) !void 
     if (self.dwarf_segment_cmd_index == null) {
         self.dwarf_segment_cmd_index = @intCast(u16, self.load_commands.items.len);
 
-        const linkedit = self.load_commands.items[self.linkedit_segment_cmd_index.?].segment;
+        const linkedit = self.load_commands.items[self.linkedit_segment_cmd_index orelse unreachable].segment;
         const ideal_size: u16 = 200 + 128 + 160 + 250;
         const needed_size = mem.alignForwardGeneric(u64, padToIdeal(ideal_size), self.base.page_size);
         const fileoff = linkedit.inner.fileoff + linkedit.inner.filesize;
@@ -200,7 +200,7 @@ pub fn populateMissingMetadata(self: *DebugSymbols, allocator: Allocator) !void 
 }
 
 fn allocateSection(self: *DebugSymbols, sectname: []const u8, size: u64, alignment: u16) !u16 {
-    const seg = &self.load_commands.items[self.dwarf_segment_cmd_index.?].segment;
+    const seg = &self.load_commands.items[self.dwarf_segment_cmd_index orelse unreachable].segment;
     var sect = macho.section_64{
         .sectname = makeStaticString(sectname),
         .segname = seg.inner.segname,
@@ -241,7 +241,7 @@ fn allocateSection(self: *DebugSymbols, sectname: []const u8, size: u64, alignme
 }
 
 fn detectAllocCollision(self: *DebugSymbols, start: u64, size: u64) ?u64 {
-    const seg = self.load_commands.items[self.dwarf_segment_cmd_index.?].segment;
+    const seg = self.load_commands.items[self.dwarf_segment_cmd_index orelse unreachable].segment;
     const end = start + padToIdeal(size);
     for (seg.sections.items) |section| {
         const increased_size = padToIdeal(section.size);
@@ -254,7 +254,7 @@ fn detectAllocCollision(self: *DebugSymbols, start: u64, size: u64) ?u64 {
 }
 
 pub fn findFreeSpace(self: *DebugSymbols, object_size: u64, min_alignment: u64) u64 {
-    const seg = self.load_commands.items[self.dwarf_segment_cmd_index.?].segment;
+    const seg = self.load_commands.items[self.dwarf_segment_cmd_index orelse unreachable].segment;
     var offset: u64 = seg.inner.fileoff;
     while (self.detectAllocCollision(offset, object_size)) |item_end| {
         offset = mem.alignForwardGeneric(u64, item_end, min_alignment);
@@ -271,15 +271,15 @@ pub fn flushModule(self: *DebugSymbols, allocator: Allocator, options: link.Opti
         const sym = switch (reloc.@"type") {
             .direct_load => self.base.locals.items[reloc.target],
             .got_load => blk: {
-                const got_index = self.base.got_entries_table.get(.{ .local = reloc.target }).?;
+                const got_index = self.base.got_entries_table.get(.{ .local = reloc.target }) orelse unreachable;
                 const got_entry = self.base.got_entries.items[got_index];
                 break :blk self.base.locals.items[got_entry.atom.local_sym_index];
             },
         };
         if (sym.n_value == reloc.prev_vaddr) continue;
 
-        const seg = &self.load_commands.items[self.dwarf_segment_cmd_index.?].segment;
-        const sect = &seg.sections.items[self.debug_info_section_index.?];
+        const seg = &self.load_commands.items[self.dwarf_segment_cmd_index orelse unreachable].segment;
+        const sect = &seg.sections.items[self.debug_info_section_index orelse unreachable];
         const file_offset = sect.offset + reloc.offset;
         log.debug("resolving relocation: {d}@{x} ('{s}') at offset {x}", .{
             reloc.target,
@@ -300,8 +300,8 @@ pub fn flushModule(self: *DebugSymbols, allocator: Allocator, options: link.Opti
     if (self.debug_info_header_dirty) {
         // Currently only one compilation unit is supported, so the address range is simply
         // identical to the main program header virtual address and memory size.
-        const text_segment = self.load_commands.items[self.text_segment_cmd_index.?].segment;
-        const text_section = text_segment.sections.items[self.text_section_index.?];
+        const text_segment = self.load_commands.items[self.text_segment_cmd_index orelse unreachable].segment;
+        const text_section = text_segment.sections.items[self.text_section_index orelse unreachable];
         const low_pc = text_section.addr;
         const high_pc = text_section.addr + text_section.size;
         try self.dwarf.writeDbgInfoHeader(&self.base.base, module, low_pc, high_pc);
@@ -311,8 +311,8 @@ pub fn flushModule(self: *DebugSymbols, allocator: Allocator, options: link.Opti
     if (self.debug_aranges_section_dirty) {
         // Currently only one compilation unit is supported, so the address range is simply
         // identical to the main program header virtual address and memory size.
-        const text_segment = self.load_commands.items[self.text_segment_cmd_index.?].segment;
-        const text_section = text_segment.sections.items[self.text_section_index.?];
+        const text_segment = self.load_commands.items[self.text_segment_cmd_index orelse unreachable].segment;
+        const text_section = text_segment.sections.items[self.text_section_index orelse unreachable];
         try self.dwarf.writeDbgAranges(&self.base.base, text_section.addr, text_section.size);
         self.load_commands_dirty = true;
         self.debug_aranges_section_dirty = false;
@@ -324,8 +324,8 @@ pub fn flushModule(self: *DebugSymbols, allocator: Allocator, options: link.Opti
     }
 
     {
-        const dwarf_segment = &self.load_commands.items[self.dwarf_segment_cmd_index.?].segment;
-        const debug_strtab_sect = &dwarf_segment.sections.items[self.debug_str_section_index.?];
+        const dwarf_segment = &self.load_commands.items[self.dwarf_segment_cmd_index orelse unreachable].segment;
+        const debug_strtab_sect = &dwarf_segment.sections.items[self.debug_str_section_index orelse unreachable];
         if (self.debug_string_table_dirty or self.dwarf.strtab.items.len != debug_strtab_sect.size) {
             const allocated_size = self.allocatedSize(debug_strtab_sect.offset);
             const needed_size = self.dwarf.strtab.items.len;
@@ -421,7 +421,7 @@ fn copySegmentCommand(
         mem.copy(u8, &sect.sectname, &base_sect.sectname);
         mem.copy(u8, &sect.segname, &base_sect.segname);
 
-        if (self.base.text_section_index.? == i) {
+        if (self.base.text_section_index orelse unreachable == i) {
             self.text_section_index = @intCast(u16, i);
         }
 
@@ -432,7 +432,7 @@ fn copySegmentCommand(
 }
 
 fn updateDwarfSegment(self: *DebugSymbols) void {
-    const dwarf_segment = &self.load_commands.items[self.dwarf_segment_cmd_index.?].segment;
+    const dwarf_segment = &self.load_commands.items[self.dwarf_segment_cmd_index orelse unreachable].segment;
 
     var max_offset: u64 = 0;
     for (dwarf_segment.sections.items) |sect| {
@@ -513,7 +513,7 @@ fn writeHeader(self: *DebugSymbols) !void {
 }
 
 pub fn allocatedSize(self: *DebugSymbols, start: u64) u64 {
-    const seg = self.load_commands.items[self.dwarf_segment_cmd_index.?].segment;
+    const seg = self.load_commands.items[self.dwarf_segment_cmd_index orelse unreachable].segment;
     assert(start >= seg.inner.fileoff);
     var min_pos: u64 = std.math.maxInt(u64);
     for (seg.sections.items) |section| {
@@ -535,22 +535,22 @@ fn updateVirtualMemoryMapping(self: *DebugSymbols) !void {
     };
 
     for (indices) |tuple| {
-        const orig_cmd = macho_file.load_commands.items[tuple[0].*.?].segment;
+        const orig_cmd = macho_file.load_commands.items[tuple[0].* orelse unreachable].segment;
         const cmd = try self.copySegmentCommand(allocator, orig_cmd);
-        const comp_cmd = &self.load_commands.items[tuple[1].*.?];
+        const comp_cmd = &self.load_commands.items[tuple[1].* orelse unreachable];
         comp_cmd.deinit(allocator);
-        self.load_commands.items[tuple[1].*.?] = .{ .segment = cmd };
+        self.load_commands.items[tuple[1].* orelse unreachable] = .{ .segment = cmd };
     }
 
     // TODO should we set the linkedit vmsize to that of the binary?
-    const orig_cmd = macho_file.load_commands.items[macho_file.linkedit_segment_cmd_index.?].segment;
+    const orig_cmd = macho_file.load_commands.items[macho_file.linkedit_segment_cmd_index orelse unreachable].segment;
     const orig_vmaddr = orig_cmd.inner.vmaddr;
-    const linkedit_cmd = &self.load_commands.items[self.linkedit_segment_cmd_index.?].segment;
+    const linkedit_cmd = &self.load_commands.items[self.linkedit_segment_cmd_index orelse unreachable].segment;
     linkedit_cmd.inner.vmaddr = orig_vmaddr;
 
     // Update VM address for the DWARF segment and sections including re-running relocations.
     // TODO re-run relocations
-    const dwarf_cmd = &self.load_commands.items[self.dwarf_segment_cmd_index.?].segment;
+    const dwarf_cmd = &self.load_commands.items[self.dwarf_segment_cmd_index orelse unreachable].segment;
     const new_start_aligned = orig_vmaddr + linkedit_cmd.inner.vmsize;
     const old_start_aligned = dwarf_cmd.inner.vmaddr;
     const diff = new_start_aligned - old_start_aligned;
@@ -572,7 +572,7 @@ fn writeLinkeditSegment(self: *DebugSymbols) !void {
     try self.writeSymbolTable();
     try self.writeStringTable();
 
-    const seg = &self.load_commands.items[self.linkedit_segment_cmd_index.?].segment;
+    const seg = &self.load_commands.items[self.linkedit_segment_cmd_index orelse unreachable].segment;
     const aligned_size = mem.alignForwardGeneric(u64, seg.inner.filesize, self.base.page_size);
     seg.inner.filesize = aligned_size;
     seg.inner.vmsize = aligned_size;
@@ -582,8 +582,8 @@ fn writeSymbolTable(self: *DebugSymbols) !void {
     const tracy = trace(@src());
     defer tracy.end();
 
-    const seg = &self.load_commands.items[self.linkedit_segment_cmd_index.?].segment;
-    const symtab = &self.load_commands.items[self.symtab_cmd_index.?].symtab;
+    const seg = &self.load_commands.items[self.linkedit_segment_cmd_index orelse unreachable].segment;
+    const symtab = &self.load_commands.items[self.symtab_cmd_index orelse unreachable].symtab;
     symtab.symoff = @intCast(u32, seg.inner.fileoff);
 
     var locals = std.ArrayList(macho.nlist_64).init(self.base.base.allocator);
@@ -608,7 +608,7 @@ fn writeSymbolTable(self: *DebugSymbols) !void {
     if (needed_size > seg.inner.filesize) {
         const aligned_size = mem.alignForwardGeneric(u64, needed_size, self.base.page_size);
         const diff = @intCast(u32, aligned_size - seg.inner.filesize);
-        const dwarf_seg = &self.load_commands.items[self.dwarf_segment_cmd_index.?].segment;
+        const dwarf_seg = &self.load_commands.items[self.dwarf_segment_cmd_index orelse unreachable].segment;
         seg.inner.filesize = aligned_size;
 
         try MachO.copyRangeAllOverlappingAlloc(
@@ -650,8 +650,8 @@ fn writeStringTable(self: *DebugSymbols) !void {
     const tracy = trace(@src());
     defer tracy.end();
 
-    const seg = &self.load_commands.items[self.linkedit_segment_cmd_index.?].segment;
-    const symtab = &self.load_commands.items[self.symtab_cmd_index.?].symtab;
+    const seg = &self.load_commands.items[self.linkedit_segment_cmd_index orelse unreachable].segment;
+    const symtab = &self.load_commands.items[self.symtab_cmd_index orelse unreachable].symtab;
     const symtab_size = @intCast(u32, symtab.nsyms * @sizeOf(macho.nlist_64));
     symtab.stroff = symtab.symoff + symtab_size;
 
@@ -661,7 +661,7 @@ fn writeStringTable(self: *DebugSymbols) !void {
     if (symtab_size + needed_size > seg.inner.filesize) {
         const aligned_size = mem.alignForwardGeneric(u64, symtab_size + needed_size, self.base.page_size);
         const diff = @intCast(u32, aligned_size - seg.inner.filesize);
-        const dwarf_seg = &self.load_commands.items[self.dwarf_segment_cmd_index.?].segment;
+        const dwarf_seg = &self.load_commands.items[self.dwarf_segment_cmd_index orelse unreachable].segment;
         seg.inner.filesize = aligned_size;
 
         try MachO.copyRangeAllOverlappingAlloc(

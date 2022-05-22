@@ -190,7 +190,7 @@ pub fn Channel(comptime T: type) type {
                         while (self.buffer_len != 0) {
                             if (get_count == 0) break :one_dispatch;
 
-                            const get_node = &self.getters.get().?.data;
+                            const get_node = &self.getters.get() orelse unreachable.data;
                             switch (get_node.data) {
                                 GetNode.Data.Normal => |info| {
                                     info.ptr.* = self.buffer_nodes[(self.buffer_index -% self.buffer_len) % self.buffer_nodes.len];
@@ -208,8 +208,8 @@ pub fn Channel(comptime T: type) type {
 
                         // direct transfer self.putters to self.getters
                         while (get_count != 0 and put_count != 0) {
-                            const get_node = &self.getters.get().?.data;
-                            const put_node = &self.putters.get().?.data;
+                            const get_node = &self.getters.get() orelse unreachable.data;
+                            const put_node = &self.putters.get() orelse unreachable.data;
 
                             switch (get_node.data) {
                                 GetNode.Data.Normal => |info| {
@@ -229,7 +229,7 @@ pub fn Channel(comptime T: type) type {
 
                         // transfer self.putters to self.buffer
                         while (self.buffer_len != self.buffer_nodes.len and put_count != 0) {
-                            const put_node = &self.putters.get().?.data;
+                            const put_node = &self.putters.get() orelse unreachable.data;
 
                             self.buffer_nodes[self.buffer_index % self.buffer_nodes.len] = put_node.data;
                             global_event_loop.onNextTick(put_node.tick_node);
@@ -322,7 +322,7 @@ fn testChannelGetter(channel: *Channel(i32)) callconv(.Async) void {
 
     var last_put = async testPut(channel, 4444);
     const value4 = channel.getOrNull();
-    try testing.expect(value4.? == 4444);
+    try testing.expect(value4 orelse unreachable == 4444);
     await last_put;
 }
 fn testChannelPutter(channel: *Channel(i32)) callconv(.Async) void {

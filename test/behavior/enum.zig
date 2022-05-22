@@ -1050,7 +1050,7 @@ test "enum literal casting to optional" {
     var bar: ?Bar = undefined;
     bar = .B;
 
-    try expect(bar.? == Bar.B);
+    try expect(bar orelse unreachable == Bar.B);
 }
 
 const A = enum(u3) { One, Two, Three, Four, One2, Two2, Three2, Four2 };

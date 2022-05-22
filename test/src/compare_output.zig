@@ -103,7 +103,7 @@ pub const CompareOutputContext = struct {
                 }
 
                 const exe = b.addExecutable("test", null);
-                exe.addAssemblyFileSource(write_src.getFileSource(case.sources.items[0].filename).?);
+                exe.addAssemblyFileSource(write_src.getFileSource(case.sources.items[0].filename) orelse unreachable);
 
                 const run = exe.run();
                 run.addArgs(case.cli_args);
@@ -124,7 +124,7 @@ pub const CompareOutputContext = struct {
                     }
 
                     const basename = case.sources.items[0].filename;
-                    const exe = b.addExecutableSource("test", write_src.getFileSource(basename).?);
+                    const exe = b.addExecutableSource("test", write_src.getFileSource(basename) orelse unreachable);
                     exe.setBuildMode(mode);
                     if (case.link_libc) {
                         exe.linkSystemLibrary("c");
@@ -145,7 +145,7 @@ pub const CompareOutputContext = struct {
                 }
 
                 const basename = case.sources.items[0].filename;
-                const exe = b.addExecutableSource("test", write_src.getFileSource(basename).?);
+                const exe = b.addExecutableSource("test", write_src.getFileSource(basename) orelse unreachable);
                 if (case.link_libc) {
                     exe.linkSystemLibrary("c");
                 }

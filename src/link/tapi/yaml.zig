@@ -175,8 +175,8 @@ pub const Value = union(ValueType) {
 
             if (list.values.items.len > 0) {
                 const hint = if (list.values.items[0].cast(Node.Value)) |value| hint: {
-                    const start = tree.tokens[value.start.?];
-                    const end = tree.tokens[value.end.?];
+                    const start = tree.tokens[value.start orelse unreachable];
+                    const end = tree.tokens[value.end orelse unreachable];
                     const raw = tree.source[start.start..end.end];
                     _ = std.fmt.parseInt(i64, raw, 10) catch {
                         _ = std.fmt.parseFloat(f64, raw) catch {
@@ -195,8 +195,8 @@ pub const Value = union(ValueType) {
 
             return Value{ .list = out_list.toOwnedSlice() };
         } else if (node.cast(Node.Value)) |value| {
-            const start = tree.tokens[value.start.?];
-            const end = tree.tokens[value.end.?];
+            const start = tree.tokens[value.start orelse unreachable];
+            const end = tree.tokens[value.end orelse unreachable];
             const raw = tree.source[start.start..end.end];
 
             if (type_hint) |hint| {
@@ -508,7 +508,7 @@ test "simple map untyped" {
 
     const map = yaml.docs.items[0].map;
     try testing.expect(map.contains("a"));
-    try testing.expectEqual(map.get("a").?.int, 0);
+    try testing.expectEqual(map.get("a") orelse unreachable.int, 0);
 }
 
 test "simple map typed" {
@@ -611,11 +611,11 @@ test "multidoc typed as a slice of structs with optionals" {
     try testing.expectEqual(result[0].a, 0);
     try testing.expect(result[0].b == null);
     try testing.expect(result[0].c != null);
-    try testing.expectEqual(result[0].c.?, 1.0);
+    try testing.expectEqual(result[0].c orelse unreachable, 1.0);
 
     try testing.expectEqual(result[1].a, 1);
     try testing.expect(result[1].b != null);
-    try testing.expect(mem.eql(u8, result[1].b.?, "different field"));
+    try testing.expect(mem.eql(u8, result[1].b orelse unreachable, "different field"));
     try testing.expect(result[1].c == null);
 }
 

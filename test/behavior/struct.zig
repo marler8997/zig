@@ -1181,8 +1181,8 @@ test "anon init through error unions and optionals" {
         }
 
         fn doTheTest() !void {
-            var a = try (try foo()).?;
-            var b = try bar().?;
+            var a = try (try foo()) orelse unreachable;
+            var b = try bar() orelse unreachable;
             try expect(a.a + b[1] == 3);
         }
     };
@@ -1204,7 +1204,7 @@ test "anon init through optional" {
         fn doTheTest() !void {
             var s: ?@This() = null;
             s = .{ .a = 1 };
-            try expect(s.?.a == 1);
+            try expect(s orelse unreachable.a == 1);
         }
     };
 
@@ -1251,8 +1251,8 @@ test "typed init through error unions and optionals" {
         }
 
         fn doTheTest() !void {
-            var a = try (try foo()).?;
-            var b = try bar().?;
+            var a = try (try foo()) orelse unreachable;
+            var b = try bar() orelse unreachable;
             try expect(a.a + b[1] == 3);
         }
     };

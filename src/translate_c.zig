@@ -55,7 +55,7 @@ const Scope = struct {
         fn getBlockScope(self: *Condition, c: *Context) !*Block {
             if (self.block) |*b| return b;
             self.block = try Block.init(c, &self.base, true);
-            return &self.block.?;
+            return &self.block orelse unreachable;
         }
 
         fn deinit(self: *Condition) void {
@@ -112,10 +112,10 @@ const Scope = struct {
         }
 
         fn complete(self: *Block, c: *Context) !Node {
-            if (self.base.parent.?.id == .do_loop) {
+            if (self.base.parent orelse unreachable.id == .do_loop) {
                 // We reserve 1 extra statement if the parent is a do_loop. This is in case of
                 // do while, we want to put `if (cond) break;` at the end.
-                const alloc_len = self.statements.items.len + @boolToInt(self.base.parent.?.id == .do_loop);
+                const alloc_len = self.statements.items.len + @boolToInt(self.base.parent orelse unreachable.id == .do_loop);
                 var stmts = try c.arena.alloc(Node, alloc_len);
                 stmts.len = self.statements.items.len;
                 mem.copy(Node, stmts, self.statements.items);
@@ -149,7 +149,7 @@ const Scope = struct {
                 if (mem.eql(u8, p.name, name))
                     return p.alias;
             }
-            return scope.base.parent.?.getAlias(name);
+            return scope.base.parent orelse unreachable.getAlias(name);
         }
 
         fn localContains(scope: *Block, name: []const u8) bool {
@@ -163,14 +163,14 @@ const Scope = struct {
         fn contains(scope: *Block, name: []const u8) bool {
             if (scope.localContains(name))
                 return true;
-            return scope.base.parent.?.contains(name);
+            return scope.base.parent orelse unreachable.contains(name);
         }
 
         fn discardVariable(scope: *Block, c: *Context, name: []const u8) Error!void {
             const name_node = try Tag.identifier.create(c.arena, name);
             const discard = try Tag.discard.create(c.arena, .{ .should_skip = false, .value = name_node });
             try scope.statements.append(discard);
-            try scope.variable_discards.putNoClobber(name, discard.castTag(.discard).?);
+            try scope.variable_discards.putNoClobber(name, discard.castTag(.discard) orelse unreachable);
         }
     };
 
@@ -219,7 +219,7 @@ const Scope = struct {
                 .root => unreachable,
                 .block => return @fieldParentPtr(Block, "base", scope),
                 .condition => return @fieldParentPtr(Condition, "base", scope).getBlockScope(c),
-                else => scope = scope.parent.?,
+                else => scope = scope.parent orelse unreachable,
             }
         }
     }
@@ -233,9 +233,9 @@ const Scope = struct {
                 .block => {
                     const block = @fieldParentPtr(Block, "base", scope);
                     if (block.return_type) |qt| return qt;
-                    scope = scope.parent.?;
+                    scope = scope.parent orelse unreachable;
                 },
-                else => scope = scope.parent.?,
+                else => scope = scope.parent orelse unreachable,
             }
         }
     }
@@ -244,7 +244,7 @@ const Scope = struct {
         return switch (scope.id) {
             .root => return name,
             .block => @fieldParentPtr(Block, "base", scope).getAlias(name),
-            .loop, .do_loop, .condition => scope.parent.?.getAlias(name),
+            .loop, .do_loop, .condition => scope.parent orelse unreachable.getAlias(name),
         };
     }
 
@@ -252,7 +252,7 @@ const Scope = struct {
         return switch (scope.id) {
             .root => @fieldParentPtr(Root, "base", scope).contains(name),
             .block => @fieldParentPtr(Block, "base", scope).contains(name),
-            .loop, .do_loop, .condition => scope.parent.?.contains(name),
+            .loop, .do_loop, .condition => scope.parent orelse unreachable.contains(name),
         };
     }
 
@@ -262,7 +262,7 @@ const Scope = struct {
             switch (scope.id) {
                 .root => unreachable,
                 .loop, .do_loop => return scope,
-                else => scope = scope.parent.?,
+                else => scope = scope.parent orelse unreachable,
             }
         }
     }
@@ -280,7 +280,7 @@ const Scope = struct {
                     const block = @fieldParentPtr(Block, "base", scope);
                     return block.statements.append(node);
                 },
-                else => scope = scope.parent.?,
+                else => scope = scope.parent orelse unreachable,
             }
         }
     }
@@ -299,7 +299,7 @@ const Scope = struct {
                 },
                 else => {},
             }
-            scope = scope.parent.?;
+            scope = scope.parent orelse unreachable;
         }
     }
 };
@@ -822,10 +822,10 @@ fn visitVarDecl(c: *Context, var_decl: *const clang.VarDecl, mangled_name: ?[]co
                 },
                 error.OutOfMemory => |e| return e,
             };
-            if (!qualTypeIsBoolean(qual_type) and isBoolRes(init_node.?)) {
-                init_node = try Tag.bool_to_int.create(c.arena, init_node.?);
-            } else if (init_node.?.tag() == .string_literal and qualTypeIsCharStar(qual_type)) {
-                init_node = try stringLiteralToCharStar(c, init_node.?);
+            if (!qualTypeIsBoolean(qual_type) and isBoolRes(init_node orelse unreachable)) {
+                init_node = try Tag.bool_to_int.create(c.arena, init_node orelse unreachable);
+            } else if (init_node orelse unreachable.tag() == .string_literal and qualTypeIsCharStar(qual_type)) {
+                init_node = try stringLiteralToCharStar(c, init_node orelse unreachable);
             }
         } else {
             init_node = Tag.undefined_literal.init();
@@ -1330,7 +1330,7 @@ fn transStmt(
         .UnaryOperatorClass => return transUnaryOperator(c, scope, @ptrCast(*const clang.UnaryOperator, stmt), result_used),
         .CompoundAssignOperatorClass => return transCompoundAssignOperator(c, scope, @ptrCast(*const clang.CompoundAssignOperator, stmt), result_used),
         .OpaqueValueExprClass => {
-            const source_expr = @ptrCast(*const clang.OpaqueValueExpr, stmt).getSourceExpr().?;
+            const source_expr = @ptrCast(*const clang.OpaqueValueExpr, stmt).getSourceExpr() orelse unreachable;
             const expr = try transExpr(c, scope, source_expr, .used);
             return maybeSuppressResult(c, scope, result_used, expr);
         },
@@ -1421,7 +1421,7 @@ fn transConvertVectorExpr(
     const init_list = try c.arena.alloc(Node, num_elements);
     for (init_list) |*init, init_index| {
         const tmp_decl = block_scope.statements.items[init_index];
-        const name = tmp_decl.castTag(.var_simple).?.data.name;
+        const name = tmp_decl.castTag(.var_simple) orelse unreachable.data.name;
         init.* = try Tag.identifier.create(c.arena, name);
     }
 
@@ -1751,7 +1751,7 @@ fn transBinaryOperator(
         const lhs_expr = stmt.getLHS();
         const lhs_qt = getExprQualType(c, lhs_expr);
         const lhs_qt_translated = try transQualType(c, scope, lhs_qt, lhs_expr.getBeginLoc());
-        const elem_type = lhs_qt_translated.castTag(.c_pointer).?.data.elem_type;
+        const elem_type = lhs_qt_translated.castTag(.c_pointer) orelse unreachable.data.elem_type;
         const sizeof = try Tag.sizeof.create(c.arena, elem_type);
 
         const bitcast = try Tag.bit_cast.create(c.arena, .{ .lhs = ptrdiff_type, .rhs = infixOpNode });
@@ -1801,7 +1801,7 @@ fn transCStyleCastExprClass(
     const loc = stmt.getBeginLoc();
 
     const cast_node = if (cast_expr.getCastKind() == .ToUnion) blk: {
-        const field_decl = cast_expr.getTargetFieldForToUnionCast(dst_type, src_type).?; // C syntax error if target field is null
+        const field_decl = cast_expr.getTargetFieldForToUnionCast(dst_type, src_type) orelse unreachable; // C syntax error if target field is null
         const field_name = try c.str(@ptrCast(*const clang.NamedDecl, field_decl).getName_bytes_begin());
 
         const union_ty = try transQualType(c, scope, dst_type, loc);
@@ -2296,7 +2296,7 @@ fn transStringLiteral(
 }
 
 fn getArrayPayload(array_type: Node) ast.Payload.Array.ArrayTypeInfo {
-    return (array_type.castTag(.array_type) orelse array_type.castTag(.null_sentinel_array_type).?).data;
+    return (array_type.castTag(.array_type) orelse array_type.castTag(.null_sentinel_array_type) orelse unreachable).data;
 }
 
 /// Translate a string literal that is initializing an array. In general narrow string
@@ -2342,7 +2342,7 @@ fn transStringLiteralInitializer(
         }
     } else null;
 
-    if (num_inits == array_size) return init_node.?; // init_node is only null if num_inits == 0; but if num_inits == array_size == 0 we've already returned
+    if (num_inits == array_size) return init_node orelse unreachable; // init_node is only null if num_inits == 0; but if num_inits == array_size == 0 we've already returned
     assert(array_size > str_length); // If array_size <= str_length, `num_inits == array_size` and we've already returned.
 
     const filler_node = try Tag.array_filler.create(c.arena, .{
@@ -2584,7 +2584,7 @@ fn transInitListExprRecord(
         //     .field_name = expr
         var raw_name = try c.str(@ptrCast(*const clang.NamedDecl, field_decl).getName_bytes_begin());
         if (field_decl.isAnonymousStructOrUnion()) {
-            const name = c.decl_table.get(@ptrToInt(field_decl.getCanonicalDecl())).?;
+            const name = c.decl_table.get(@ptrToInt(field_decl.getCanonicalDecl())) orelse unreachable;
             raw_name = try c.arena.dupe(u8, name);
         }
 
@@ -2704,7 +2704,7 @@ fn transInitListExprVector(
     const init_list = try c.arena.alloc(Node, init_count);
     for (init_list) |*init, init_index| {
         const tmp_decl = block_scope.statements.items[init_index];
-        const name = tmp_decl.castTag(.var_simple).?.data.name;
+        const name = tmp_decl.castTag(.var_simple) orelse unreachable.data.name;
         init.* = try Tag.identifier.create(c.arena, name);
     }
 
@@ -2960,7 +2960,7 @@ fn transDoWhileLoop(
         // zig:   if (!cond) break;
         // zig: }
         const node = try transStmt(c, &loop_scope, stmt.getBody(), .unused);
-        const block = node.castTag(.block).?;
+        const block = node.castTag(.block) orelse unreachable;
         block.data.stmts.len += 1; // This is safe since we reserve one extra space in Scope.Block.complete.
         block.data.stmts[block.data.stmts.len - 1] = if_not_break;
         break :blk node;
@@ -2996,9 +2996,9 @@ fn transForLoop(
 
     if (stmt.getInit()) |init| {
         block_scope = try Scope.Block.init(c, scope, false);
-        loop_scope.parent = &block_scope.?.base;
-        const init_node = try transStmt(c, &block_scope.?.base, init, .unused);
-        if (init_node.tag() != .declaration) try block_scope.?.statements.append(init_node);
+        loop_scope.parent = &block_scope orelse unreachable.base;
+        const init_node = try transStmt(c, &block_scope orelse unreachable.base, init, .unused);
+        if (init_node.tag() != .declaration) try block_scope orelse unreachable.statements.append(init_node);
     }
     var cond_scope = Scope.Condition{
         .base = .{
@@ -3349,7 +3349,7 @@ fn transMemberExpr(c: *Context, scope: *Scope, stmt: *const clang.MemberExpr, re
         if (decl_kind == .Field) {
             const field_decl = @ptrCast(*const clang.FieldDecl, member_decl);
             if (field_decl.isAnonymousStructOrUnion()) {
-                const name = c.decl_table.get(@ptrToInt(field_decl.getCanonicalDecl())).?;
+                const name = c.decl_table.get(@ptrToInt(field_decl.getCanonicalDecl())) orelse unreachable;
                 break :blk try c.arena.dupe(u8, name);
             }
         }
@@ -3483,7 +3483,7 @@ fn transArrayAccess(c: *Context, scope: *Scope, stmt: *const clang.ArraySubscrip
 }
 
 /// Check if an expression is ultimately a reference to a function declaration
-/// (which means it should not be unwrapped with `.?` in translated code)
+/// (which means it should not be unwrapped with ` orelse unreachable` in translated code)
 fn cIsFunctionDeclRef(expr: *const clang.Expr) bool {
     switch (expr.getStmtClass()) {
         .ParenExprClass => {
@@ -4595,7 +4595,7 @@ fn transCreateNodeMacroFn(c: *Context, name: []const u8, ref: Node, proto_alias:
     }
 
     const init = if (ref.castTag(.var_decl)) |v|
-        v.data.init.?
+        v.data.init orelse unreachable
     else if (ref.castTag(.var_simple) orelse ref.castTag(.pub_var_simple)) |v|
         v.data.init
     else
@@ -4604,7 +4604,7 @@ fn transCreateNodeMacroFn(c: *Context, name: []const u8, ref: Node, proto_alias:
     const unwrap_expr = try Tag.unwrap.create(c.arena, init);
     const args = try c.arena.alloc(Node, fn_params.items.len);
     for (fn_params.items) |param, i| {
-        args[i] = try Tag.identifier.create(c.arena, param.name.?);
+        args[i] = try Tag.identifier.create(c.arena, param.name orelse unreachable);
     }
     const call_expr = try Tag.call.create(c.arena, .{
         .lhs = unwrap_expr,
@@ -4739,7 +4739,7 @@ fn transType(c: *Context, scope: *Scope, ty: *const clang.Type, source_loc: clan
                 if (builtin_typedef_map.get(decl_name)) |builtin| return Tag.type.create(c.arena, builtin);
             }
             try transTypeDef(c, trans_scope, typedef_decl);
-            const name = c.decl_table.get(@ptrToInt(typedef_decl.getCanonicalDecl())).?;
+            const name = c.decl_table.get(@ptrToInt(typedef_decl.getCanonicalDecl())) orelse unreachable;
             return Tag.identifier.create(c.arena, name);
         },
         .Record => {
@@ -4752,7 +4752,7 @@ fn transType(c: *Context, scope: *Scope, ty: *const clang.Type, source_loc: clan
                 if (c.global_names.get(decl_name)) |_| trans_scope = &c.global_scope.base;
             }
             try transRecordDecl(c, trans_scope, record_decl);
-            const name = c.decl_table.get(@ptrToInt(record_decl.getCanonicalDecl())).?;
+            const name = c.decl_table.get(@ptrToInt(record_decl.getCanonicalDecl())) orelse unreachable;
             return Tag.identifier.create(c.arena, name);
         },
         .Enum => {
@@ -4765,7 +4765,7 @@ fn transType(c: *Context, scope: *Scope, ty: *const clang.Type, source_loc: clan
                 if (c.global_names.get(decl_name)) |_| trans_scope = &c.global_scope.base;
             }
             try transEnumDecl(c, trans_scope, enum_decl);
-            const name = c.decl_table.get(@ptrToInt(enum_decl.getCanonicalDecl())).?;
+            const name = c.decl_table.get(@ptrToInt(enum_decl.getCanonicalDecl())) orelse unreachable;
             return Tag.identifier.create(c.arena, name);
         },
         .Elaborated => {
@@ -4955,13 +4955,13 @@ fn finishTransFnProto(
 
     // TODO check for align attribute
 
-    const param_count: usize = if (fn_proto_ty != null) fn_proto_ty.?.getNumParams() else 0;
+    const param_count: usize = if (fn_proto_ty != null) fn_proto_ty orelse unreachable.getNumParams() else 0;
     var fn_params = try std.ArrayList(ast.Payload.Param).initCapacity(c.gpa, param_count);
     defer fn_params.deinit();
 
     var i: usize = 0;
     while (i < param_count) : (i += 1) {
-        const param_qt = fn_proto_ty.?.getParamType(@intCast(c_uint, i));
+        const param_qt = fn_proto_ty orelse unreachable.getParamType(@intCast(c_uint, i));
         const is_noalias = param_qt.isRestrictQualified();
 
         const param_name: ?[]const u8 =
@@ -5201,7 +5201,7 @@ const PatternList = struct {
                         if (pattern_arg_index == null and macro_arg_index == null) {
                             if (!mem.eql(u8, pattern_bytes, macro_bytes)) return false;
                         } else if (pattern_arg_index != null and macro_arg_index != null) {
-                            if (pattern_arg_index.? != macro_arg_index.?) return false;
+                            if (pattern_arg_index orelse unreachable != macro_arg_index orelse unreachable) return false;
                         } else {
                             return false;
                         }
@@ -5266,7 +5266,7 @@ test "Macro matching" {
             const macro_slicer = MacroSlicer{ .source = source, .tokens = tok_list.items };
             const matched = try pattern_list.match(allocator, macro_slicer);
             if (expected_match) |expected| {
-                try testing.expectEqualStrings(expected, matched.?.impl);
+                try testing.expectEqualStrings(expected, matched orelse unreachable.impl);
                 try testing.expect(@hasDecl(MacroFunctions, expected));
             } else {
                 try testing.expectEqual(@as(@TypeOf(matched), null), matched);
@@ -5322,7 +5322,7 @@ const MacroCtx = struct {
     }
 
     fn skip(self: *MacroCtx, c: *Context, expected_id: std.meta.Tag(CToken.Id)) ParseError!void {
-        const next_id = self.next().?;
+        const next_id = self.next() orelse unreachable;
         if (next_id != expected_id) {
             try self.fail(
                 c,
@@ -5356,7 +5356,7 @@ const MacroCtx = struct {
                 .Identifier => {
                     const identifier = slicer.slice(token);
                     const is_param = for (params) |param| {
-                        if (param.name != null and mem.eql(u8, identifier, param.name.?)) break true;
+                        if (param.name != null and mem.eql(u8, identifier, param.name orelse unreachable)) break true;
                     } else false;
                     if (!scope.contains(identifier) and !isBuiltinDefined(identifier) and !is_param) return identifier;
                 },
@@ -5424,7 +5424,7 @@ fn transPreprocessorEntities(c: *Context, unit: *clang.ASTUnit) Error!void {
                 assert(mem.eql(u8, macro_ctx.slice(), name));
 
                 var macro_fn = false;
-                switch (macro_ctx.peek().?) {
+                switch (macro_ctx.peek() orelse unreachable) {
                     .Identifier => {
                         // if it equals itself, ignore. for example, from stdio.h:
                         // #define stdin stdin
@@ -5468,7 +5468,7 @@ fn transMacroDefine(c: *Context, m: *MacroCtx) ParseError!void {
         return m.fail(c, "unable to translate macro: undefined identifier `{s}`", .{ident});
 
     const init_node = try parseCExpr(c, m, scope);
-    const last = m.next().?;
+    const last = m.next() orelse unreachable;
     if (last != .Eof and last != .Nl)
         return m.fail(c, "unable to translate C expr: unexpected token '{s}'", .{last.symbol()});
 
@@ -5497,7 +5497,7 @@ fn transMacroFnDefine(c: *Context, m: *MacroCtx) ParseError!void {
     defer fn_params.deinit();
 
     while (true) {
-        if (m.peek().? != .Identifier) break;
+        if (m.peek() orelse unreachable != .Identifier) break;
         _ = m.next();
 
         const mangled_name = try block_scope.makeMangledName(c, m.slice());
@@ -5507,7 +5507,7 @@ fn transMacroFnDefine(c: *Context, m: *MacroCtx) ParseError!void {
             .type = Tag.@"anytype".init(),
         });
         try block_scope.discardVariable(c, mangled_name);
-        if (m.peek().? != .Comma) break;
+        if (m.peek() orelse unreachable != .Comma) break;
         _ = m.next();
     }
 
@@ -5517,14 +5517,14 @@ fn transMacroFnDefine(c: *Context, m: *MacroCtx) ParseError!void {
         return m.fail(c, "unable to translate macro: undefined identifier `{s}`", .{ident});
 
     const expr = try parseCExpr(c, m, scope);
-    const last = m.next().?;
+    const last = m.next() orelse unreachable;
     if (last != .Eof and last != .Nl)
         return m.fail(c, "unable to translate C expr: unexpected token '{s}'", .{last.symbol()});
 
     const typeof_arg = if (expr.castTag(.block)) |some| blk: {
         const stmts = some.data.stmts;
         const blk_last = stmts[stmts.len - 1];
-        const br = blk_last.castTag(.break_val).?;
+        const br = blk_last.castTag(.break_val) orelse unreachable;
         break :blk br.data.val;
     } else expr;
 
@@ -5552,7 +5552,7 @@ const ParseError = Error || error{ParseError};
 fn parseCExpr(c: *Context, m: *MacroCtx, scope: *Scope) ParseError!Node {
     // TODO parseCAssignExpr here
     const node = try parseCCondExpr(c, m, scope);
-    if (m.next().? != .Comma) {
+    if (m.next() orelse unreachable != .Comma) {
         m.i -= 1;
         return node;
     }
@@ -5566,7 +5566,7 @@ fn parseCExpr(c: *Context, m: *MacroCtx, scope: *Scope) ParseError!Node {
         try block_scope.statements.append(ignore);
 
         last = try parseCCondExpr(c, m, &block_scope.base);
-        if (m.next().? != .Comma) {
+        if (m.next() orelse unreachable != .Comma) {
             m.i -= 1;
             break;
         }
@@ -5858,7 +5858,7 @@ fn zigifyEscapeSequences(ctx: *Context, m: *MacroCtx) ![]const u8 {
 }
 
 fn parseCPrimaryExprInner(c: *Context, m: *MacroCtx, scope: *Scope) ParseError!Node {
-    const tok = m.next().?;
+    const tok = m.next() orelse unreachable;
     const slice = m.slice();
     switch (tok) {
         .CharLiteral => {
@@ -5879,7 +5879,7 @@ fn parseCPrimaryExprInner(c: *Context, m: *MacroCtx, scope: *Scope) ParseError!N
             const mangled_name = scope.getAlias(slice);
             if (builtin_typedef_map.get(mangled_name)) |ty| return Tag.type.create(c.arena, ty);
             const identifier = try Tag.identifier.create(c.arena, mangled_name);
-            scope.skipVariableDiscard(identifier.castTag(.identifier).?.data);
+            scope.skipVariableDiscard(identifier.castTag(.identifier) orelse unreachable.data);
             return identifier;
         },
         .LParen => {
@@ -5907,7 +5907,7 @@ fn parseCPrimaryExpr(c: *Context, m: *MacroCtx, scope: *Scope) ParseError!Node {
     // This should do approximately the same by concatting any strings and identifiers
     // after a primary expression.
     while (true) {
-        switch (m.peek().?) {
+        switch (m.peek() orelse unreachable) {
             .StringLiteral, .Identifier => {},
             else => break,
         }
@@ -5934,7 +5934,7 @@ fn macroIntToBool(c: *Context, node: Node) !Node {
 
 fn parseCCondExpr(c: *Context, m: *MacroCtx, scope: *Scope) ParseError!Node {
     const node = try parseCOrExpr(c, m, scope);
-    if (m.peek().? != .QuestionMark) {
+    if (m.peek() orelse unreachable != .QuestionMark) {
         return node;
     }
     _ = m.next();
@@ -5947,7 +5947,7 @@ fn parseCCondExpr(c: *Context, m: *MacroCtx, scope: *Scope) ParseError!Node {
 
 fn parseCOrExpr(c: *Context, m: *MacroCtx, scope: *Scope) ParseError!Node {
     var node = try parseCAndExpr(c, m, scope);
-    while (m.next().? == .PipePipe) {
+    while (m.next() orelse unreachable == .PipePipe) {
         const lhs = try macroIntToBool(c, node);
         const rhs = try macroIntToBool(c, try parseCAndExpr(c, m, scope));
         node = try Tag.@"or".create(c.arena, .{ .lhs = lhs, .rhs = rhs });
@@ -5958,7 +5958,7 @@ fn parseCOrExpr(c: *Context, m: *MacroCtx, scope: *Scope) ParseError!Node {
 
 fn parseCAndExpr(c: *Context, m: *MacroCtx, scope: *Scope) ParseError!Node {
     var node = try parseCBitOrExpr(c, m, scope);
-    while (m.next().? == .AmpersandAmpersand) {
+    while (m.next() orelse unreachable == .AmpersandAmpersand) {
         const lhs = try macroIntToBool(c, node);
         const rhs = try macroIntToBool(c, try parseCBitOrExpr(c, m, scope));
         node = try Tag.@"and".create(c.arena, .{ .lhs = lhs, .rhs = rhs });
@@ -5969,7 +5969,7 @@ fn parseCAndExpr(c: *Context, m: *MacroCtx, scope: *Scope) ParseError!Node {
 
 fn parseCBitOrExpr(c: *Context, m: *MacroCtx, scope: *Scope) ParseError!Node {
     var node = try parseCBitXorExpr(c, m, scope);
-    while (m.next().? == .Pipe) {
+    while (m.next() orelse unreachable == .Pipe) {
         const lhs = try macroBoolToInt(c, node);
         const rhs = try macroBoolToInt(c, try parseCBitXorExpr(c, m, scope));
         node = try Tag.bit_or.create(c.arena, .{ .lhs = lhs, .rhs = rhs });
@@ -5980,7 +5980,7 @@ fn parseCBitOrExpr(c: *Context, m: *MacroCtx, scope: *Scope) ParseError!Node {
 
 fn parseCBitXorExpr(c: *Context, m: *MacroCtx, scope: *Scope) ParseError!Node {
     var node = try parseCBitAndExpr(c, m, scope);
-    while (m.next().? == .Caret) {
+    while (m.next() orelse unreachable == .Caret) {
         const lhs = try macroBoolToInt(c, node);
         const rhs = try macroBoolToInt(c, try parseCBitAndExpr(c, m, scope));
         node = try Tag.bit_xor.create(c.arena, .{ .lhs = lhs, .rhs = rhs });
@@ -5991,7 +5991,7 @@ fn parseCBitXorExpr(c: *Context, m: *MacroCtx, scope: *Scope) ParseError!Node {
 
 fn parseCBitAndExpr(c: *Context, m: *MacroCtx, scope: *Scope) ParseError!Node {
     var node = try parseCEqExpr(c, m, scope);
-    while (m.next().? == .Ampersand) {
+    while (m.next() orelse unreachable == .Ampersand) {
         const lhs = try macroBoolToInt(c, node);
         const rhs = try macroBoolToInt(c, try parseCEqExpr(c, m, scope));
         node = try Tag.bit_and.create(c.arena, .{ .lhs = lhs, .rhs = rhs });
@@ -6003,7 +6003,7 @@ fn parseCBitAndExpr(c: *Context, m: *MacroCtx, scope: *Scope) ParseError!Node {
 fn parseCEqExpr(c: *Context, m: *MacroCtx, scope: *Scope) ParseError!Node {
     var node = try parseCRelExpr(c, m, scope);
     while (true) {
-        switch (m.peek().?) {
+        switch (m.peek() orelse unreachable) {
             .BangEqual => {
                 _ = m.next();
                 const lhs = try macroBoolToInt(c, node);
@@ -6024,7 +6024,7 @@ fn parseCEqExpr(c: *Context, m: *MacroCtx, scope: *Scope) ParseError!Node {
 fn parseCRelExpr(c: *Context, m: *MacroCtx, scope: *Scope) ParseError!Node {
     var node = try parseCShiftExpr(c, m, scope);
     while (true) {
-        switch (m.peek().?) {
+        switch (m.peek() orelse unreachable) {
             .AngleBracketRight => {
                 _ = m.next();
                 const lhs = try macroBoolToInt(c, node);
@@ -6057,7 +6057,7 @@ fn parseCRelExpr(c: *Context, m: *MacroCtx, scope: *Scope) ParseError!Node {
 fn parseCShiftExpr(c: *Context, m: *MacroCtx, scope: *Scope) ParseError!Node {
     var node = try parseCAddSubExpr(c, m, scope);
     while (true) {
-        switch (m.peek().?) {
+        switch (m.peek() orelse unreachable) {
             .AngleBracketAngleBracketLeft => {
                 _ = m.next();
                 const lhs = try macroBoolToInt(c, node);
@@ -6078,7 +6078,7 @@ fn parseCShiftExpr(c: *Context, m: *MacroCtx, scope: *Scope) ParseError!Node {
 fn parseCAddSubExpr(c: *Context, m: *MacroCtx, scope: *Scope) ParseError!Node {
     var node = try parseCMulExpr(c, m, scope);
     while (true) {
-        switch (m.peek().?) {
+        switch (m.peek() orelse unreachable) {
             .Plus => {
                 _ = m.next();
                 const lhs = try macroBoolToInt(c, node);
@@ -6099,7 +6099,7 @@ fn parseCAddSubExpr(c: *Context, m: *MacroCtx, scope: *Scope) ParseError!Node {
 fn parseCMulExpr(c: *Context, m: *MacroCtx, scope: *Scope) ParseError!Node {
     var node = try parseCCastExpr(c, m, scope);
     while (true) {
-        switch (m.next().?) {
+        switch (m.next() orelse unreachable) {
             .Asterisk => {
                 const lhs = try macroBoolToInt(c, node);
                 const rhs = try macroBoolToInt(c, try parseCCastExpr(c, m, scope));
@@ -6124,11 +6124,11 @@ fn parseCMulExpr(c: *Context, m: *MacroCtx, scope: *Scope) ParseError!Node {
 }
 
 fn parseCCastExpr(c: *Context, m: *MacroCtx, scope: *Scope) ParseError!Node {
-    switch (m.next().?) {
+    switch (m.next() orelse unreachable) {
         .LParen => {
             if (try parseCTypeName(c, m, scope, true)) |type_name| {
                 try m.skip(c, .RParen);
-                if (m.peek().? == .LBrace) {
+                if (m.peek() orelse unreachable == .LBrace) {
                     // initializer list
                     return parseCPostfixExpr(c, m, scope, type_name);
                 }
@@ -6152,7 +6152,7 @@ fn parseCTypeName(c: *Context, m: *MacroCtx, scope: *Scope, allow_fail: bool) Pa
 }
 
 fn parseCSpecifierQualifierList(c: *Context, m: *MacroCtx, scope: *Scope, allow_fail: bool) ParseError!?Node {
-    const tok = m.next().?;
+    const tok = m.next() orelse unreachable;
     switch (tok) {
         .Identifier => {
             const mangled_name = scope.getAlias(m.slice());
@@ -6221,7 +6221,7 @@ fn parseCNumericType(c: *Context, m: *MacroCtx, scope: *Scope) ParseError!Node {
     // prevent overflow
     var i: u8 = 0;
     while (i < math.maxInt(u8)) : (i += 1) {
-        switch (m.next().?) {
+        switch (m.next() orelse unreachable) {
             .Keyword_double => kw.double += 1,
             .Keyword_long => kw.long += 1,
             .Keyword_int => kw.int += 1,
@@ -6300,7 +6300,7 @@ fn parseCNumericType(c: *Context, m: *MacroCtx, scope: *Scope) ParseError!Node {
 
 fn parseCAbstractDeclarator(c: *Context, m: *MacroCtx, scope: *Scope, node: Node) ParseError!Node {
     _ = scope;
-    switch (m.next().?) {
+    switch (m.next() orelse unreachable) {
         .Asterisk => {
             // last token of `node`
             const prev_id = m.list[m.i - 1].id;
@@ -6330,7 +6330,7 @@ fn parseCAbstractDeclarator(c: *Context, m: *MacroCtx, scope: *Scope, node: Node
 fn parseCPostfixExpr(c: *Context, m: *MacroCtx, scope: *Scope, type_name: ?Node) ParseError!Node {
     var node = type_name orelse try parseCPrimaryExpr(c, m, scope);
     while (true) {
-        switch (m.next().?) {
+        switch (m.next() orelse unreachable) {
             .Period => {
                 try m.skip(c, .Identifier);
 
@@ -6348,7 +6348,7 @@ fn parseCPostfixExpr(c: *Context, m: *MacroCtx, scope: *Scope, type_name: ?Node)
                 try m.skip(c, .RBracket);
             },
             .LParen => {
-                if (m.peek().? == .RParen) {
+                if (m.peek() orelse unreachable == .RParen) {
                     m.i += 1;
                     node = try Tag.call.create(c.arena, .{ .lhs = node, .args = &[0]Node{} });
                 } else {
@@ -6357,7 +6357,7 @@ fn parseCPostfixExpr(c: *Context, m: *MacroCtx, scope: *Scope, type_name: ?Node)
                     while (true) {
                         const arg = try parseCCondExpr(c, m, scope);
                         try args.append(arg);
-                        const next_id = m.next().?;
+                        const next_id = m.next() orelse unreachable;
                         switch (next_id) {
                             .Comma => {},
                             .RParen => break,
@@ -6372,7 +6372,7 @@ fn parseCPostfixExpr(c: *Context, m: *MacroCtx, scope: *Scope, type_name: ?Node)
             },
             .LBrace => {
                 // Check for designated field initializers
-                if (m.peek().? == .Period) {
+                if (m.peek() orelse unreachable == .Period) {
                     var init_vals = std.ArrayList(ast.Payload.ContainerInitDot.Initializer).init(c.gpa);
                     defer init_vals.deinit();
 
@@ -6384,7 +6384,7 @@ fn parseCPostfixExpr(c: *Context, m: *MacroCtx, scope: *Scope, type_name: ?Node)
 
                         const val = try parseCCondExpr(c, m, scope);
                         try init_vals.append(.{ .name = name, .value = val });
-                        const next_id = m.next().?;
+                        const next_id = m.next() orelse unreachable;
                         switch (next_id) {
                             .Comma => {},
                             .RBrace => break,
@@ -6405,7 +6405,7 @@ fn parseCPostfixExpr(c: *Context, m: *MacroCtx, scope: *Scope, type_name: ?Node)
                 while (true) {
                     const val = try parseCCondExpr(c, m, scope);
                     try init_vals.append(val);
-                    const next_id = m.next().?;
+                    const next_id = m.next() orelse unreachable;
                     switch (next_id) {
                         .Comma => {},
                         .RBrace => break,
@@ -6431,7 +6431,7 @@ fn parseCPostfixExpr(c: *Context, m: *MacroCtx, scope: *Scope, type_name: ?Node)
 }
 
 fn parseCUnaryExpr(c: *Context, m: *MacroCtx, scope: *Scope) ParseError!Node {
-    switch (m.next().?) {
+    switch (m.next() orelse unreachable) {
         .Bang => {
             const operand = try macroIntToBool(c, try parseCCastExpr(c, m, scope));
             return Tag.not.create(c.arena, operand);
@@ -6454,9 +6454,9 @@ fn parseCUnaryExpr(c: *Context, m: *MacroCtx, scope: *Scope) ParseError!Node {
             return Tag.address_of.create(c.arena, operand);
         },
         .Keyword_sizeof => {
-            const operand = if (m.peek().? == .LParen) blk: {
+            const operand = if (m.peek() orelse unreachable == .LParen) blk: {
                 _ = m.next();
-                const inner = (try parseCTypeName(c, m, scope, false)).?;
+                const inner = (try parseCTypeName(c, m, scope, false)) orelse unreachable;
                 try m.skip(c, .RParen);
                 break :blk inner;
             } else try parseCUnaryExpr(c, m, scope);
@@ -6467,7 +6467,7 @@ fn parseCUnaryExpr(c: *Context, m: *MacroCtx, scope: *Scope) ParseError!Node {
             // TODO this won't work if using <stdalign.h>'s
             // #define alignof _Alignof
             try m.skip(c, .LParen);
-            const operand = (try parseCTypeName(c, m, scope, false)).?;
+            const operand = (try parseCTypeName(c, m, scope, false)) orelse unreachable;
             try m.skip(c, .RParen);
 
             return Tag.alignof.create(c.arena, operand);
@@ -6499,17 +6499,17 @@ fn getContainer(c: *Context, node: Node) ?Node {
         => return node,
 
         .identifier => {
-            const ident = node.castTag(.identifier).?;
+            const ident = node.castTag(.identifier) orelse unreachable;
             if (c.global_scope.sym_table.get(ident.data)) |value| {
                 if (value.castTag(.var_decl)) |var_decl|
-                    return getContainer(c, var_decl.data.init.?);
+                    return getContainer(c, var_decl.data.init orelse unreachable);
                 if (value.castTag(.var_simple) orelse value.castTag(.pub_var_simple)) |var_decl|
                     return getContainer(c, var_decl.data.init);
             }
         },
 
         .field_access => {
-            const field_access = node.castTag(.field_access).?;
+            const field_access = node.castTag(.field_access) orelse unreachable;
 
             if (getContainerTypeOf(c, field_access.data.lhs)) |ty_node| {
                 if (ty_node.castTag(.@"struct") orelse ty_node.castTag(.@"union")) |container| {

@@ -385,7 +385,7 @@ fn callFn(comptime f: anytype, args: anytype) switch (Impl) {
     const default_value = if (Impl == PosixThreadImpl) null else 0;
     const bad_fn_ret = "expected return type of startFn to be 'u8', 'noreturn', 'void', or '!void'";
 
-    switch (@typeInfo(@typeInfo(@TypeOf(f)).Fn.return_type.?)) {
+    switch (@typeInfo(@typeInfo(@TypeOf(f)).Fn.return_type orelse unreachable)) {
         .NoReturn => {
             @call(.{}, f, args);
         },

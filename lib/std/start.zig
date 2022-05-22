@@ -109,7 +109,7 @@ fn callMain2() noreturn {
 }
 
 fn wasiMain2() noreturn {
-    switch (@typeInfo(@typeInfo(@TypeOf(root.main)).Fn.return_type.?)) {
+    switch (@typeInfo(@typeInfo(@TypeOf(root.main)).Fn.return_type orelse unreachable)) {
         .Void => {
             root.main();
             std.os.wasi.proc_exit(0);
@@ -244,7 +244,7 @@ fn EfiMain(handle: uefi.Handle, system_table: *uefi.tables.SystemTable) callconv
     uefi.handle = handle;
     uefi.system_table = system_table;
 
-    switch (@typeInfo(@TypeOf(root.main)).Fn.return_type.?) {
+    switch (@typeInfo(@TypeOf(root.main)).Fn.return_type orelse unreachable) {
         noreturn => {
             root.main();
         },
@@ -563,7 +563,7 @@ fn callWinMainAsync(loop: *std.event.Loop) callconv(.Async) std.os.windows.INT {
 // This is not marked inline because it is called with @asyncCall when
 // there is an event loop.
 pub fn callMain() u8 {
-    switch (@typeInfo(@typeInfo(@TypeOf(root.main)).Fn.return_type.?)) {
+    switch (@typeInfo(@typeInfo(@TypeOf(root.main)).Fn.return_type orelse unreachable)) {
         .NoReturn => {
             root.main();
         },
@@ -601,8 +601,8 @@ pub fn callMain() u8 {
 }
 
 pub fn call_wWinMain() std.os.windows.INT {
-    const MAIN_HINSTANCE = @typeInfo(@TypeOf(root.wWinMain)).Fn.args[0].arg_type.?;
-    const hInstance = @ptrCast(MAIN_HINSTANCE, std.os.windows.kernel32.GetModuleHandleW(null).?);
+    const MAIN_HINSTANCE = @typeInfo(@TypeOf(root.wWinMain)).Fn.args[0].arg_type orelse unreachable;
+    const hInstance = @ptrCast(MAIN_HINSTANCE, std.os.windows.kernel32.GetModuleHandleW(null) orelse unreachable);
     const lpCmdLine = std.os.windows.kernel32.GetCommandLineW();
 
     // There's no (documented) way to get the nCmdShow parameter, so we're

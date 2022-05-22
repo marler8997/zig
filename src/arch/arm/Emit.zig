@@ -176,7 +176,7 @@ fn instructionSize(emit: *Emit, inst: Mir.Inst.Index) usize {
     const tag = emit.mir.instructions.items(.tag)[inst];
 
     if (isBranch(tag)) {
-        switch (emit.branch_types.get(inst).?) {
+        switch (emit.branch_types.get(inst) orelse unreachable) {
             .b => return 4,
         }
     }
@@ -276,9 +276,9 @@ fn lowerBranches(emit: *Emit) !void {
             if (isBranch(tag)) {
                 const target_inst = emit.branchTarget(inst);
                 if (target_inst < inst) {
-                    const target_offset = emit.code_offset_mapping.get(target_inst).?;
+                    const target_offset = emit.code_offset_mapping.get(target_inst) orelse unreachable;
                     const offset = @intCast(i64, target_offset) - @intCast(i64, current_code_offset + 8);
-                    const branch_type = emit.branch_types.getPtr(inst).?;
+                    const branch_type = emit.branch_types.getPtr(inst) orelse unreachable;
                     const optimal_branch_type = try emit.optimalBranchType(tag, offset);
                     if (branch_type.* != optimal_branch_type) {
                         branch_type.* = optimal_branch_type;
@@ -295,9 +295,9 @@ fn lowerBranches(emit: *Emit) !void {
             if (emit.branch_forward_origins.get(inst)) |origin_list| {
                 for (origin_list.items) |forward_branch_inst| {
                     const branch_tag = emit.mir.instructions.items(.tag)[forward_branch_inst];
-                    const forward_branch_inst_offset = emit.code_offset_mapping.get(forward_branch_inst).?;
+                    const forward_branch_inst_offset = emit.code_offset_mapping.get(forward_branch_inst) orelse unreachable;
                     const offset = @intCast(i64, current_code_offset) - @intCast(i64, forward_branch_inst_offset + 8);
-                    const branch_type = emit.branch_types.getPtr(forward_branch_inst).?;
+                    const branch_type = emit.branch_types.getPtr(forward_branch_inst) orelse unreachable;
                     const optimal_branch_type = try emit.optimalBranchType(branch_tag, offset);
                     if (branch_type.* != optimal_branch_type) {
                         branch_type.* = optimal_branch_type;
@@ -417,8 +417,8 @@ fn mirBranch(emit: *Emit, inst: Mir.Inst.Index) !void {
     const cond = emit.mir.instructions.items(.cond)[inst];
     const target_inst = emit.mir.instructions.items(.data)[inst].inst;
 
-    const offset = @intCast(i64, emit.code_offset_mapping.get(target_inst).?) - @intCast(i64, emit.code.items.len + 8);
-    const branch_type = emit.branch_types.get(inst).?;
+    const offset = @intCast(i64, emit.code_offset_mapping.get(target_inst) orelse unreachable) - @intCast(i64, emit.code.items.len + 8);
+    const branch_type = emit.branch_types.get(inst) orelse unreachable;
 
     switch (branch_type) {
         .b => switch (tag) {

@@ -1781,6 +1781,6 @@ test "std.event.Loop - sleep" {
 }
 
 fn testSleep(wait_ns: u64, sleep_count: *usize) void {
-    Loop.instance.?.sleep(wait_ns);
+    Loop.instance orelse unreachable.sleep(wait_ns);
     _ = @atomicRmw(usize, sleep_count, .Add, 1, .SeqCst);
 }

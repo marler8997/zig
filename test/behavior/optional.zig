@@ -15,7 +15,7 @@ test "passing an optional integer as a parameter" {
         }
 
         fn foo(x: ?i32) bool {
-            return x.? == 1234;
+            return x orelse unreachable == 1234;
         }
     };
     try expect(S.entry());
@@ -80,7 +80,7 @@ test "address of unwrap optional" {
         var global: ?Foo = null;
 
         pub fn getFoo() anyerror!*Foo {
-            return &global.?;
+            return &global orelse unreachable;
         }
     };
     S.global = S.Foo{ .a = 1234 };
@@ -102,7 +102,7 @@ test "nested optional field in struct" {
     var s = S1{
         .x = S2{ .y = 127 },
     };
-    try expect(s.x.?.y == 127);
+    try expect(s.x orelse unreachable.y == 127);
 }
 
 test "equality compare optional with non-optional" {
@@ -149,7 +149,7 @@ test "unwrap function call with optional pointer return value" {
 
     const S = struct {
         fn entry() !void {
-            try expect(foo().?.* == 1234);
+            try expect(foo() orelse unreachable.* == 1234);
             try expect(bar() == null);
         }
         const global: i32 = 1234;
@@ -218,10 +218,10 @@ test "assigning to an unwrapped optional field in an inline loop" {
     inline for ("ab") |x| {
         _ = x;
         maybe_pos_arg = 0;
-        if (maybe_pos_arg.? != 0) {
+        if (maybe_pos_arg orelse unreachable != 0) {
             @compileError("bad");
         }
-        maybe_pos_arg.? = 10;
+        maybe_pos_arg orelse unreachable = 10;
     }
 }
 
@@ -237,7 +237,7 @@ test "coerce an anon struct literal to optional struct" {
         fn doTheTest() !void {
             var maybe_dims: ?Struct = null;
             maybe_dims = .{ .field = 1 };
-            try expect(maybe_dims.?.field == 1);
+            try expect(maybe_dims orelse unreachable.field == 1);
         }
     };
     try S.doTheTest();
@@ -320,17 +320,17 @@ test "array of optional unaligned types" {
 
     // The index must be a runtime value
     var i: usize = 0;
-    try expect(Enum.one == values[i].?.Num);
+    try expect(Enum.one == values[i] orelse unreachable.Num);
     i += 1;
-    try expect(Enum.two == values[i].?.Num);
+    try expect(Enum.two == values[i] orelse unreachable.Num);
     i += 1;
-    try expect(Enum.three == values[i].?.Num);
+    try expect(Enum.three == values[i] orelse unreachable.Num);
     i += 1;
-    try expect(Enum.one == values[i].?.Num);
+    try expect(Enum.one == values[i] orelse unreachable.Num);
     i += 1;
-    try expect(Enum.two == values[i].?.Num);
+    try expect(Enum.two == values[i] orelse unreachable.Num);
     i += 1;
-    try expect(Enum.three == values[i].?.Num);
+    try expect(Enum.three == values[i] orelse unreachable.Num);
 }
 
 test "optional pointer to zero bit optional payload" {

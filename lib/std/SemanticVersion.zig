@@ -42,8 +42,8 @@ pub fn order(lhs: Version, rhs: Version) std.math.Order {
     if (lhs.pre == null and rhs.pre != null) return .gt;
 
     // Iterate over pre-release identifiers until a difference is found.
-    var lhs_pre_it = std.mem.split(u8, lhs.pre.?, ".");
-    var rhs_pre_it = std.mem.split(u8, rhs.pre.?, ".");
+    var lhs_pre_it = std.mem.split(u8, lhs.pre orelse unreachable, ".");
+    var rhs_pre_it = std.mem.split(u8, rhs.pre orelse unreachable, ".");
     while (true) {
         const next_lid = lhs_pre_it.next();
         const next_rid = rhs_pre_it.next();
@@ -53,8 +53,8 @@ pub fn order(lhs: Version, rhs: Version) std.math.Order {
         if (next_lid == null and next_rid == null) return .eq;
         if (next_lid != null and next_rid == null) return .gt;
 
-        const lid = next_lid.?; // Left identifier
-        const rid = next_rid.?; // Right identifier
+        const lid = next_lid orelse unreachable; // Left identifier
+        const rid = next_rid orelse unreachable; // Right identifier
 
         // Attempt to parse identifiers as numbers. Overflows are checked by parse.
         const lnum: ?usize = std.fmt.parseUnsigned(usize, lid, 10) catch |err| switch (err) {
@@ -73,8 +73,8 @@ pub fn order(lhs: Version, rhs: Version) std.math.Order {
         // Identifiers consisting of only digits are compared numerically.
         // Identifiers with letters or hyphens are compared lexically in ASCII sort order.
         if (lnum != null and rnum != null) {
-            if (lnum.? < rnum.?) return .lt;
-            if (lnum.? > rnum.?) return .gt;
+            if (lnum orelse unreachable < rnum orelse unreachable) return .lt;
+            if (lnum orelse unreachable > rnum orelse unreachable) return .gt;
         } else {
             const ord = std.mem.order(u8, lid, rid);
             if (ord != .eq) return ord;
@@ -96,7 +96,7 @@ pub fn parse(text: []const u8) !Version {
     if (extra_index == null) return ver;
 
     // Slice optional pre-release or build metadata components.
-    const extra: []const u8 = text[extra_index.?..text.len];
+    const extra: []const u8 = text[extra_index orelse unreachable..text.len];
     if (extra[0] == '-') {
         const build_index = std.mem.indexOfScalar(u8, extra, '+');
         ver.pre = extra[1..(build_index orelse extra.len)];

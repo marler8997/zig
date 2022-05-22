@@ -175,21 +175,21 @@ const Dump = struct {
     }
 
     fn mergeJson(self: *Dump, root: json.Value) !void {
-        const params = &root.Object.get("params").?.value.Object;
-        const zig_id = params.get("zigId").?.value.String;
-        const zig_version = params.get("zigVersion").?.value.String;
-        const root_name = params.get("rootName").?.value.String;
+        const params = &root.Object.get("params") orelse unreachable.value.Object;
+        const zig_id = params.get("zigId") orelse unreachable.value.String;
+        const zig_version = params.get("zigVersion") orelse unreachable.value.String;
+        const root_name = params.get("rootName") orelse unreachable.value.String;
         try mergeSameStrings(&self.zig_id, zig_id);
         try mergeSameStrings(&self.zig_version, zig_version);
         try mergeSameStrings(&self.root_name, root_name);
 
-        for (params.get("builds").?.value.Array.items) |json_build| {
-            const target = json_build.Object.get("target").?.value.String;
+        for (params.get("builds") orelse unreachable.value.Array.items) |json_build| {
+            const target = json_build.Object.get("target") orelse unreachable.value.String;
             try self.targets.append(target);
         }
 
         // Merge files. If the string matches, it's the same file.
-        const other_files = root.Object.get("files").?.value.Array.items;
+        const other_files = root.Object.get("files") orelse unreachable.value.Array.items;
         var other_file_to_mine = std.AutoHashMap(usize, usize).init(self.a());
         for (other_files) |other_file, i| {
             const gop = try self.file_map.getOrPut(other_file.String);
@@ -201,14 +201,14 @@ const Dump = struct {
         }
 
         // Merge AST nodes. If the file id, line, and column all match, it's the same AST node.
-        const other_ast_nodes = root.Object.get("astNodes").?.value.Array.items;
+        const other_ast_nodes = root.Object.get("astNodes") orelse unreachable.value.Array.items;
         var other_ast_node_to_mine = std.AutoHashMap(usize, usize).init(self.a());
         for (other_ast_nodes) |other_ast_node_json, i| {
             const other_file_id = jsonObjInt(other_ast_node_json, "file");
             const other_node = Node{
                 .line = jsonObjInt(other_ast_node_json, "line"),
                 .col = jsonObjInt(other_ast_node_json, "col"),
-                .file = other_file_to_mine.getValue(other_file_id).?,
+                .file = other_file_to_mine.getValue(other_file_id) orelse unreachable,
                 .fields = ([*]usize)(undefined)[0..0],
             };
             const gop = try self.node_map.getOrPut(other_node);
@@ -220,26 +220,26 @@ const Dump = struct {
         }
         // convert fields lists
         for (other_ast_nodes) |other_ast_node_json, i| {
-            const my_node_index = other_ast_node_to_mine.get(i).?.value;
+            const my_node_index = other_ast_node_to_mine.get(i) orelse unreachable.value;
             const my_node = &self.node_list.items[my_node_index];
             if (other_ast_node_json.Object.get("fields")) |fields_json_kv| {
                 const other_fields = fields_json_kv.value.Array.items;
                 my_node.fields = try self.a().alloc(usize, other_fields.len);
                 for (other_fields) |other_field_index, field_i| {
                     const other_index = @intCast(usize, other_field_index.Integer);
-                    my_node.fields[field_i] = other_ast_node_to_mine.get(other_index).?.value;
+                    my_node.fields[field_i] = other_ast_node_to_mine.get(other_index) orelse unreachable.value;
                 }
             }
         }
 
         // Merge errors. If the AST Node matches, it's the same error value.
-        const other_errors = root.Object.get("errors").?.value.Array.items;
+        const other_errors = root.Object.get("errors") orelse unreachable.value.Array.items;
         var other_error_to_mine = std.AutoHashMap(usize, usize).init(self.a());
         for (other_errors) |other_error_json, i| {
             const other_src_id = jsonObjInt(other_error_json, "src");
             const other_error = Error{
-                .src = other_ast_node_to_mine.getValue(other_src_id).?,
-                .name = other_error_json.Object.get("name").?.value.String,
+                .src = other_ast_node_to_mine.getValue(other_src_id) orelse unreachable,
+                .name = other_error_json.Object.get("name") orelse unreachable.value.String,
             };
             const gop = try self.error_map.getOrPut(other_error);
             if (!gop.found_existing) {
@@ -253,12 +253,12 @@ const Dump = struct {
         // First we identify all the simple types and merge those.
         // Example: void, type, noreturn
         // We can also do integers and floats.
-        const other_types = root.Object.get("types").?.value.Array.items;
+        const other_types = root.Object.get("types") orelse unreachable.value.Array.items;
         var other_types_to_mine = std.AutoHashMap(usize, usize).init(self.a());
         for (other_types) |other_type_json, i| {
             const type_kind = jsonObjInt(other_type_json, "kind");
             switch (type_kind) {
-                fieldIndex(TypeId, "Int").? => {
+                fieldIndex(TypeId, "Int") orelse unreachable => {
                     var signed: bool = undefined;
                     var bits: usize = undefined;
                     if (other_type_json.Object.get("i")) |kv| {
@@ -278,7 +278,7 @@ const Dump = struct {
                     };
                     try self.mergeOtherType(other_type, i, &other_types_to_mine);
                 },
-                fieldIndex(TypeId, "Float").? => {
+                fieldIndex(TypeId, "Float") orelse unreachable => {
                     const other_type = Type{
                         .Float = jsonObjInt(other_type_json, "bits"),
                     };
@@ -288,7 +288,7 @@ const Dump = struct {
             }
 
             inline for (simple_types) |simple_type_name| {
-                if (type_kind == std.meta.fieldIndex(builtin.TypeId, simple_type_name).?) {
+                if (type_kind == std.meta.fieldIndex(builtin.TypeId, simple_type_name) orelse unreachable) {
                     const other_type = @unionInit(Type, simple_type_name, {});
                     try self.mergeOtherType(other_type, i, &other_types_to_mine);
                 }
@@ -326,13 +326,13 @@ const Dump = struct {
         try jw.beginObject();
 
         try jw.objectField("zigId");
-        try jw.emitString(self.zig_id.?);
+        try jw.emitString(self.zig_id orelse unreachable);
 
         try jw.objectField("zigVersion");
-        try jw.emitString(self.zig_version.?);
+        try jw.emitString(self.zig_version orelse unreachable);
 
         try jw.objectField("rootName");
-        try jw.emitString(self.root_name.?);
+        try jw.emitString(self.root_name orelse unreachable);
 
         try jw.objectField("builds");
         try jw.beginArray();
@@ -449,6 +449,6 @@ const Dump = struct {
 };
 
 fn jsonObjInt(json_val: json.Value, field: []const u8) usize {
-    const uncasted = json_val.Object.get(field).?.value.Integer;
+    const uncasted = json_val.Object.get(field) orelse unreachable.value.Integer;
     return @intCast(usize, uncasted);
 }

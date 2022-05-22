@@ -196,7 +196,7 @@ fn make(step: *Step) !void {
 
     switch (self.stdout_action) {
         .expect_exact, .expect_matches => {
-            stdout = child.stdout.?.reader().readAllAlloc(self.builder.allocator, max_stdout_size) catch unreachable;
+            stdout = child.stdout orelse unreachable.reader().readAllAlloc(self.builder.allocator, max_stdout_size) catch unreachable;
         },
         .inherit, .ignore => {},
     }
@@ -206,7 +206,7 @@ fn make(step: *Step) !void {
 
     switch (self.stderr_action) {
         .expect_exact, .expect_matches => {
-            stderr = child.stderr.?.reader().readAllAlloc(self.builder.allocator, max_stdout_size) catch unreachable;
+            stderr = child.stderr orelse unreachable.reader().readAllAlloc(self.builder.allocator, max_stdout_size) catch unreachable;
         },
         .inherit, .ignore => {},
     }
@@ -247,7 +247,7 @@ fn make(step: *Step) !void {
     switch (self.stderr_action) {
         .inherit, .ignore => {},
         .expect_exact => |expected_bytes| {
-            if (!mem.eql(u8, expected_bytes, stderr.?)) {
+            if (!mem.eql(u8, expected_bytes, stderr orelse unreachable)) {
                 std.debug.print(
                     \\
                     \\========= Expected this stderr: =========
@@ -255,13 +255,13 @@ fn make(step: *Step) !void {
                     \\========= But found: ====================
                     \\{s}
                     \\
-                , .{ expected_bytes, stderr.? });
+                , .{ expected_bytes, stderr orelse unreachable });
                 printCmd(cwd, argv);
                 return error.TestFailed;
             }
         },
         .expect_matches => |matches| for (matches) |match| {
-            if (mem.indexOf(u8, stderr.?, match) == null) {
+            if (mem.indexOf(u8, stderr orelse unreachable, match) == null) {
                 std.debug.print(
                     \\
                     \\========= Expected to find in stderr: =========
@@ -269,7 +269,7 @@ fn make(step: *Step) !void {
                     \\========= But stderr does not contain it: =====
                     \\{s}
                     \\
-                , .{ match, stderr.? });
+                , .{ match, stderr orelse unreachable });
                 printCmd(cwd, argv);
                 return error.TestFailed;
             }
@@ -279,7 +279,7 @@ fn make(step: *Step) !void {
     switch (self.stdout_action) {
         .inherit, .ignore => {},
         .expect_exact => |expected_bytes| {
-            if (!mem.eql(u8, expected_bytes, stdout.?)) {
+            if (!mem.eql(u8, expected_bytes, stdout orelse unreachable)) {
                 std.debug.print(
                     \\
                     \\========= Expected this stdout: =========
@@ -287,13 +287,13 @@ fn make(step: *Step) !void {
                     \\========= But found: ====================
                     \\{s}
                     \\
-                , .{ expected_bytes, stdout.? });
+                , .{ expected_bytes, stdout orelse unreachable });
                 printCmd(cwd, argv);
                 return error.TestFailed;
             }
         },
         .expect_matches => |matches| for (matches) |match| {
-            if (mem.indexOf(u8, stdout.?, match) == null) {
+            if (mem.indexOf(u8, stdout orelse unreachable, match) == null) {
                 std.debug.print(
                     \\
                     \\========= Expected to find in stdout: =========
@@ -301,7 +301,7 @@ fn make(step: *Step) !void {
                     \\========= But stdout does not contain it: =====
                     \\{s}
                     \\
-                , .{ match, stdout.? });
+                , .{ match, stdout orelse unreachable });
                 printCmd(cwd, argv);
                 return error.TestFailed;
             }
@@ -322,7 +322,7 @@ fn addPathForDynLibs(self: *RunStep, artifact: *LibExeObjStep) void {
         switch (link_object) {
             .other_step => |other| {
                 if (other.target.isWindows() and other.isDynamicLibrary()) {
-                    self.addPathDir(fs.path.dirname(other.getOutputSource().getPath(self.builder)).?);
+                    self.addPathDir(fs.path.dirname(other.getOutputSource().getPath(self.builder)) orelse unreachable);
                     self.addPathForDynLibs(other);
                 }
             },

@@ -172,7 +172,7 @@ pub fn sizeof(target: anytype) usize {
                 const array_info = @typeInfo(ptr.child).Array;
                 if ((array_info.child == u8 or array_info.child == u16) and
                     array_info.sentinel != null and
-                    @ptrCast(*const array_info.child, array_info.sentinel.?).* == 0)
+                    @ptrCast(*const array_info.child, array_info.sentinel orelse unreachable).* == 0)
                 {
                     // length of the string plus one for the null terminator.
                     return (array_info.len + 1) * @sizeOf(array_info.child);
@@ -253,7 +253,7 @@ fn PromoteIntLiteralReturnType(comptime SuffixType: type, comptime number: compt
     else
         &signed_oct_hex;
 
-    var pos = mem.indexOfScalar(type, list, SuffixType).?;
+    var pos = mem.indexOfScalar(type, list, SuffixType) orelse unreachable;
 
     while (pos < list.len) : (pos += 1) {
         if (number >= math.minInt(list[pos]) and number <= math.maxInt(list[pos])) {

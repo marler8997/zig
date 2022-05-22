@@ -93,7 +93,7 @@ pub fn getSelfDebugInfo() !*DebugInfo {
         return info;
     } else {
         self_debug_info = try openSelfDebugInfo(getDebugInfoAllocator());
-        return &self_debug_info.?;
+        return &self_debug_info orelse unreachable;
     }
 }
 
@@ -670,17 +670,17 @@ test "machoSearchSymbols" {
 
     try testing.expectEqual(@as(?*const MachoSymbol, null), machoSearchSymbols(&symbols, 0));
     try testing.expectEqual(@as(?*const MachoSymbol, null), machoSearchSymbols(&symbols, 99));
-    try testing.expectEqual(&symbols[0], machoSearchSymbols(&symbols, 100).?);
-    try testing.expectEqual(&symbols[0], machoSearchSymbols(&symbols, 150).?);
-    try testing.expectEqual(&symbols[0], machoSearchSymbols(&symbols, 199).?);
+    try testing.expectEqual(&symbols[0], machoSearchSymbols(&symbols, 100) orelse unreachable);
+    try testing.expectEqual(&symbols[0], machoSearchSymbols(&symbols, 150) orelse unreachable);
+    try testing.expectEqual(&symbols[0], machoSearchSymbols(&symbols, 199) orelse unreachable);
 
-    try testing.expectEqual(&symbols[1], machoSearchSymbols(&symbols, 200).?);
-    try testing.expectEqual(&symbols[1], machoSearchSymbols(&symbols, 250).?);
-    try testing.expectEqual(&symbols[1], machoSearchSymbols(&symbols, 299).?);
+    try testing.expectEqual(&symbols[1], machoSearchSymbols(&symbols, 200) orelse unreachable);
+    try testing.expectEqual(&symbols[1], machoSearchSymbols(&symbols, 250) orelse unreachable);
+    try testing.expectEqual(&symbols[1], machoSearchSymbols(&symbols, 299) orelse unreachable);
 
-    try testing.expectEqual(&symbols[2], machoSearchSymbols(&symbols, 300).?);
-    try testing.expectEqual(&symbols[2], machoSearchSymbols(&symbols, 301).?);
-    try testing.expectEqual(&symbols[2], machoSearchSymbols(&symbols, 5000).?);
+    try testing.expectEqual(&symbols[2], machoSearchSymbols(&symbols, 300) orelse unreachable);
+    try testing.expectEqual(&symbols[2], machoSearchSymbols(&symbols, 301) orelse unreachable);
+    try testing.expectEqual(&symbols[2], machoSearchSymbols(&symbols, 5000) orelse unreachable);
 }
 
 pub fn printSourceAtAddress(debug_info: *DebugInfo, out_stream: anytype, address: usize, tty_config: TTY.Config) !void {
@@ -1457,12 +1457,12 @@ pub const ModuleDebugInfo = switch (native_os) {
             // Parse symbols
             const strtab = @ptrCast(
                 [*]const u8,
-                hdr_base + symtabcmd.?.stroff,
-            )[0 .. symtabcmd.?.strsize - 1 :0];
+                hdr_base + symtabcmd orelse unreachable.stroff,
+            )[0 .. symtabcmd orelse unreachable.strsize - 1 :0];
             const symtab = @ptrCast(
                 [*]const macho.nlist_64,
-                @alignCast(@alignOf(macho.nlist_64), hdr_base + symtabcmd.?.symoff),
-            )[0..symtabcmd.?.nsyms];
+                @alignCast(@alignOf(macho.nlist_64), hdr_base + symtabcmd orelse unreachable.symoff),
+            )[0..symtabcmd orelse unreachable.nsyms];
 
             // TODO handle tentative (common) symbols
             var addr_table = std.StringHashMap(u64).init(allocator);
@@ -1485,7 +1485,7 @@ pub const ModuleDebugInfo = switch (native_os) {
             const sections = @ptrCast(
                 [*]const macho.section_64,
                 @alignCast(@alignOf(macho.section_64), segptr + @sizeOf(std.macho.segment_command_64)),
-            )[0..segcmd.?.nsects];
+            )[0..segcmd orelse unreachable.nsects];
             for (sections) |*sect| {
                 // The section name may not exceed 16 chars and a trailing null may
                 // not be present
@@ -1900,7 +1900,7 @@ fn handleSegfaultWindowsExtra(info: *windows.EXCEPTION_POINTERS, comptime msg: u
         nosuspend {
             const stderr = io.getStdErr().writer();
             _ = switch (msg) {
-                0 => stderr.print("{s}\n", .{format.?}),
+                0 => stderr.print("{s}\n", .{format orelse unreachable}),
                 1 => stderr.print("Segmentation fault at address 0x{x}\n", .{info.ExceptionRecord.ExceptionInformation[1]}),
                 2 => stderr.print("Illegal instruction at address 0x{x}\n", .{regs.ip}),
                 else => unreachable,
@@ -1911,7 +1911,7 @@ fn handleSegfaultWindowsExtra(info: *windows.EXCEPTION_POINTERS, comptime msg: u
         os.abort();
     } else {
         switch (msg) {
-            0 => panicImpl(null, exception_address, format.?),
+            0 => panicImpl(null, exception_address, format orelse unreachable),
             1 => {
                 const format_item = "Segmentation fault at address 0x{x}";
                 var buf: [format_item.len + 64]u8 = undefined; // 64 is arbitrary, but sufficiently large

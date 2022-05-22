@@ -216,7 +216,7 @@ pub fn main() !void {
 }
 
 fn runBuild(builder: *Builder) anyerror!void {
-    switch (@typeInfo(@typeInfo(@TypeOf(root.build)).Fn.return_type.?)) {
+    switch (@typeInfo(@typeInfo(@TypeOf(root.build)).Fn.return_type orelse unreachable)) {
         .Void => root.build(builder),
         .ErrorUnion => try root.build(builder),
         else => @compileError("expected return type of build to be 'void' or '!void'"),

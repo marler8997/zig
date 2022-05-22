@@ -204,22 +204,22 @@ test "EnvMap" {
     defer env.deinit();
 
     try env.put("SOMETHING_NEW", "hello");
-    try testing.expectEqualStrings("hello", env.get("SOMETHING_NEW").?);
+    try testing.expectEqualStrings("hello", env.get("SOMETHING_NEW") orelse unreachable);
     try testing.expectEqual(@as(EnvMap.Size, 1), env.count());
 
     // overwrite
     try env.put("SOMETHING_NEW", "something");
-    try testing.expectEqualStrings("something", env.get("SOMETHING_NEW").?);
+    try testing.expectEqualStrings("something", env.get("SOMETHING_NEW") orelse unreachable);
     try testing.expectEqual(@as(EnvMap.Size, 1), env.count());
 
     // a new longer name to test the Windows-specific conversion buffer
     try env.put("SOMETHING_NEW_AND_LONGER", "1");
-    try testing.expectEqualStrings("1", env.get("SOMETHING_NEW_AND_LONGER").?);
+    try testing.expectEqualStrings("1", env.get("SOMETHING_NEW_AND_LONGER") orelse unreachable);
     try testing.expectEqual(@as(EnvMap.Size, 2), env.count());
 
     // case insensitivity on Windows only
     if (builtin.os.tag == .windows) {
-        try testing.expectEqualStrings("1", env.get("something_New_aNd_LONGER").?);
+        try testing.expectEqualStrings("1", env.get("something_New_aNd_LONGER") orelse unreachable);
     } else {
         try testing.expect(null == env.get("something_New_aNd_LONGER"));
     }
@@ -241,7 +241,7 @@ test "EnvMap" {
     // test Unicode case-insensitivity on Windows
     if (builtin.os.tag == .windows) {
         try env.put("КИРиллИЦА", "something else");
-        try testing.expectEqualStrings("something else", env.get("кириллица").?);
+        try testing.expectEqualStrings("something else", env.get("кириллица") orelse unreachable);
     }
 }
 
@@ -306,8 +306,8 @@ pub fn getEnvMap(allocator: Allocator) !EnvMap {
         for (environ) |env| {
             const pair = mem.sliceTo(env, 0);
             var parts = mem.split(u8, pair, "=");
-            const key = parts.next().?;
-            const value = parts.next().?;
+            const key = parts.next() orelse unreachable;
+            const value = parts.next() orelse unreachable;
             try result.put(key, value);
         }
         return result;
@@ -902,7 +902,7 @@ fn testGeneralCmdLine(input_cmd_line: []const u8, expected_args: []const []const
     var it = try ArgIteratorGeneral(.{}).init(std.testing.allocator, input_cmd_line);
     defer it.deinit();
     for (expected_args) |expected_arg| {
-        const arg = it.next().?;
+        const arg = it.next() orelse unreachable;
         try testing.expectEqualStrings(expected_arg, arg);
     }
     try testing.expect(it.next() == null);
@@ -943,7 +943,7 @@ fn testResponseFileCmdLine(input_cmd_line: []const u8, expected_args: []const []
         .init(std.testing.allocator, input_cmd_line);
     defer it.deinit();
     for (expected_args) |expected_arg| {
-        const arg = it.next().?;
+        const arg = it.next() orelse unreachable;
         try testing.expectEqualStrings(expected_arg, arg);
     }
     try testing.expect(it.next() == null);
@@ -1213,5 +1213,5 @@ pub fn execve(
         }
     };
 
-    return os.execvpeZ_expandArg0(.no_expand, argv_buf.ptr[0].?, argv_buf.ptr, envp);
+    return os.execvpeZ_expandArg0(.no_expand, argv_buf.ptr[0] orelse unreachable, argv_buf.ptr, envp);
 }

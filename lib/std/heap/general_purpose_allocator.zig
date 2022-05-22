@@ -1287,10 +1287,10 @@ test "double frees" {
     // detect a large allocation double free
     const large = try allocator.alloc(u8, 2 * page_size);
     try std.testing.expect(gpa.large_allocations.contains(@ptrToInt(large.ptr)));
-    try std.testing.expectEqual(gpa.large_allocations.getEntry(@ptrToInt(large.ptr)).?.value_ptr.bytes, large);
+    try std.testing.expectEqual(gpa.large_allocations.getEntry(@ptrToInt(large.ptr)) orelse unreachable.value_ptr.bytes, large);
     allocator.free(large);
     try std.testing.expect(gpa.large_allocations.contains(@ptrToInt(large.ptr)));
-    try std.testing.expect(gpa.large_allocations.getEntry(@ptrToInt(large.ptr)).?.value_ptr.freed);
+    try std.testing.expect(gpa.large_allocations.getEntry(@ptrToInt(large.ptr)) orelse unreachable.value_ptr.freed);
 
     const normal_small = try allocator.alloc(u8, size_class);
     defer allocator.free(normal_small);

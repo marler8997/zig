@@ -410,7 +410,7 @@ fn start_asm_path(comp: *Compilation, arena: Allocator, basename: []const u8) ![
     const s = path.sep_str;
 
     var result = std.ArrayList(u8).init(arena);
-    try result.appendSlice(comp.zig_lib_directory.path.?);
+    try result.appendSlice(comp.zig_lib_directory.path orelse unreachable);
     try result.appendSlice(s ++ "libc" ++ s ++ "glibc" ++ s ++ "sysdeps" ++ s);
     if (is_sparc) {
         if (mem.eql(u8, basename, "crti.S") or mem.eql(u8, basename, "crtn.S")) {
@@ -492,7 +492,7 @@ fn add_include_dirs(comp: *Compilation, arena: Allocator, args: *std.ArrayList([
     }
     if (opt_nptl) |nptl| {
         try args.append("-I");
-        try args.append(try path.join(arena, &[_][]const u8{ comp.zig_lib_directory.path.?, lib_libc_glibc ++ "sysdeps", nptl }));
+        try args.append(try path.join(arena, &[_][]const u8{ comp.zig_lib_directory.path orelse unreachable, lib_libc_glibc ++ "sysdeps", nptl }));
     }
 
     try args.append("-I");
@@ -512,11 +512,11 @@ fn add_include_dirs(comp: *Compilation, arena: Allocator, args: *std.ArrayList([
     try args.append(try lib_path(comp, arena, lib_libc_glibc ++ "sysdeps" ++ s ++ "generic"));
 
     try args.append("-I");
-    try args.append(try path.join(arena, &[_][]const u8{ comp.zig_lib_directory.path.?, lib_libc ++ "glibc" }));
+    try args.append(try path.join(arena, &[_][]const u8{ comp.zig_lib_directory.path orelse unreachable, lib_libc ++ "glibc" }));
 
     try args.append("-I");
     try args.append(try std.fmt.allocPrint(arena, "{s}" ++ s ++ "libc" ++ s ++ "include" ++ s ++ "{s}-{s}-{s}", .{
-        comp.zig_lib_directory.path.?, @tagName(arch), @tagName(target.os.tag), @tagName(target.abi),
+        comp.zig_lib_directory.path orelse unreachable, @tagName(arch), @tagName(target.os.tag), @tagName(target.abi),
     }));
 
     try args.append("-I");
@@ -525,7 +525,7 @@ fn add_include_dirs(comp: *Compilation, arena: Allocator, args: *std.ArrayList([
     const arch_name = target_util.osArchName(target);
     try args.append("-I");
     try args.append(try std.fmt.allocPrint(arena, "{s}" ++ s ++ "libc" ++ s ++ "include" ++ s ++ "{s}-linux-any", .{
-        comp.zig_lib_directory.path.?, arch_name,
+        comp.zig_lib_directory.path orelse unreachable, arch_name,
     }));
 
     try args.append("-I");
@@ -645,14 +645,14 @@ fn add_include_dirs_arch(
 }
 
 fn path_from_lib(comp: *Compilation, arena: Allocator, sub_path: []const u8) ![]const u8 {
-    return path.join(arena, &[_][]const u8{ comp.zig_lib_directory.path.?, sub_path });
+    return path.join(arena, &[_][]const u8{ comp.zig_lib_directory.path orelse unreachable, sub_path });
 }
 
 const lib_libc = "libc" ++ path.sep_str;
 const lib_libc_glibc = lib_libc ++ "glibc" ++ path.sep_str;
 
 fn lib_path(comp: *Compilation, arena: Allocator, sub_path: []const u8) ![]const u8 {
-    return path.join(arena, &[_][]const u8{ comp.zig_lib_directory.path.?, sub_path });
+    return path.join(arena, &[_][]const u8{ comp.zig_lib_directory.path orelse unreachable, sub_path });
 }
 
 pub const BuiltSharedObjects = struct {
@@ -707,7 +707,7 @@ pub fn buildSharedObjects(comp: *Compilation) !void {
 
     var o_directory: Compilation.Directory = .{
         .handle = try comp.global_cache_directory.handle.makeOpenPath(o_sub_path, .{}),
-        .path = try path.join(arena, &[_][]const u8{ comp.global_cache_directory.path.?, o_sub_path }),
+        .path = try path.join(arena, &[_][]const u8{ comp.global_cache_directory.path orelse unreachable, o_sub_path }),
     };
     defer o_directory.handle.close();
 
@@ -1064,7 +1064,7 @@ pub fn buildSharedObjects(comp: *Compilation) !void {
     assert(comp.glibc_so_files == null);
     comp.glibc_so_files = BuiltSharedObjects{
         .lock = cache.toOwnedLock(),
-        .dir_path = try path.join(comp.gpa, &[_][]const u8{ comp.global_cache_directory.path.?, o_sub_path }),
+        .dir_path = try path.join(comp.gpa, &[_][]const u8{ comp.global_cache_directory.path orelse unreachable, o_sub_path }),
     };
 }
 
@@ -1087,12 +1087,12 @@ fn buildSharedLib(
         .basename = basename,
     };
     const version: Version = .{ .major = lib.sover, .minor = 0, .patch = 0 };
-    const ld_basename = path.basename(comp.getTarget().standardDynamicLinkerPath().get().?);
+    const ld_basename = path.basename(comp.getTarget().standardDynamicLinkerPath().get() orelse unreachable);
     const soname = if (mem.eql(u8, lib.name, "ld")) ld_basename else basename;
-    const map_file_path = try path.join(arena, &[_][]const u8{ bin_directory.path.?, all_map_basename });
+    const map_file_path = try path.join(arena, &[_][]const u8{ bin_directory.path orelse unreachable, all_map_basename });
     const c_source_files = [1]Compilation.CSourceFile{
         .{
-            .src_path = try path.join(arena, &[_][]const u8{ bin_directory.path.?, asm_file_basename }),
+            .src_path = try path.join(arena, &[_][]const u8{ bin_directory.path orelse unreachable, asm_file_basename }),
         },
     };
     const sub_compilation = try Compilation.create(comp.gpa, .{

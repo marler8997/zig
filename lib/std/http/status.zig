@@ -172,8 +172,8 @@ pub const Status = enum(u10) {
 };
 
 test {
-    try std.testing.expectEqualStrings("OK", Status.ok.phrase().?);
-    try std.testing.expectEqualStrings("Not Found", Status.not_found.phrase().?);
+    try std.testing.expectEqualStrings("OK", Status.ok.phrase() orelse unreachable);
+    try std.testing.expectEqualStrings("Not Found", Status.not_found.phrase() orelse unreachable);
 }
 
 test {

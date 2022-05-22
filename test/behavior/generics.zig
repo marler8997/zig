@@ -163,7 +163,7 @@ test "generic fn with implicit cast" {
     }) == 0);
 }
 fn getByte(ptr: ?*const u8) u8 {
-    return ptr.?.*;
+    return ptr orelse unreachable.*;
 }
 fn getFirstByte(comptime T: type, mem: []const T) u8 {
     return getByte(@ptrCast(*const u8, &mem[0]));

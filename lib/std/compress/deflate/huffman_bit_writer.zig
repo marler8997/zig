@@ -327,8 +327,8 @@ pub fn HuffmanBitWriter(comptime WriterType: type) type {
             if (in == null) {
                 return .{ .size = 0, .storable = false };
             }
-            if (in.?.len <= deflate_const.max_store_block_size) {
-                return .{ .size = @intCast(u32, (in.?.len + 5) * 8), .storable = true };
+            if (in orelse unreachable.len <= deflate_const.max_store_block_size) {
+                return .{ .size = @intCast(u32, (in orelse unreachable.len + 5) * 8), .storable = true };
             }
             return .{ .size = 0, .storable = false };
         }
@@ -521,8 +521,8 @@ pub fn HuffmanBitWriter(comptime WriterType: type) type {
 
             // Stored bytes?
             if (storable and stored_size < size) {
-                try self.writeStoredHeader(input.?.len, eof);
-                try self.writeBytes(input.?);
+                try self.writeStoredHeader(input orelse unreachable.len, eof);
+                try self.writeBytes(input orelse unreachable);
                 return;
             }
 
@@ -575,8 +575,8 @@ pub fn HuffmanBitWriter(comptime WriterType: type) type {
             var ssize = stored_size.size;
             var storable = stored_size.storable;
             if (storable and ssize < (size + (size >> 4))) {
-                try self.writeStoredHeader(input.?.len, eof);
-                try self.writeBytes(input.?);
+                try self.writeStoredHeader(input orelse unreachable.len, eof);
+                try self.writeBytes(input orelse unreachable);
                 return;
             }
 
@@ -890,7 +890,7 @@ fn testBlockHuff(in_name: []const u8, want_name: []const u8) !void {
     // Skip wasi because it does not support std.fs.openDirAbsolute()
     if (builtin.os.tag == .wasi) return error.SkipZigTest;
 
-    const current_dir = try std.fs.openDirAbsolute(std.fs.path.dirname(@src().file).?, .{});
+    const current_dir = try std.fs.openDirAbsolute(std.fs.path.dirname(@src().file) orelse unreachable, .{});
     const testdata_dir = try current_dir.openDir("testdata", .{});
     const in_file = try testdata_dir.openFile(in_name, .{});
     defer in_file.close();
@@ -1622,7 +1622,7 @@ fn testBlock(comptime ht: HuffTest, ttype: TestType) !void {
     var want: []u8 = undefined;
     var want_ni: []u8 = undefined; // want no input: what we expect when input is empty
 
-    const current_dir = try std.fs.openDirAbsolute(std.fs.path.dirname(@src().file).?, .{});
+    const current_dir = try std.fs.openDirAbsolute(std.fs.path.dirname(@src().file) orelse unreachable, .{});
     const testdata_dir = try current_dir.openDir("testdata", .{});
 
     var want_name_type = if (ht.want.len == 0) .{} else .{ttype.to_s()};

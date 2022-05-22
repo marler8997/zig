@@ -172,8 +172,8 @@ fn relocationValue(self: Atom, relocation: types.Relocation, wasm_bin: *const Wa
             std.debug.assert(symbol.tag == .data);
             const merge_segment = wasm_bin.base.options.output_mode != .Obj;
             const segment_name = wasm_bin.segment_info.items[symbol.index].outputName(merge_segment);
-            const atom_index = wasm_bin.data_segments.get(segment_name).?;
-            const target_atom = wasm_bin.symbol_atom.get(target_loc).?;
+            const atom_index = wasm_bin.data_segments.get(segment_name) orelse unreachable;
+            const target_atom = wasm_bin.symbol_atom.get(target_loc) orelse unreachable;
             const segment = wasm_bin.segments.items[atom_index];
             return target_atom.offset + segment.offset + (relocation.addend orelse 0);
         },

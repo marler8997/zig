@@ -824,12 +824,12 @@ fn buildOutputType(
 
                         const new_cur_pkg = Package.create(
                             gpa,
-                            fs.path.dirname(pkg_path.?),
-                            fs.path.basename(pkg_path.?),
+                            fs.path.dirname(pkg_path orelse unreachable),
+                            fs.path.basename(pkg_path orelse unreachable),
                         ) catch |err| {
-                            fatal("Failed to add package at path {s}: {s}", .{ pkg_path.?, @errorName(err) });
+                            fatal("Failed to add package at path {s}: {s}", .{ pkg_path orelse unreachable, @errorName(err) });
                         };
-                        try cur_pkg.addAndAdopt(gpa, pkg_name.?, new_cur_pkg);
+                        try cur_pkg.addAndAdopt(gpa, pkg_name orelse unreachable, new_cur_pkg);
                         cur_pkg = new_cur_pkg;
                     } else if (mem.eql(u8, arg, "--pkg-end")) {
                         cur_pkg = cur_pkg.parent orelse
@@ -974,7 +974,7 @@ fn buildOutputType(
                             fatal("expected parameter after {s}", .{arg});
                         };
                         try clang_argv.append("-isysroot");
-                        try clang_argv.append(sysroot.?);
+                        try clang_argv.append(sysroot orelse unreachable);
                     } else if (mem.eql(u8, arg, "--libc")) {
                         libc_paths_file = args_iter.next() orelse {
                             fatal("expected parameter after {s}", .{arg});
@@ -2518,7 +2518,7 @@ fn buildOutputType(
         },
         .yes_default_path => Emit.Resolved{
             .data = Compilation.EmitLoc{
-                .directory = emit_bin_loc.?.directory,
+                .directory = emit_bin_loc orelse unreachable.directory,
                 .basename = default_implib_basename,
             },
             .dir = null,
@@ -2796,7 +2796,7 @@ fn buildOutputType(
     if (test_exec_args.items.len == 0 and object_format == .c) default_exec_args: {
         // Default to using `zig run` to execute the produced .c code from `zig test`.
         const c_code_loc = emit_bin_loc orelse break :default_exec_args;
-        const c_code_directory = c_code_loc.directory orelse comp.bin_file.options.emit.?.directory;
+        const c_code_directory = c_code_loc.directory orelse comp.bin_file.options.emit orelse unreachable.directory;
         const c_code_path = try fs.path.join(arena, &[_][]const u8{
             c_code_directory.path orelse ".", c_code_loc.basename,
         });
@@ -2944,24 +2944,24 @@ fn parseCrossTargetOrReportFatalError(
             help: {
                 var help_text = std.ArrayList(u8).init(allocator);
                 defer help_text.deinit();
-                for (diags.arch.?.allCpuModels()) |cpu| {
+                for (diags.arch orelse unreachable.allCpuModels()) |cpu| {
                     help_text.writer().print(" {s}\n", .{cpu.name}) catch break :help;
                 }
                 std.log.info("Available CPUs for architecture '{s}':\n{s}", .{
-                    @tagName(diags.arch.?), help_text.items,
+                    @tagName(diags.arch orelse unreachable), help_text.items,
                 });
             }
-            fatal("Unknown CPU: '{s}'", .{diags.cpu_name.?});
+            fatal("Unknown CPU: '{s}'", .{diags.cpu_name orelse unreachable});
         },
         error.UnknownCpuFeature => {
             help: {
                 var help_text = std.ArrayList(u8).init(allocator);
                 defer help_text.deinit();
-                for (diags.arch.?.allFeaturesList()) |feature| {
+                for (diags.arch orelse unreachable.allFeaturesList()) |feature| {
                     help_text.writer().print(" {s}: {s}\n", .{ feature.name, feature.description }) catch break :help;
                 }
                 std.log.info("Available CPU features for architecture '{s}':\n{s}", .{
-                    @tagName(diags.arch.?), help_text.items,
+                    @tagName(diags.arch orelse unreachable), help_text.items,
                 });
             }
             fatal("Unknown CPU feature: '{s}'", .{diags.unknown_feature_name});
@@ -3120,16 +3120,16 @@ fn updateModule(gpa: Allocator, comp: *Compilation, hook: AfterUpdateHook) !void
     } else switch (hook) {
         .none => {},
         .print_emit_bin_dir_path => {
-            const emit = comp.bin_file.options.emit.?;
+            const emit = comp.bin_file.options.emit orelse unreachable;
             const full_path = try emit.directory.join(gpa, &.{emit.sub_path});
             defer gpa.free(full_path);
-            const dir_path = fs.path.dirname(full_path).?;
+            const dir_path = fs.path.dirname(full_path) orelse unreachable;
             try io.getStdOut().writer().print("{s}\n", .{dir_path});
         },
         .update => |full_path| {
-            const bin_sub_path = comp.bin_file.options.emit.?.sub_path;
+            const bin_sub_path = comp.bin_file.options.emit orelse unreachable.sub_path;
             const cwd = fs.cwd();
-            const cache_dir = comp.bin_file.options.emit.?.directory.handle;
+            const cache_dir = comp.bin_file.options.emit orelse unreachable.directory.handle;
             _ = try cache_dir.updateFile(bin_sub_path, cwd, full_path, .{});
 
             // If a .pdb file is part of the expected output, we must also copy
@@ -3696,7 +3696,7 @@ pub fn cmdBuild(gpa: Allocator, arena: Allocator, args: []const []const u8) !voi
         };
         try comp.makeBinFileExecutable();
 
-        const emit = comp.bin_file.options.emit.?;
+        const emit = comp.bin_file.options.emit orelse unreachable;
         child_argv.items[argv_index_exe] = try emit.directory.join(
             arena,
             &[_][]const u8{emit.sub_path},

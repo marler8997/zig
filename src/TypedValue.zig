@@ -142,7 +142,7 @@ pub fn print(
             if (level == 0) {
                 return writer.writeAll(".{ ... }");
             }
-            const vals = val.castTag(.aggregate).?.data;
+            const vals = val.castTag(.aggregate) orelse unreachable.data;
             if (ty.zigTypeTag() == .Struct) {
                 try writer.writeAll(".{ ");
                 const struct_fields = ty.structFields();
@@ -189,11 +189,11 @@ pub fn print(
             if (level == 0) {
                 return writer.writeAll(".{ ... }");
             }
-            const union_val = val.castTag(.@"union").?.data;
+            const union_val = val.castTag(.@"union") orelse unreachable.data;
             try writer.writeAll(".{ ");
 
             try print(.{
-                .ty = ty.unionTagType().?,
+                .ty = ty.unionTagType() orelse unreachable,
                 .val = union_val.tag,
             }, writer, level - 1, mod);
             try writer.writeAll(" = ");
@@ -211,39 +211,39 @@ pub fn print(
         .void_value => return writer.writeAll("{}"),
         .unreachable_value => return writer.writeAll("unreachable"),
         .the_only_possible_value => {
-            val = ty.onePossibleValue().?;
+            val = ty.onePossibleValue() orelse unreachable;
         },
         .bool_true => return writer.writeAll("true"),
         .bool_false => return writer.writeAll("false"),
-        .ty => return val.castTag(.ty).?.data.print(writer, mod),
+        .ty => return val.castTag(.ty) orelse unreachable.data.print(writer, mod),
         .int_type => {
-            const int_type = val.castTag(.int_type).?.data;
+            const int_type = val.castTag(.int_type) orelse unreachable.data;
             return writer.print("{s}{d}", .{
                 if (int_type.signed) "s" else "u",
                 int_type.bits,
             });
         },
-        .int_u64 => return std.fmt.formatIntValue(val.castTag(.int_u64).?.data, "", .{}, writer),
-        .int_i64 => return std.fmt.formatIntValue(val.castTag(.int_i64).?.data, "", .{}, writer),
-        .int_big_positive => return writer.print("{}", .{val.castTag(.int_big_positive).?.asBigInt()}),
-        .int_big_negative => return writer.print("{}", .{val.castTag(.int_big_negative).?.asBigInt()}),
+        .int_u64 => return std.fmt.formatIntValue(val.castTag(.int_u64) orelse unreachable.data, "", .{}, writer),
+        .int_i64 => return std.fmt.formatIntValue(val.castTag(.int_i64) orelse unreachable.data, "", .{}, writer),
+        .int_big_positive => return writer.print("{}", .{val.castTag(.int_big_positive) orelse unreachable.asBigInt()}),
+        .int_big_negative => return writer.print("{}", .{val.castTag(.int_big_negative) orelse unreachable.asBigInt()}),
         .lazy_align => {
-            const sub_ty = val.castTag(.lazy_align).?.data;
+            const sub_ty = val.castTag(.lazy_align) orelse unreachable.data;
             const x = sub_ty.abiAlignment(target);
             return writer.print("{d}", .{x});
         },
         .lazy_size => {
-            const sub_ty = val.castTag(.lazy_size).?.data;
+            const sub_ty = val.castTag(.lazy_size) orelse unreachable.data;
             const x = sub_ty.abiSize(target);
             return writer.print("{d}", .{x});
         },
         .function => return writer.print("(function '{s}')", .{
-            mod.declPtr(val.castTag(.function).?.data.owner_decl).name,
+            mod.declPtr(val.castTag(.function) orelse unreachable.data.owner_decl).name,
         }),
         .extern_fn => return writer.writeAll("(extern function)"),
         .variable => return writer.writeAll("(variable)"),
         .decl_ref_mut => {
-            const decl_index = val.castTag(.decl_ref_mut).?.data.decl_index;
+            const decl_index = val.castTag(.decl_ref_mut) orelse unreachable.data.decl_index;
             const decl = mod.declPtr(decl_index);
             if (level == 0) {
                 return writer.print("(decl ref mut '{s}')", .{decl.name});
@@ -254,7 +254,7 @@ pub fn print(
             }, writer, level - 1, mod);
         },
         .decl_ref => {
-            const decl_index = val.castTag(.decl_ref).?.data;
+            const decl_index = val.castTag(.decl_ref) orelse unreachable.data;
             const decl = mod.declPtr(decl_index);
             if (level == 0) {
                 return writer.print("(decl ref '{s}')", .{decl.name});
@@ -265,7 +265,7 @@ pub fn print(
             }, writer, level - 1, mod);
         },
         .elem_ptr => {
-            const elem_ptr = val.castTag(.elem_ptr).?.data;
+            const elem_ptr = val.castTag(.elem_ptr) orelse unreachable.data;
             try writer.writeAll("&");
             try print(.{
                 .ty = elem_ptr.elem_ty,
@@ -274,7 +274,7 @@ pub fn print(
             return writer.print("[{}]", .{elem_ptr.index});
         },
         .field_ptr => {
-            const field_ptr = val.castTag(.field_ptr).?.data;
+            const field_ptr = val.castTag(.field_ptr) orelse unreachable.data;
             try writer.writeAll("&");
             try print(.{
                 .ty = field_ptr.container_ty,
@@ -290,11 +290,11 @@ pub fn print(
             } else unreachable;
         },
         .empty_array => return writer.writeAll(".{}"),
-        .enum_literal => return writer.print(".{}", .{std.zig.fmtId(val.castTag(.enum_literal).?.data)}),
+        .enum_literal => return writer.print(".{}", .{std.zig.fmtId(val.castTag(.enum_literal) orelse unreachable.data)}),
         .enum_field_index => {
-            return writer.print(".{s}", .{ty.enumFieldName(val.castTag(.enum_field_index).?.data)});
+            return writer.print(".{s}", .{ty.enumFieldName(val.castTag(.enum_field_index) orelse unreachable.data)});
         },
-        .bytes => return writer.print("\"{}\"", .{std.zig.fmtEscapes(val.castTag(.bytes).?.data)}),
+        .bytes => return writer.print("\"{}\"", .{std.zig.fmtEscapes(val.castTag(.bytes) orelse unreachable.data)}),
         .repeated => {
             if (level == 0) {
                 return writer.writeAll(".{ ... }");
@@ -303,7 +303,7 @@ pub fn print(
             try writer.writeAll(".{ ");
             const elem_tv = TypedValue{
                 .ty = ty.elemType2(),
-                .val = val.castTag(.repeated).?.data,
+                .val = val.castTag(.repeated) orelse unreachable.data,
             };
             const len = ty.arrayLen();
             const max_len = std.math.min(len, max_aggregate_items);
@@ -323,12 +323,12 @@ pub fn print(
             try writer.writeAll(".{ ");
             try print(.{
                 .ty = ty.elemType2(),
-                .val = ty.sentinel().?,
+                .val = ty.sentinel() orelse unreachable,
             }, writer, level - 1, mod);
             return writer.writeAll(" }");
         },
         .slice => {
-            const payload = val.castTag(.slice).?.data;
+            const payload = val.castTag(.slice) orelse unreachable.data;
             try writer.writeAll(".{ ");
             const elem_ty = ty.elemType2();
             const len = payload.len.toUnsignedInt(target);
@@ -348,32 +348,32 @@ pub fn print(
             }
             return writer.writeAll(" }");
         },
-        .float_16 => return writer.print("{}", .{val.castTag(.float_16).?.data}),
-        .float_32 => return writer.print("{}", .{val.castTag(.float_32).?.data}),
-        .float_64 => return writer.print("{}", .{val.castTag(.float_64).?.data}),
-        .float_80 => return writer.print("{}", .{val.castTag(.float_80).?.data}),
-        .float_128 => return writer.print("{}", .{val.castTag(.float_128).?.data}),
-        .@"error" => return writer.print("error.{s}", .{val.castTag(.@"error").?.data.name}),
+        .float_16 => return writer.print("{}", .{val.castTag(.float_16) orelse unreachable.data}),
+        .float_32 => return writer.print("{}", .{val.castTag(.float_32) orelse unreachable.data}),
+        .float_64 => return writer.print("{}", .{val.castTag(.float_64) orelse unreachable.data}),
+        .float_80 => return writer.print("{}", .{val.castTag(.float_80) orelse unreachable.data}),
+        .float_128 => return writer.print("{}", .{val.castTag(.float_128) orelse unreachable.data}),
+        .@"error" => return writer.print("error.{s}", .{val.castTag(.@"error") orelse unreachable.data.name}),
         .eu_payload => {
-            val = val.castTag(.eu_payload).?.data;
+            val = val.castTag(.eu_payload) orelse unreachable.data;
         },
         .opt_payload => {
-            val = val.castTag(.opt_payload).?.data;
+            val = val.castTag(.opt_payload) orelse unreachable.data;
         },
         .eu_payload_ptr => {
             try writer.writeAll("&");
-            val = val.castTag(.eu_payload_ptr).?.data.container_ptr;
+            val = val.castTag(.eu_payload_ptr) orelse unreachable.data.container_ptr;
         },
         .opt_payload_ptr => {
             try writer.writeAll("&");
-            val = val.castTag(.opt_payload_ptr).?.data.container_ptr;
+            val = val.castTag(.opt_payload_ptr) orelse unreachable.data.container_ptr;
         },
 
         // TODO these should not appear in this function
         .inferred_alloc => return writer.writeAll("(inferred allocation value)"),
         .inferred_alloc_comptime => return writer.writeAll("(inferred comptime allocation value)"),
         .bound_fn => {
-            const bound_func = val.castTag(.bound_fn).?.data;
+            const bound_func = val.castTag(.bound_fn) orelse unreachable.data;
             return writer.print("(bound_fn %{}(%{})", .{ bound_func.func_inst, bound_func.arg0_inst });
         },
         .generic_poison_type => return writer.writeAll("(generic poison type)"),

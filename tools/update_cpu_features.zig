@@ -910,19 +910,19 @@ fn processOneTarget(job: Job) anyerror!void {
             if (kv.key_ptr.*[0] == '!') continue;
             if (kv.value_ptr.* != .Object) continue;
             if (hasSuperclass(&kv.value_ptr.Object, "SubtargetFeature")) {
-                const llvm_name = kv.value_ptr.Object.get("Name").?.String;
+                const llvm_name = kv.value_ptr.Object.get("Name") orelse unreachable.String;
                 if (llvm_name.len == 0) continue;
 
                 var zig_name = try llvmNameToZigName(arena, llvm_name);
-                var desc = kv.value_ptr.Object.get("Desc").?.String;
+                var desc = kv.value_ptr.Object.get("Desc") orelse unreachable.String;
                 var deps = std.ArrayList([]const u8).init(arena);
                 var omit = false;
                 var flatten = false;
-                const implies = kv.value_ptr.Object.get("Implies").?.Array;
+                const implies = kv.value_ptr.Object.get("Implies") orelse unreachable.Array;
                 for (implies.items) |imply| {
-                    const other_key = imply.Object.get("def").?.String;
-                    const other_obj = &root_map.getPtr(other_key).?.Object;
-                    const other_llvm_name = other_obj.get("Name").?.String;
+                    const other_key = imply.Object.get("def") orelse unreachable.String;
+                    const other_obj = &root_map.getPtr(other_key) orelse unreachable.Object;
+                    const other_llvm_name = other_obj.get("Name") orelse unreachable.String;
                     const other_zig_name = (try llvmNameToZigNameOmit(
                         arena,
                         llvm_target,
@@ -965,16 +965,16 @@ fn processOneTarget(job: Job) anyerror!void {
                 }
             }
             if (hasSuperclass(&kv.value_ptr.Object, "Processor")) {
-                const llvm_name = kv.value_ptr.Object.get("Name").?.String;
+                const llvm_name = kv.value_ptr.Object.get("Name") orelse unreachable.String;
                 if (llvm_name.len == 0) continue;
 
                 var zig_name = try llvmNameToZigName(arena, llvm_name);
                 var deps = std.ArrayList([]const u8).init(arena);
-                const features = kv.value_ptr.Object.get("Features").?.Array;
+                const features = kv.value_ptr.Object.get("Features") orelse unreachable.Array;
                 for (features.items) |feature| {
-                    const feature_key = feature.Object.get("def").?.String;
-                    const feature_obj = &root_map.getPtr(feature_key).?.Object;
-                    const feature_llvm_name = feature_obj.get("Name").?.String;
+                    const feature_key = feature.Object.get("def") orelse unreachable.String;
+                    const feature_obj = &root_map.getPtr(feature_key) orelse unreachable.Object;
+                    const feature_llvm_name = feature_obj.get("Name") orelse unreachable.String;
                     if (feature_llvm_name.len == 0) continue;
                     const feature_zig_name = (try llvmNameToZigNameOmit(
                         arena,
@@ -983,11 +983,11 @@ fn processOneTarget(job: Job) anyerror!void {
                     )) orelse continue;
                     try deps.append(feature_zig_name);
                 }
-                const tune_features = kv.value_ptr.Object.get("TuneFeatures").?.Array;
+                const tune_features = kv.value_ptr.Object.get("TuneFeatures") orelse unreachable.Array;
                 for (tune_features.items) |feature| {
-                    const feature_key = feature.Object.get("def").?.String;
-                    const feature_obj = &root_map.getPtr(feature_key).?.Object;
-                    const feature_llvm_name = feature_obj.get("Name").?.String;
+                    const feature_key = feature.Object.get("def") orelse unreachable.String;
+                    const feature_obj = &root_map.getPtr(feature_key) orelse unreachable.Object;
+                    const feature_llvm_name = feature_obj.get("Name") orelse unreachable.String;
                     if (feature_llvm_name.len == 0) continue;
                     const feature_zig_name = (try llvmNameToZigNameOmit(
                         arena,
@@ -1290,7 +1290,7 @@ fn pruneFeatures(
     {
         var it = deps_set.keyIterator();
         while (it.next()) |key| {
-            const feature = features_table.get(key.*).?;
+            const feature = features_table.get(key.*) orelse unreachable;
             try walkFeatures(features_table, &deletion_set, feature);
         }
     }
@@ -1309,7 +1309,7 @@ fn walkFeatures(
 ) error{OutOfMemory}!void {
     for (feature.deps) |dep| {
         try deletion_set.put(dep, {});
-        const other_feature = features_table.get(dep).?;
+        const other_feature = features_table.get(dep) orelse unreachable;
         try walkFeatures(features_table, deletion_set, other_feature);
     }
 }
@@ -1319,7 +1319,7 @@ fn putDep(
     features_table: std.StringHashMap(Feature),
     zig_feature_name: []const u8,
 ) error{OutOfMemory}!void {
-    const feature = features_table.get(zig_feature_name).?;
+    const feature = features_table.get(zig_feature_name) orelse unreachable;
     if (feature.flatten) {
         for (feature.deps) |dep| {
             try putDep(deps_set, features_table, dep);

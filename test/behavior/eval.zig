@@ -14,7 +14,7 @@ fn fibonacci(x: i32) i32 {
 }
 
 fn unwrapAndAddOne(blah: ?i32) i32 {
-    return blah.? + 1;
+    return blah orelse unreachable + 1;
 }
 const should_be_1235 = unwrapAndAddOne(1234);
 test "static add one" {
@@ -787,8 +787,8 @@ test "comptime assign int to optional int" {
     comptime {
         var x: ?i32 = null;
         x = 2;
-        x.? *= 10;
-        try expectEqual(20, x.?);
+        x orelse unreachable *= 10;
+        try expectEqual(20, x orelse unreachable);
     }
 }
 

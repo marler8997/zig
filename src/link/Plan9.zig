@@ -164,7 +164,7 @@ pub fn createEmpty(gpa: Allocator, options: link.Options) !*Plan9 {
 
 fn putFn(self: *Plan9, decl_index: Module.Decl.Index, out: FnDeclOutput) !void {
     const gpa = self.base.allocator;
-    const mod = self.base.options.module.?;
+    const mod = self.base.options.module orelse unreachable;
     const decl = mod.declPtr(decl_index);
     const fn_map_res = try self.fn_decl_table.getOrPut(gpa, decl.getFileScope());
     if (fn_map_res.found_existing) {
@@ -272,7 +272,7 @@ pub fn updateFunc(self: *Plan9, module: *Module, func: *Module.Fn, air: Air, liv
     const out: FnDeclOutput = .{
         .code = code,
         .lineinfo = dbg_line_buffer.toOwnedSlice(),
-        .start_line = start_line.?,
+        .start_line = start_line orelse unreachable,
         .end_line = end_line,
     };
     try self.putFn(decl_index, out);
@@ -420,7 +420,7 @@ pub fn flushModule(self: *Plan9, comp: *Compilation, prog_node: *std.Progress.No
     var iovecs = try self.base.allocator.alloc(std.os.iovec_const, self.declCount() + 4);
     defer self.base.allocator.free(iovecs);
 
-    const file = self.base.file.?;
+    const file = self.base.file orelse unreachable;
 
     var hdr_buf: [40]u8 = undefined;
     // account for the fat header
@@ -462,12 +462,12 @@ pub fn flushModule(self: *Plan9, comp: *Compilation, prog_node: *std.Progress.No
                 text_i += out.code.len;
                 decl.link.plan9.offset = off;
                 if (!self.sixtyfour_bit) {
-                    mem.writeIntNative(u32, got_table[decl.link.plan9.got_index.? * 4 ..][0..4], @intCast(u32, off));
-                    mem.writeInt(u32, got_table[decl.link.plan9.got_index.? * 4 ..][0..4], @intCast(u32, off), self.base.options.target.cpu.arch.endian());
+                    mem.writeIntNative(u32, got_table[decl.link.plan9.got_index orelse unreachable * 4 ..][0..4], @intCast(u32, off));
+                    mem.writeInt(u32, got_table[decl.link.plan9.got_index orelse unreachable * 4 ..][0..4], @intCast(u32, off), self.base.options.target.cpu.arch.endian());
                 } else {
-                    mem.writeInt(u64, got_table[decl.link.plan9.got_index.? * 8 ..][0..8], off, self.base.options.target.cpu.arch.endian());
+                    mem.writeInt(u64, got_table[decl.link.plan9.got_index orelse unreachable * 8 ..][0..8], off, self.base.options.target.cpu.arch.endian());
                 }
-                self.syms.items[decl.link.plan9.sym_index.?].value = off;
+                self.syms.items[decl.link.plan9.sym_index orelse unreachable].value = off;
                 if (mod.decl_exports.get(decl_index)) |exports| {
                     try self.addDeclExports(mod, decl, exports);
                 }
@@ -500,11 +500,11 @@ pub fn flushModule(self: *Plan9, comp: *Compilation, prog_node: *std.Progress.No
             data_i += code.len;
             decl.link.plan9.offset = off;
             if (!self.sixtyfour_bit) {
-                mem.writeInt(u32, got_table[decl.link.plan9.got_index.? * 4 ..][0..4], @intCast(u32, off), self.base.options.target.cpu.arch.endian());
+                mem.writeInt(u32, got_table[decl.link.plan9.got_index orelse unreachable * 4 ..][0..4], @intCast(u32, off), self.base.options.target.cpu.arch.endian());
             } else {
-                mem.writeInt(u64, got_table[decl.link.plan9.got_index.? * 8 ..][0..8], off, self.base.options.target.cpu.arch.endian());
+                mem.writeInt(u64, got_table[decl.link.plan9.got_index orelse unreachable * 8 ..][0..8], off, self.base.options.target.cpu.arch.endian());
             }
-            self.syms.items[decl.link.plan9.sym_index.?].value = off;
+            self.syms.items[decl.link.plan9.sym_index orelse unreachable].value = off;
             if (mod.decl_exports.get(decl_index)) |exports| {
                 try self.addDeclExports(mod, decl, exports);
             }
@@ -532,12 +532,12 @@ pub fn flushModule(self: *Plan9, comp: *Compilation, prog_node: *std.Progress.No
         .bss = 0,
         .spsz = 0,
         .pcsz = @intCast(u32, linecountinfo.items.len),
-        .entry = @intCast(u32, self.entry_val.?),
+        .entry = @intCast(u32, self.entry_val orelse unreachable),
     };
     std.mem.copy(u8, hdr_slice, self.hdr.toU8s()[0..hdr_size]);
     // write the fat header for 64 bit entry points
     if (self.sixtyfour_bit) {
-        mem.writeIntSliceBig(u64, hdr_buf[32..40], self.entry_val.?);
+        mem.writeIntSliceBig(u64, hdr_buf[32..40], self.entry_val orelse unreachable);
     }
     // write it all!
     try file.pwritevAll(iovecs, 0);
@@ -557,7 +557,7 @@ fn addDeclExports(
             }
         }
         const sym = .{
-            .value = decl.link.plan9.offset.?,
+            .value = decl.link.plan9.offset orelse unreachable,
             .type = decl.link.plan9.type.toGlobal(),
             .name = exp.options.name,
         };
@@ -576,11 +576,11 @@ pub fn freeDecl(self: *Plan9, decl_index: Module.Decl.Index) void {
     // allocateDeclIndexes and then freeDecl without any updateDecl in between.
     // However that is planned to change, see the TODO comment in Module.zig
     // in the deleteUnusedDecl function.
-    const mod = self.base.options.module.?;
+    const mod = self.base.options.module orelse unreachable;
     const decl = mod.declPtr(decl_index);
     const is_fn = (decl.val.tag() == .function);
     if (is_fn) {
-        var symidx_and_submap = self.fn_decl_table.get(decl.getFileScope()).?;
+        var symidx_and_submap = self.fn_decl_table.get(decl.getFileScope()) orelse unreachable;
         var submap = symidx_and_submap.functions;
         _ = submap.swapRemove(decl_index);
         if (submap.count() == 0) {
@@ -602,7 +602,7 @@ pub fn freeDecl(self: *Plan9, decl_index: Module.Decl.Index) void {
 }
 
 pub fn seeDecl(self: *Plan9, decl_index: Module.Decl.Index) !void {
-    const mod = self.base.options.module.?;
+    const mod = self.base.options.module orelse unreachable;
     const decl = mod.declPtr(decl_index);
     if (decl.link.plan9.got_index == null) {
         if (self.got_index_free_list.popOrNull()) |i| {
@@ -662,7 +662,7 @@ pub fn openPath(allocator: Allocator, sub_path: []const u8, options: link.Option
     const self = try createEmpty(allocator, options);
     errdefer self.base.destroy();
 
-    const file = try options.emit.?.directory.handle.createFile(sub_path, .{
+    const file = try options.emit orelse unreachable.directory.handle.createFile(sub_path, .{
         .read = true,
         .mode = link.determineMode(options),
     });
@@ -719,7 +719,7 @@ pub fn writeSyms(self: *Plan9, buf: *std.ArrayList(u8)) !void {
         }
     }
 
-    const mod = self.base.options.module.?;
+    const mod = self.base.options.module orelse unreachable;
 
     // write the data symbols
     {
@@ -727,11 +727,11 @@ pub fn writeSyms(self: *Plan9, buf: *std.ArrayList(u8)) !void {
         while (it.next()) |entry| {
             const decl_index = entry.key_ptr.*;
             const decl = mod.declPtr(decl_index);
-            const sym = self.syms.items[decl.link.plan9.sym_index.?];
+            const sym = self.syms.items[decl.link.plan9.sym_index orelse unreachable];
             try self.writeSym(writer, sym);
-            if (self.base.options.module.?.decl_exports.get(decl_index)) |exports| {
+            if (self.base.options.module orelse unreachable.decl_exports.get(decl_index)) |exports| {
                 for (exports) |e| {
-                    try self.writeSym(writer, self.syms.items[e.link.plan9.?]);
+                    try self.writeSym(writer, self.syms.items[e.link.plan9 orelse unreachable]);
                 }
             }
         }
@@ -752,11 +752,11 @@ pub fn writeSyms(self: *Plan9, buf: *std.ArrayList(u8)) !void {
             while (submap_it.next()) |entry| {
                 const decl_index = entry.key_ptr.*;
                 const decl = mod.declPtr(decl_index);
-                const sym = self.syms.items[decl.link.plan9.sym_index.?];
+                const sym = self.syms.items[decl.link.plan9.sym_index orelse unreachable];
                 try self.writeSym(writer, sym);
-                if (self.base.options.module.?.decl_exports.get(decl_index)) |exports| {
+                if (self.base.options.module orelse unreachable.decl_exports.get(decl_index)) |exports| {
                     for (exports) |e| {
-                        const s = self.syms.items[e.link.plan9.?];
+                        const s = self.syms.items[e.link.plan9 orelse unreachable];
                         if (mem.eql(u8, s.name, "_start"))
                             self.entry_val = s.value;
                         try self.writeSym(writer, s);
@@ -778,7 +778,7 @@ pub fn getDeclVAddr(
     reloc_info: link.File.RelocInfo,
 ) !u64 {
     _ = reloc_info;
-    const mod = self.base.options.module.?;
+    const mod = self.base.options.module orelse unreachable;
     const decl = mod.declPtr(decl_index);
     if (decl.ty.zigTypeTag() == .Fn) {
         var start = self.bases.text;

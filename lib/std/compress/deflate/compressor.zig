@@ -872,7 +872,7 @@ pub fn Compressor(comptime WriterType: anytype) type {
                     s.compression_level = levels(.level_6);
                     try s.initDeflate();
                     if (options.dictionary != null) {
-                        s.fillWindow(options.dictionary.?);
+                        s.fillWindow(options.dictionary orelse unreachable);
                     }
                 },
                 .level_2,
@@ -888,7 +888,7 @@ pub fn Compressor(comptime WriterType: anytype) type {
                     s.compression_level = levels(options.level);
                     try s.initDeflate();
                     if (options.dictionary != null) {
-                        s.fillWindow(options.dictionary.?);
+                        s.fillWindow(options.dictionary orelse unreachable);
                     }
                 },
             }
@@ -950,7 +950,7 @@ pub fn Compressor(comptime WriterType: anytype) type {
                     self.max_insert_index = 0;
 
                     if (self.dictionary != null) {
-                        self.fillWindow(self.dictionary.?);
+                        self.fillWindow(self.dictionary orelse unreachable);
                     }
                 },
             }

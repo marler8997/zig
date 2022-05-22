@@ -15,7 +15,7 @@ const UefiPoolAllocator = struct {
     fn alignedAlloc(len: usize, alignment: usize) ?[*]u8 {
         var unaligned_ptr: [*]align(8) u8 = undefined;
 
-        if (uefi.system_table.boot_services.?.allocatePool(uefi.efi_pool_memory_type, len, &unaligned_ptr) != .Success)
+        if (uefi.system_table.boot_services orelse unreachable.allocatePool(uefi.efi_pool_memory_type, len, &unaligned_ptr) != .Success)
             return null;
 
         const unaligned_addr = @ptrToInt(unaligned_ptr);
@@ -28,7 +28,7 @@ const UefiPoolAllocator = struct {
     }
 
     fn alignedFree(ptr: [*]u8) void {
-        _ = uefi.system_table.boot_services.?.freePool(getHeader(ptr).*);
+        _ = uefi.system_table.boot_services orelse unreachable.freePool(getHeader(ptr).*);
     }
 
     fn alloc(
@@ -116,7 +116,7 @@ fn uefi_alloc(
 
     var ptr: [*]align(8) u8 = undefined;
 
-    if (uefi.system_table.boot_services.?.allocatePool(uefi.efi_pool_memory_type, len, &ptr) != .Success) {
+    if (uefi.system_table.boot_services orelse unreachable.allocatePool(uefi.efi_pool_memory_type, len, &ptr) != .Success) {
         return error.OutOfMemory;
     }
 
@@ -149,5 +149,5 @@ fn uefi_free(
 ) void {
     _ = buf_align;
     _ = ret_addr;
-    _ = uefi.system_table.boot_services.?.freePool(@alignCast(8, buf.ptr));
+    _ = uefi.system_table.boot_services orelse unreachable.freePool(@alignCast(8, buf.ptr));
 }

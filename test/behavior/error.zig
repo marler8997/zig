@@ -188,7 +188,7 @@ const MyErrSet = error{
 };
 
 fn testErrorSetType() !void {
-    try expect(@typeInfo(MyErrSet).ErrorSet.?.len == 2);
+    try expect(@typeInfo(MyErrSet).ErrorSet orelse unreachable.len == 2);
 
     const a: MyErrSet!i32 = 5678;
     const b: MyErrSet!i32 = MyErrSet.OutOfMemory;
@@ -605,9 +605,9 @@ test "inferred error set equality" {
         fn quux() anyerror!void {}
     };
 
-    const FooError = @typeInfo(@typeInfo(@TypeOf(S.foo)).Fn.return_type.?).ErrorUnion.error_set;
-    const BarError = @typeInfo(@typeInfo(@TypeOf(S.bar)).Fn.return_type.?).ErrorUnion.error_set;
-    const BazError = @typeInfo(@typeInfo(@TypeOf(S.baz)).Fn.return_type.?).ErrorUnion.error_set;
+    const FooError = @typeInfo(@typeInfo(@TypeOf(S.foo)).Fn.return_type orelse unreachable).ErrorUnion.error_set;
+    const BarError = @typeInfo(@typeInfo(@TypeOf(S.bar)).Fn.return_type orelse unreachable).ErrorUnion.error_set;
+    const BazError = @typeInfo(@typeInfo(@TypeOf(S.baz)).Fn.return_type orelse unreachable).ErrorUnion.error_set;
 
     try expect(BarError != error{Bad});
 

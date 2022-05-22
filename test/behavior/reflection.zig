@@ -7,12 +7,12 @@ const reflection = @This();
 test "reflection: function return type, var args, and param types" {
     comptime {
         const info = @typeInfo(@TypeOf(dummy)).Fn;
-        try expect(info.return_type.? == i32);
+        try expect(info.return_type orelse unreachable == i32);
         try expect(!info.is_var_args);
         try expect(info.args.len == 3);
-        try expect(info.args[0].arg_type.? == bool);
-        try expect(info.args[1].arg_type.? == i32);
-        try expect(info.args[2].arg_type.? == f32);
+        try expect(info.args[0].arg_type orelse unreachable == bool);
+        try expect(info.args[1].arg_type orelse unreachable == i32);
+        try expect(info.args[2].arg_type orelse unreachable == f32);
     }
 }
 

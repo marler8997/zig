@@ -2,7 +2,7 @@ pub fn main() void {
     var x: u8 = undefined;
     const maybe_x = byPtr(&x);
     assert(maybe_x != null);
-    maybe_x.?.* = 255;
+    maybe_x orelse unreachable.* = 255;
     assert(x == 255);
 }
 

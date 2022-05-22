@@ -758,7 +758,7 @@ test "result location is optional inside error union" {
     if (builtin.zig_backend == .stage2_arm) return error.SkipZigTest; // TODO
 
     const x = maybe(true) catch unreachable;
-    try expect(x.? == 42);
+    try expect(x orelse unreachable == 42);
 }
 
 fn maybe(x: bool) anyerror!?u32 {

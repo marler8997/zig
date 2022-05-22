@@ -423,7 +423,7 @@ fn networkShareServersEql(ns1: []const u8, ns2: []const u8) bool {
     var it2 = mem.tokenize(u8, ns2, &[_]u8{sep2});
 
     // TODO ASCII is wrong, we actually need full unicode support to compare paths.
-    return asciiEqlIgnoreCase(it1.next().?, it2.next().?);
+    return asciiEqlIgnoreCase(it1.next() orelse unreachable, it2.next() orelse unreachable);
 }
 
 fn compareDiskDesignators(kind: WindowsPath.Kind, p1: []const u8, p2: []const u8) bool {
@@ -444,7 +444,7 @@ fn compareDiskDesignators(kind: WindowsPath.Kind, p1: []const u8, p2: []const u8
             var it2 = mem.tokenize(u8, p2, &[_]u8{sep2});
 
             // TODO ASCII is wrong, we actually need full unicode support to compare paths.
-            return asciiEqlIgnoreCase(it1.next().?, it2.next().?) and asciiEqlIgnoreCase(it1.next().?, it2.next().?);
+            return asciiEqlIgnoreCase(it1.next() orelse unreachable, it2.next() orelse unreachable) and asciiEqlIgnoreCase(it1.next() orelse unreachable, it2.next() orelse unreachable);
         },
     }
 }
@@ -564,8 +564,8 @@ pub fn resolveWindows(allocator: Allocator, paths: []const []const u8) ![]u8 {
             WindowsPath.Kind.NetworkShare => {
                 result = try allocator.alloc(u8, max_size);
                 var it = mem.tokenize(u8, paths[first_index], "/\\");
-                const server_name = it.next().?;
-                const other_name = it.next().?;
+                const server_name = it.next() orelse unreachable;
+                const other_name = it.next() orelse unreachable;
 
                 result[result_index] = '\\';
                 result_index += 1;
@@ -954,7 +954,7 @@ test "dirnameWindows" {
 
 fn testDirnamePosix(input: []const u8, expected_output: ?[]const u8) !void {
     if (dirnamePosix(input)) |output| {
-        try testing.expect(mem.eql(u8, output, expected_output.?));
+        try testing.expect(mem.eql(u8, output, expected_output orelse unreachable));
     } else {
         try testing.expect(expected_output == null);
     }
@@ -962,7 +962,7 @@ fn testDirnamePosix(input: []const u8, expected_output: ?[]const u8) !void {
 
 fn testDirnameWindows(input: []const u8, expected_output: ?[]const u8) !void {
     if (dirnameWindows(input)) |output| {
-        try testing.expect(mem.eql(u8, output, expected_output.?));
+        try testing.expect(mem.eql(u8, output, expected_output orelse unreachable));
     } else {
         try testing.expect(expected_output == null);
     }

@@ -232,7 +232,7 @@ fn testLock(allocator: Allocator, lock: *RwLock) callconv(.Async) void {
         const frame = allocator.create(@Frame(readRunner)) catch @panic("memory");
         read_node.data = frame;
         frame.* = async readRunner(lock);
-        Loop.instance.?.onNextTick(read_node);
+        Loop.instance orelse unreachable.onNextTick(read_node);
     }
 
     var write_nodes: [shared_it_count]Loop.NextTickNode = undefined;
@@ -240,7 +240,7 @@ fn testLock(allocator: Allocator, lock: *RwLock) callconv(.Async) void {
         const frame = allocator.create(@Frame(writeRunner)) catch @panic("memory");
         write_node.data = frame;
         frame.* = async writeRunner(lock);
-        Loop.instance.?.onNextTick(write_node);
+        Loop.instance orelse unreachable.onNextTick(write_node);
     }
 
     for (write_nodes) |*write_node| {
