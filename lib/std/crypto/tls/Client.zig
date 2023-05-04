@@ -43,7 +43,11 @@ application_cipher: tls.ApplicationCipher,
 /// 3. unused
 /// The fields `partial_cleartext_idx`, `partial_ciphertext_idx`, and
 /// `partial_ciphertext_end` describe the span of the segments.
-partially_read_buffer: [tls.max_ciphertext_record_len]u8,
+/// !!! NOTE: we need this to be larger than enough to contain 1 ciphertext record
+///           because currently we sometimes store both plaintext at the beginning
+///           which doesn't leave us room for a full record.  For now I've multiplied
+///           the capacity by 2 which seems to work?
+partially_read_buffer: [2*tls.max_ciphertext_record_len]u8,
 
 /// This is an example of the type that is needed by the read and write
 /// functions. It can have any fields but it must at least have these
@@ -920,29 +924,43 @@ pub fn readvAdvanced(c: *Client, stream: anytype, iovecs: []const std.os.iovec) 
 
     // Give away the buffered cleartext we have, if any.
     const partial_cleartext = c.partially_read_buffer[c.partial_cleartext_idx..c.partial_ciphertext_idx];
+    // capacity is 16645
+    std.log.info("readvAdvanced {} {} {} clear={} cipher={}", .{
+        c.partial_cleartext_idx,
+        c.partial_ciphertext_idx,
+        c.partial_ciphertext_end,
+        partial_cleartext.len,
+        c.partial_ciphertext_end - c.partial_ciphertext_idx,
+    });
     if (partial_cleartext.len > 0) {
         const amt = @intCast(u15, vp.put(partial_cleartext));
+        assert(vp.total == amt);
         c.partial_cleartext_idx += amt;
 
-        if (c.partial_ciphertext_end == c.partial_ciphertext_idx) {
+        // or c.received_close_notify ??? is this necessary?
+        if (c.partial_cleartext_idx == c.partial_ciphertext_end) {
             // The buffer is now empty.
             c.partial_cleartext_idx = 0;
             c.partial_ciphertext_idx = 0;
             c.partial_ciphertext_end = 0;
         }
 
-        if (c.received_close_notify) {
-            c.partial_ciphertext_end = 0;
-            assert(vp.total == amt);
-            return amt;
-        } else if (amt <= partial_cleartext.len) {
-            // We don't need more data, so don't call read.
-            assert(vp.total == amt);
-            return amt;
-        }
+        return amt;
     }
 
     assert(!c.received_close_notify);
+
+    // NOTE: this isn't optimially efficient, but fixes bugs that aren't able to handle
+    //       not having the full capacity of the partially_read_buffer at this point in the code
+    if (c.partial_ciphertext_idx != 0) {
+        const new_len = c.partial_ciphertext_end - c.partial_ciphertext_idx;
+        std.log.info("shifting {} bytes of ciphertext by {} bytes", .{new_len, c.partial_ciphertext_idx});
+        std.mem.copyForwards(u8, c.partially_read_buffer[0 .. new_len] , c.partially_read_buffer[c.partial_ciphertext_idx..][0 .. new_len]);
+        c.partial_cleartext_idx = 0;
+        c.partial_ciphertext_idx = 0;
+        c.partial_ciphertext_end = new_len;
+    }
+
 
     // Ideally, this buffer would never be used. It is needed when `iovecs` are
     // too small to fit the cleartext, which may be as large as `max_ciphertext_len`.
@@ -975,7 +993,21 @@ pub fn readvAdvanced(c: *Client, stream: anytype, iovecs: []const std.os.iovec) 
     const wanted_read_len = buf_cap * (max_ciphertext_len + tls.record_header_len);
     const ask_len = @max(wanted_read_len, cleartext_stack_buffer.len);
     const ask_iovecs = limitVecs(&ask_iovecs_buf, ask_len);
+    switch (ask_iovecs.len) {
+        0 => {
+            assert(wanted_read_len == 0);
+            std.log.info("wanted_read_len 0", .{});
+        },
+        1 => std.log.info("wanted_read_len {} ({})", .{wanted_read_len, ask_iovecs[0].iov_len}),
+        2 => std.log.info("wanted_read_len {} ({} and {})", .{wanted_read_len, ask_iovecs[0].iov_len, ask_iovecs[1].iov_len}),
+        else => @panic("unexpected"),
+    }
+    const ask_iovecs_buf_copy = ask_iovecs_buf;
     const actual_read_len = try stream.readv(ask_iovecs);
+    for (0 .. 2) |i| {
+        std.debug.assert(ask_iovecs_buf_copy[i].iov_len == ask_iovecs_buf[i].iov_len);
+    }
+    std.log.info("actually read {} bytes (asked for {})", .{actual_read_len, wanted_read_len});
     if (actual_read_len == 0) {
         // This is either a truncation attack, a bug in the server, or an
         // intentional omission of the close_notify message due to truncation
@@ -998,18 +1030,24 @@ pub fn readvAdvanced(c: *Client, stream: anytype, iovecs: []const std.os.iovec) 
     var frag = frag0;
     var in: usize = 0;
     while (true) {
+        std.log.info("loop frag{} in={} vp.total={}", .{@as(u1, if (frag.ptr == frag0.ptr) 0 else 1), in, vp.total});
         if (in == frag.len) {
             // Perfect split.
             if (frag.ptr == frag1.ptr) {
+                std.log.info("case 0.0 (dropping ciphertext {}-{}) returning {}", .{c.partial_ciphertext_idx, c.partial_ciphertext_end, vp.total});
+                // TODO: is this right, isn't frag1 the in_stack_buffer? actually frag1 is mutable
+                //       so it could have been redirected
                 c.partial_ciphertext_end = c.partial_ciphertext_idx;
                 return vp.total;
             }
+            std.log.info("case 0.1", .{});
             frag = frag1;
             in = 0;
             continue;
         }
 
         if (in + tls.record_header_len > frag.len) {
+            std.log.info("case 1", .{});
             if (frag.ptr == frag1.ptr)
                 return finishRead(c, frag, in, vp.total);
 
@@ -1036,6 +1074,8 @@ pub fn readvAdvanced(c: *Client, stream: anytype, iovecs: []const std.os.iovec) 
             in = 0;
             continue;
         }
+
+        std.log.info("case 2", .{});
         const ct = @intToEnum(tls.ContentType, frag[in]);
         in += 1;
         const legacy_version = mem.readIntBig(u16, frag[in..][0..2]);
@@ -1046,26 +1086,35 @@ pub fn readvAdvanced(c: *Client, stream: anytype, iovecs: []const std.os.iovec) 
         in += 2;
         const end = in + record_len;
         if (end > frag.len) {
+            std.log.info("case 2.0 in={}", .{in});
             // We need the record header on the next iteration of the loop.
             in -= tls.record_header_len;
 
-            if (frag.ptr == frag1.ptr)
+            if (frag.ptr == frag1.ptr) {
+                std.log.info("case 2.0.0 (is frag1)", .{});
                 return finishRead(c, frag, in, vp.total);
+            }
 
             // A record straddles the two fragments. Copy into the now-empty first fragment.
             const first = frag[in..];
             const full_record_len = record_len + tls.record_header_len;
             const second_len = full_record_len - first.len;
+            std.log.info("case 2.0.1 (is frag0) full_len={} first.len={} second.len={}", .{
+                full_record_len,
+                first.len,
+                second_len,
+            });
             if (frag1.len < second_len)
                 return finishRead2(c, first, frag1, vp.total);
 
-            @memcpy(frag[0..in], first);
-            @memcpy(frag[first.len..][0..second_len], frag1[0..second_len]);
+            std.mem.copyForwards(u8, frag[0 .. first.len], first);
+            std.mem.copyForwards(u8, frag[first.len..][0..second_len], frag1[0..second_len]);
             frag = frag[0..full_record_len];
             frag1 = frag1[second_len..];
             in = 0;
             continue;
         }
+        std.log.info("case 2.1 {s}", .{@tagName(ct)});
         switch (ct) {
             .alert => {
                 if (in + 2 > frag.len) return error.TlsDecodeError;
@@ -1227,14 +1276,14 @@ fn finishRead2(c: *Client, first: []const u8, frag1: []const u8, out: usize) usi
     if (c.partial_ciphertext_idx > c.partial_cleartext_idx) {
         // There is cleartext at the beginning already which we need to preserve.
         c.partial_ciphertext_end = @intCast(@TypeOf(c.partial_ciphertext_end), c.partial_ciphertext_idx + first.len + frag1.len);
-        @memcpy(c.partially_read_buffer[c.partial_ciphertext_idx..][0..first.len], first);
-        @memcpy(c.partially_read_buffer[c.partial_ciphertext_idx + first.len ..][0..frag1.len], frag1);
+        std.mem.copyForwards(u8, c.partially_read_buffer[c.partial_ciphertext_idx..][0..first.len], first);
+        std.mem.copyForwards(u8, c.partially_read_buffer[c.partial_ciphertext_idx + first.len ..][0..frag1.len], frag1);
     } else {
         c.partial_cleartext_idx = 0;
         c.partial_ciphertext_idx = 0;
         c.partial_ciphertext_end = @intCast(@TypeOf(c.partial_ciphertext_end), first.len + frag1.len);
-        @memcpy(c.partially_read_buffer[0..first.len], first);
-        @memcpy(c.partially_read_buffer[first.len..][0..frag1.len], frag1);
+        std.mem.copyForwards(u8, c.partially_read_buffer[0..first.len], first);
+        std.mem.copyForwards(u8, c.partially_read_buffer[first.len..][0..frag1.len], frag1);
     }
     return out;
 }
