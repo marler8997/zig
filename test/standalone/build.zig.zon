@@ -69,6 +69,9 @@
         .@"extern" = .{
             .path = "extern",
         },
+        .lazy_deps = .{
+            .path = "lazy_deps",
+        },
         .dep_diamond = .{
             .path = "dep_diamond",
         },

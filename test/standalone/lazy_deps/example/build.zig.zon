@@ -1,0 +1,14 @@
+.{
+    .name = "example",
+    .version = "0.0.0",
+    .dependencies = .{
+        .always_unavailable = .{
+            .url = "https://some_fake_host_that_hopefully_doesnt_exist/foo.tar",
+            .hash = "122026f249798ac9b3ab3561b94d8460aaf1fb3487a5cb7c021387db000000001234",
+            .lazy = true,
+        },
+    },
+    .paths = .{
+        ".",
+    },
+}

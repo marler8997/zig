@@ -25,6 +25,7 @@ pub const Fuzz = @import("Build/Fuzz.zig");
 
 /// Shared state among all Build instances.
 graph: *Graph,
+available: bool,
 install_tls: TopLevelStep,
 uninstall_tls: TopLevelStep,
 allocator: Allocator,
@@ -247,6 +248,7 @@ pub const DirList = struct {
 
 pub fn create(
     graph: *Graph,
+    availability: Availability,
     build_root: Cache.Directory,
     cache_root: Cache.Directory,
     available_deps: AvailableDeps,
@@ -258,6 +260,7 @@ pub fn create(
     const b = try arena.create(Build);
     b.* = .{
         .graph = graph,
+        .available = switch (availability) { .unavailable => false, .available => true },
         .build_root = build_root,
         .cache_root = cache_root,
         .verbose = false,
@@ -318,12 +321,13 @@ pub fn create(
 fn createChild(
     parent: *Build,
     dep_name: []const u8,
+    available: bool,
     build_root: Cache.Directory,
     pkg_hash: []const u8,
     pkg_deps: AvailableDeps,
     user_input_options: UserInputOptionsMap,
 ) !*Build {
-    const child = try createChildOnly(parent, dep_name, build_root, pkg_hash, pkg_deps, user_input_options);
+    const child = try createChildOnly(parent, dep_name, available, build_root, pkg_hash, pkg_deps, user_input_options);
     try determineAndApplyInstallPrefix(child);
     return child;
 }
@@ -331,6 +335,7 @@ fn createChild(
 fn createChildOnly(
     parent: *Build,
     dep_name: []const u8,
+    available: bool,
     build_root: Cache.Directory,
     pkg_hash: []const u8,
     pkg_deps: AvailableDeps,
@@ -341,6 +346,7 @@ fn createChildOnly(
     child.* = .{
         .graph = parent.graph,
         .allocator = allocator,
+        .available = available,
         .install_tls = .{
             .step = Step.init(.{
                 .id = TopLevelStep.base_id,
@@ -1877,9 +1883,31 @@ pub fn getInstallPath(b: *Build, dir: InstallDir, dest_rel_path: []const u8) []c
 }
 
 pub const Dependency = struct {
+    unavailable: ?struct {
+        artifacts: std.StringHashMapUnmanaged(*Step.Compile) = .empty,
+        //modules: std.StringHashMapUnmanaged(*Module) = .empty,
+    },
     builder: *Build,
 
     pub fn artifact(d: *Dependency, name: []const u8) *Step.Compile {
+        if (d.unavailable) |*u| {
+            const a = u.artifacts.getOrPut(d.builder.allocator, name) catch @panic("OOM");
+            if (!a.found_existing) {
+                a.value_ptr.* = Step.Compile.create(d.builder, .{
+                    .name = name,
+                    // default to exe for now
+                    // better ideas, add an "unavailable" value, or probably better, instead of an "artifact"
+                    // function, might be better to have "exe"/"lib"/"obj"/"test" functions which solves the
+                    // problem of having multiple artifacts of the same name
+                    .kind = .exe,
+                    .root_module = .{
+                        .target = d.builder.host,
+                    },
+                });
+            }
+            return a.value_ptr.*;
+        }
+
         var found: ?*Step.Compile = null;
         for (d.builder.install_tls.step.dependencies.items) |dep_step| {
             const inst = dep_step.cast(Step.InstallArtifact) orelse continue;
@@ -1899,23 +1927,31 @@ pub const Dependency = struct {
 
     pub fn module(d: *Dependency, name: []const u8) *Module {
         return d.builder.modules.get(name) orelse {
+            if (d.unavailable) |_| {
+                const m = d.builder.addModule(name, .{});
+                std.debug.assert(m == d.builder.modules.get(name));
+                return m;
+            }
             panic("unable to find module '{s}'", .{name});
         };
     }
 
     pub fn namedWriteFiles(d: *Dependency, name: []const u8) *Step.WriteFile {
+        if (d.unavailble) |_| @panic("todo");
         return d.builder.named_writefiles.get(name) orelse {
             panic("unable to find named writefiles '{s}'", .{name});
         };
     }
 
     pub fn namedLazyPath(d: *Dependency, name: []const u8) LazyPath {
+        if (d.unavailble) |_| @panic("todo");
         return d.builder.named_lazy_paths.get(name) orelse {
             panic("unable to find named lazypath '{s}'", .{name});
         };
     }
 
     pub fn path(d: *Dependency, sub_path: []const u8) LazyPath {
+        if (d.unavailble) |_| @panic("todo");
         return .{
             .dependency = .{
                 .dependency = d,
@@ -1958,39 +1994,6 @@ fn markNeededLazyDep(b: *Build, pkg_hash: []const u8) void {
     b.graph.needed_lazy_dependencies.put(b.graph.arena, pkg_hash, {}) catch @panic("OOM");
 }
 
-/// When this function is called, it means that the current build does, in
-/// fact, require this dependency. If the dependency is already fetched, it
-/// proceeds in the same manner as `dependency`. However if the dependency was
-/// not fetched, then when the build script is finished running, the build will
-/// not proceed to the make phase. Instead, the parent process will
-/// additionally fetch all the lazy dependencies that were actually required by
-/// running the build script, rebuild the build script, and then run it again.
-/// In other words, if this function returns `null` it means that the only
-/// purpose of completing the configure phase is to find out all the other lazy
-/// dependencies that are also required.
-/// It is allowed to use this function for non-lazy dependencies, in which case
-/// it will never return `null`. This allows toggling laziness via
-/// build.zig.zon without changing build.zig logic.
-pub fn lazyDependency(b: *Build, name: []const u8, args: anytype) ?*Dependency {
-    const build_runner = @import("root");
-    const deps = build_runner.dependencies;
-    const pkg_hash = findPkgHashOrFatal(b, name);
-
-    inline for (@typeInfo(deps.packages).@"struct".decls) |decl| {
-        if (mem.eql(u8, decl.name, pkg_hash)) {
-            const pkg = @field(deps.packages, decl.name);
-            const available = !@hasDecl(pkg, "available") or pkg.available;
-            if (!available) {
-                markNeededLazyDep(b, pkg_hash);
-                return null;
-            }
-            return dependencyInner(b, name, pkg.build_root, if (@hasDecl(pkg, "build_zig")) pkg.build_zig else null, pkg_hash, pkg.deps, args);
-        }
-    }
-
-    unreachable; // Bad @dependencies source
-}
-
 pub fn dependency(b: *Build, name: []const u8, args: anytype) *Dependency {
     const build_runner = @import("root");
     const deps = build_runner.dependencies;
@@ -1999,17 +2002,25 @@ pub fn dependency(b: *Build, name: []const u8, args: anytype) *Dependency {
     inline for (@typeInfo(deps.packages).@"struct".decls) |decl| {
         if (mem.eql(u8, decl.name, pkg_hash)) {
             const pkg = @field(deps.packages, decl.name);
-            if (@hasDecl(pkg, "available")) {
-                std.debug.panic("dependency '{s}{s}' is marked as lazy in build.zig.zon which means it must use the lazyDependency function instead", .{ b.dep_prefix, name });
-            }
-            return dependencyInner(b, name, pkg.build_root, if (@hasDecl(pkg, "build_zig")) pkg.build_zig else null, pkg_hash, pkg.deps, args);
+            const available = !@hasDecl(pkg, "available") or pkg.available;
+            const build_root = blk: {
+                if (available) break :blk pkg.build_root;
+                const build_root = b.pathResolve(&.{ b.cache_root.path.?, "tmp", "unavailable", pkg_hash });
+                b.cache_root.handle.makePath(build_root) catch |err| std.debug.panic(
+                    "mkdir '{s}' failed with {s}", .{ build_root, @errorName(err) }
+                );
+                break :blk build_root;
+            };
+            const pkg_deps: []const struct { []const u8, []const u8 } = if (available) pkg.deps else &.{};
+            return dependencyInner(
+                b, name, available, build_root, if (@hasDecl(pkg, "build_zig")) pkg.build_zig else null, pkg_hash, pkg_deps, args
+            );
         }
     }
 
     unreachable; // Bad @dependencies source
 }
 
-/// In a build.zig file, this function is to `@import` what `lazyDependency` is to `dependency`.
 /// If the dependency is lazy and has not yet been fetched, it instructs the parent process to fetch
 /// that dependency after the build script has finished running, then returns `null`.
 /// If the dependency is lazy but has already been fetched, or if it is eager, it returns
@@ -2117,9 +2128,12 @@ fn userValuesAreSame(lhs: UserValue, rhs: UserValue) bool {
     return true;
 }
 
+const Availability = enum { unavailable, available };
+
 fn dependencyInner(
     b: *Build,
     name: []const u8,
+    available: bool,
     build_root_string: []const u8,
     comptime build_zig: ?type,
     pkg_hash: []const u8,
@@ -2143,7 +2157,7 @@ fn dependencyInner(
         },
     };
 
-    const sub_builder = b.createChild(name, build_root, pkg_hash, pkg_deps, user_input_options) catch @panic("unhandled error");
+    const sub_builder = b.createChild(name, available, build_root, pkg_hash, pkg_deps, user_input_options) catch @panic("unhandled error");
     if (build_zig) |bz| {
         sub_builder.runBuild(bz) catch @panic("unhandled error");
 
@@ -2153,7 +2167,10 @@ fn dependencyInner(
     }
 
     const dep = b.allocator.create(Dependency) catch @panic("OOM");
-    dep.* = .{ .builder = sub_builder };
+    dep.* = .{
+        .unavailable = if (available) null else .{},
+        .builder = sub_builder,
+    };
 
     b.initialized_deps.put(.{
         .build_root_string = build_root_string,

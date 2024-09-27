@@ -90,6 +90,7 @@ pub fn main() !void {
 
     const builder = try std.Build.create(
         &graph,
+        .available,
         build_root_directory,
         local_cache_directory,
         dependencies.root_deps,
@@ -335,6 +336,8 @@ pub fn main() !void {
         try builder.runBuild(root);
     }
 
+    findNeededLazyDependencies(arena, builder, targets.items);
+
     if (graph.needed_lazy_dependencies.entries.len != 0) {
         var buffer: std.ArrayListUnmanaged(u8) = .empty;
         for (graph.needed_lazy_dependencies.keys()) |k| {
@@ -521,6 +524,56 @@ const Run = struct {
     }
 };
 
+fn findNeededLazyDependencies(arena: Allocator, b: *std.Build, step_names: []const []const u8) void {
+    var checked: std.AutoArrayHashMapUnmanaged(*std.Build.Step, void) = .empty;
+    defer checked.deinit(arena);
+    for (step_names) |step_name| {
+        const top_level_step = b.top_level_steps.get(step_name) orelse {
+            std.debug.print("no step named '{s}'\n  access the help menu with 'zig build -h'\n", .{step_name});
+            process.exit(1);
+        };
+        findNeededLazyDependenciesStep(arena, &top_level_step.step, &checked);
+    }
+}
+fn findNeededLazyDependenciesStep(
+    arena: Allocator,
+    step: *std.Build.Step,
+    checked: *std.AutoArrayHashMapUnmanaged(*std.Build.Step, void),
+) void {
+    const entry = checked.getOrPut(arena, step) catch @panic("OOM");
+    if (entry.found_existing) return;
+    const b = step.owner;
+    if (!b.available) {
+        _ = b.graph.needed_lazy_dependencies.getOrPut(b.graph.arena, b.pkg_hash) catch @panic("OOM");
+    }
+    switch (step.id) {
+        .top_level => {},
+        .compile => |c| {
+
+        },
+        .install_artifact,
+        .install_file,
+        .install_dir,
+        .remove_dir,
+        .fail,
+        .fmt,
+        .translate_c,
+        .write_file,
+        .update_source_files,
+        .run,
+        .check_file,
+        .check_object,
+        .config_header,
+        .objcopy,
+        .options,
+        .custom,
+    }
+
+    for (step.dependencies.items) |dep| {
+        findNeededLazyDependenciesStep(arena, dep, checked);
+    }
+}
+
 fn prepare(
     gpa: Allocator,
     arena: Allocator,
@@ -537,10 +590,7 @@ fn prepare(
         try step_stack.ensureUnusedCapacity(gpa, step_names.len);
         for (0..step_names.len) |i| {
             const step_name = step_names[step_names.len - i - 1];
-            const s = b.top_level_steps.get(step_name) orelse {
-                std.debug.print("no step named '{s}'\n  access the help menu with 'zig build -h'\n", .{step_name});
-                process.exit(1);
-            };
+            const s = b.top_level_steps.get(step_name).?;
             step_stack.putAssumeCapacity(&s.step, {});
         }
     }
