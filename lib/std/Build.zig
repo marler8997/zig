@@ -23,6 +23,11 @@ pub const Module = @import("Build/Module.zig");
 pub const Watch = @import("Build/Watch.zig");
 pub const Fuzz = @import("Build/Fuzz.zig");
 
+const ThreadLocalData = struct {
+    current_step: ?*Step = null,
+};
+pub threadlocal var thread_local: ThreadLocalData = .{};
+
 /// Shared state among all Build instances.
 graph: *Graph,
 install_tls: TopLevelStep,
@@ -2252,6 +2257,32 @@ pub const LazyPath = union(enum) {
         sub_path: []const u8,
     },
 
+    // todo: instead of an eql, we might want a hashing function for fast lookup
+    pub fn eql(lazy_path: LazyPath, other: LazyPath) bool {
+        return switch (lazy_path) {
+            .src_path => |sp| switch (other) {
+                .src_path => |sp_other| (sp.owner == sp_other.owner and
+                    std.mem.eql(u8, sp.sub_path, sp_other.sub_path)),
+                else => false,
+            },
+            .generated => |g| switch (other) {
+                .generated => |g_other| (g.file == g_other.file and
+                    g.up == g_other.up and
+                    std.mem.eql(u8, g.sub_path, g_other.sub_path)),
+                else => false,
+            },
+            .cwd_relative => |c| switch (other) {
+                .cwd_relative => |c_other| std.mem.eql(u8, c, c_other),
+                else => false,
+            },
+            .dependency => |d| switch (other) {
+                .dependency => |d_other| (d.dependency == d_other.dependency and
+                    std.mem.eql(u8, d.sub_path, d_other.sub_path)),
+                else => false,
+            },
+        };
+    }
+
     /// Returns a lazy path referring to the directory containing this path.
     ///
     /// The dirname is not allowed to escape the logical root for underlying path.
@@ -2349,12 +2380,33 @@ pub const LazyPath = union(enum) {
         };
     }
 
-    /// Adds dependencies this file source implies to the given step.
-    pub fn addStepDependencies(lazy_path: LazyPath, other_step: *Step) void {
-        switch (lazy_path) {
-            .src_path, .cwd_relative, .dependency => {},
-            .generated => |gen| other_step.dependOn(gen.file.step),
-        }
+    pub fn getPathInGenerateStep(lazy_path: LazyPath, src_builder: *Build) Cache.Path {
+        const current_step = thread_local.current_step orelse @panic("getPathInGenerateStep called on LazyPath outside of any step's make function");
+        const generated = switch (lazy_path) {
+            .generated => |generated| generated,
+            else => std.debug.panic(
+                "getPathInGenerateStep called on a non-generated lazy path '{s}'",
+                .{lazy_path.getDisplayName()},
+            ),
+        };
+        if (current_step != generated.file.step) std.debug.panic(
+            "getPathInGenerateStep called for lazy path '{s}' in step '{s}' but it is generated in step '{s}'",
+            .{ lazy_path.getDisplayName(), current_step.name, generated.file.step.name },
+        );
+        return lazy_path.getPathChecked(src_builder, null);
+    }
+
+    /// Call during the make phase.  Resolves the given lazy path, given that the
+    /// lazy path is a dependency of the given step, and, the step is a dependecy
+    /// of the current step being built.
+    pub fn getPathFromDependency(lazy_path: LazyPath, dep_step: *Step) Cache.Path {
+        const current_step = thread_local.current_step orelse @panic("getPath called on LazyPath outside of any step's make function");
+        std.debug.assert(current_step != dep_step);
+        if (!dep_step.generates(lazy_path) and !dep_step.dependsOnLazyPathShallow(lazy_path)) std.debug.panic(
+            "step '{s}' dependency '{s}' does not depend on nor generate lazy path '{s}'",
+            .{ current_step.name, dep_step.name, lazy_path.getDisplayName() },
+        );
+        return lazy_path.getPathChecked(dep_step.owner, current_step);
     }
 
     /// Deprecated, see `getPath3`.
@@ -2373,6 +2425,18 @@ pub const LazyPath = union(enum) {
     /// `asking_step` is only used for debugging purposes; it's the step being
     /// run that is asking for the path.
     pub fn getPath3(lazy_path: LazyPath, src_builder: *Build, asking_step: ?*Step) Cache.Path {
+        const current_step = thread_local.current_step orelse @panic("getPath called on LazyPath outside of any step's make function");
+        if (asking_step) |a| {
+            if (current_step != a) @panic("getPath called on LazyPath outside of the asking step's make function");
+        }
+        if (!current_step.dependsOnLazyPathShallow(lazy_path)) std.debug.panic(
+            "step '{s}' is missing a dependency on lazy path '{s}'",
+            .{ current_step.name, lazy_path.getDisplayName() },
+        );
+        return lazy_path.getPathNoChecks(src_builder, asking_step);
+    }
+
+    fn getPathNoChecks(lazy_path: LazyPath, src_builder: *Build, asking_step: ?*Step) Cache.Path {
         switch (lazy_path) {
             .src_path => |sp| return .{
                 .root_dir = sp.owner.build_root,

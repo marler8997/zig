@@ -38,7 +38,7 @@ pub fn create(
         .expected_matches = owner.dupeStrings(options.expected_matches),
         .expected_exact = options.expected_exact,
     };
-    check_file.source.addStepDependencies(&check_file.step);
+    check_file.step.dependOnLazyPath(check_file.source);
     return check_file;
 }
 

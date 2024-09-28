@@ -106,11 +106,19 @@ pub fn create(owner: *std.Build, artifact: *Step.Compile, options: Options) *Ins
 
     install_artifact.step.dependOn(&artifact.step);
 
-    if (install_artifact.dest_dir != null) install_artifact.emitted_bin = artifact.getEmittedBin();
-    if (install_artifact.pdb_dir != null) install_artifact.emitted_pdb = artifact.getEmittedPdb();
+    if (install_artifact.dest_dir != null) {
+        install_artifact.emitted_bin = artifact.getEmittedBin();
+        install_artifact.step.dependOnLazyPath(install_artifact.emitted_bin.?);
+    }
+    if (install_artifact.pdb_dir != null) {
+        install_artifact.emitted_pdb = artifact.getEmittedPdb();
+        install_artifact.step.dependOnLazyPath(install_artifact.emitted_pdb.?);
+    }
     // https://github.com/ziglang/zig/issues/9698
-    //if (install_artifact.h_dir != null) install_artifact.emitted_h = artifact.getEmittedH();
-    if (install_artifact.implib_dir != null) install_artifact.emitted_implib = artifact.getEmittedImplib();
+    if (install_artifact.implib_dir != null) {
+        install_artifact.emitted_implib = artifact.getEmittedImplib();
+        install_artifact.step.dependOnLazyPath(install_artifact.emitted_implib.?);
+    }
 
     return install_artifact;
 }
@@ -176,7 +184,7 @@ fn make(step: *Step, options: Step.MakeOptions) !void {
 
         for (install_artifact.artifact.installed_headers.items) |installation| switch (installation) {
             .file => |file| {
-                const src_path = file.source.getPath3(b, step);
+                const src_path = file.source.getPathFromDependency(&install_artifact.artifact.step);
                 const full_h_path = b.getInstallPath(h_dir, file.dest_rel_path);
                 const p = fs.Dir.updateFile(src_path.root_dir.handle, src_path.sub_path, cwd, full_h_path, .{}) catch |err| {
                     return step.fail("unable to update file from '{s}' to '{s}': {s}", .{
@@ -186,7 +194,7 @@ fn make(step: *Step, options: Step.MakeOptions) !void {
                 all_cached = all_cached and p == .fresh;
             },
             .directory => |dir| {
-                const src_dir_path = dir.source.getPath3(b, step);
+                const src_dir_path = dir.source.getPathFromDependency(&install_artifact.artifact.step);
                 const full_h_prefix = b.getInstallPath(h_dir, dir.dest_rel_path);
 
                 var src_dir = src_dir_path.root_dir.handle.openDir(src_dir_path.sub_path, .{ .iterate = true }) catch |err| {

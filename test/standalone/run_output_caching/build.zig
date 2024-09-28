@@ -82,7 +82,7 @@ const CheckOutputCaching = struct {
             .expect_caching = expect_caching,
         };
         for (output_paths) |output_path| {
-            output_path.addStepDependencies(&check.step);
+            check.step.dependOnLazyPath(output_path);
         }
         return check;
     }
@@ -120,7 +120,7 @@ const CheckPathEquality = struct {
             .output_paths = owner.allocator.dupe(std.Build.LazyPath, output_paths) catch @panic("OOM"),
         };
         for (output_paths) |output_path| {
-            output_path.addStepDependencies(&check.step);
+            check.step.dependOnLazyPath(output_path);
         }
         return check;
     }

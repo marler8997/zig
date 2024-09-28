@@ -47,7 +47,7 @@ pub fn create(owner: *std.Build, options: Options) *TranslateC {
         .link_libc = options.link_libc,
         .use_clang = options.use_clang,
     };
-    source.addStepDependencies(&translate_c.step);
+    translate_c.step.dependOnLazyPath(source);
     return translate_c;
 }
 

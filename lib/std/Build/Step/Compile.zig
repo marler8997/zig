@@ -423,14 +423,17 @@ pub fn create(owner: *std.Build, options: Options) *Compile {
 
     compile.root_module.init(owner, options.root_module, compile);
 
+    // !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+    //compile.step.dependOnLazyPath(compile.getEmittedBin());
+
     if (options.zig_lib_dir) |lp| {
         compile.zig_lib_dir = lp.dupe(compile.step.owner);
-        lp.addStepDependencies(&compile.step);
+        compile.step.dependOnLazyPath(lp);
     }
 
     if (options.test_runner) |lp| {
         compile.test_runner = lp.dupe(compile.step.owner);
-        lp.addStepDependencies(&compile.step);
+        compile.step.dependOnLazyPath(lp);
     }
 
     // Only the PE/COFF format has a Resource Table which is where the manifest
@@ -438,7 +441,7 @@ pub fn create(owner: *std.Build, options: Options) *Compile {
     if (target.ofmt == .coff) {
         if (options.win32_manifest) |lp| {
             compile.win32_manifest = lp.dupe(compile.step.owner);
-            lp.addStepDependencies(&compile.step);
+            compile.step.dependOnLazyPath(lp);
         }
     }
 
@@ -485,7 +488,7 @@ pub fn installHeader(cs: *Compile, source: LazyPath, dest_rel_path: []const u8) 
     } };
     cs.installed_headers.append(installation) catch @panic("OOM");
     cs.addHeaderInstallationToIncludeTree(installation);
-    installation.getSource().addStepDependencies(&cs.step);
+    cs.step.dependOnLazyPath(installation.getSource());
 }
 
 /// Marks headers from the specified directory for installation alongside this artifact.
@@ -505,7 +508,7 @@ pub fn installHeadersDirectory(
     } };
     cs.installed_headers.append(installation) catch @panic("OOM");
     cs.addHeaderInstallationToIncludeTree(installation);
-    installation.getSource().addStepDependencies(&cs.step);
+    cs.step.dependOnLazyPath(installation.getSource());
 }
 
 /// Marks the specified config header for installation alongside this artifact.
@@ -524,7 +527,7 @@ pub fn installLibraryHeaders(cs: *Compile, lib: *Compile) void {
         const installation_copy = installation.dupe(lib.step.owner);
         cs.installed_headers.append(installation_copy) catch @panic("OOM");
         cs.addHeaderInstallationToIncludeTree(installation_copy);
-        installation_copy.getSource().addStepDependencies(&cs.step);
+        cs.step.dependOnLazyPath(installation_copy.getSource());
     }
 }
 
@@ -578,13 +581,13 @@ pub const setLinkerScriptPath = setLinkerScript;
 pub fn setLinkerScript(compile: *Compile, source: LazyPath) void {
     const b = compile.step.owner;
     compile.linker_script = source.dupe(b);
-    source.addStepDependencies(&compile.step);
+    compile.step.dependOnLazyPath(source);
 }
 
 pub fn setVersionScript(compile: *Compile, source: LazyPath) void {
     const b = compile.step.owner;
     compile.version_script = source.dupe(b);
-    source.addStepDependencies(&compile.step);
+    compile.step.dependOnLazyPath(source);
 }
 
 pub fn forceUndefinedSymbol(compile: *Compile, symbol_name: []const u8) void {
@@ -1200,7 +1203,8 @@ fn getZigArgs(compile: *Compile, fuzz: bool) ![][]const u8 {
                                 const included_in_lib_or_obj = !my_responsibility and
                                     (dep.compile.?.kind == .lib or dep.compile.?.kind == .obj);
                                 if (!already_linked and !included_in_lib_or_obj) {
-                                    try zig_args.append(other.getEmittedBin().getPath2(b, step));
+                                    const bin = other.getEmittedBin().getPathFromDependency(&other.step);
+                                    try zig_args.append(other.step.owner.pathResolve(&.{ bin.root_dir.path orelse ".", bin.sub_path }));
                                     total_linker_objects += 1;
                                 }
                             },
@@ -1837,9 +1841,10 @@ fn make(step: *Step, options: Step.MakeOptions) !void {
     if (compile.kind == .lib and compile.linkage != null and compile.linkage.? == .dynamic and
         compile.version != null and std.Build.wantSharedLibSymLinks(compile.rootModuleTarget()))
     {
+        const bin_path = compile.getEmittedBin().getPathInGenerateStep(b);
         try doAtomicSymLinks(
             step,
-            compile.getEmittedBin().getPath2(b, step),
+            b.pathResolve(&.{ bin_path.root_dir.path orelse ".", bin_path.sub_path }),
             compile.major_only_filename.?,
             compile.name_only_filename.?,
         );

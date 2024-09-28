@@ -50,7 +50,7 @@ pub fn addCopyFileToSource(usf: *UpdateSourceFiles, source: std.Build.LazyPath, 
         .contents = .{ .copy = source },
         .sub_path = sub_path,
     }) catch @panic("OOM");
-    source.addStepDependencies(&usf.step);
+    usf.step.dependOnLazyPath(source);
 }
 
 /// A path relative to the package root.

@@ -17,6 +17,9 @@ dependants: std.ArrayListUnmanaged(*Step),
 /// retain previous value, or update.
 inputs: Inputs,
 
+/// Direct lazy path dependencies, added with `dependOnLazyPath`.
+lazy_paths: std.ArrayListUnmanaged(Build.LazyPath) = .empty,
+
 state: State,
 /// Set this field to declare an upper bound on the amount of bytes of memory it will
 /// take to run the step. Zero means no limit.
@@ -228,6 +231,17 @@ pub fn init(options: StepOptions) Step {
 pub fn make(s: *Step, options: MakeOptions) error{ MakeFailed, MakeSkipped }!void {
     const arena = s.owner.allocator;
 
+    const old_step = Build.thread_local.current_step;
+    defer Build.thread_local.current_step = old_step;
+
+    const panic_on_nested_makes = true;
+    if (old_step) |old| if (panic_on_nested_makes) std.debug.panic(
+        "make was called on step '{s}' while inside make for step '{s}'",
+        .{ s.name, old.name },
+    );
+
+    Build.thread_local.current_step = s;
+
     s.makeFn(s, options) catch |err| switch (err) {
         error.MakeFailed => return error.MakeFailed,
         error.MakeSkipped => return error.MakeSkipped,
@@ -252,6 +266,46 @@ pub fn make(s: *Step, options: MakeOptions) error{ MakeFailed, MakeSkipped }!voi
 
 pub fn dependOn(step: *Step, other: *Step) void {
     step.dependencies.append(other) catch @panic("OOM");
+}
+
+pub fn dependsOnShallow(step: *Step, other: *Step) bool {
+    for (step.dependencies) |d| {
+        if (d == other) return true;
+    }
+    return false;
+}
+
+pub fn dependOnLazyPath(step: *Step, lazy_path: Build.LazyPath) void {
+    if (!dependOnLazyPathIfNotAlready(step, lazy_path)) std.debug.panic(
+        "step '{s}' already depends on this lazy path '{s}'",
+        .{ step.name, lazy_path.getDisplayName() },
+    );
+}
+
+pub fn dependOnLazyPathIfNotAlready(step: *Step, lazy_path: Build.LazyPath) bool {
+    if (dependsOnLazyPathShallow(step, lazy_path))
+        return false;
+    step.lazy_paths.append(step.owner.allocator, lazy_path) catch @panic("OOM");
+    switch (lazy_path) {
+        .src_path, .cwd_relative, .dependency => {},
+        .generated => |gen| step.dependOn(gen.file.step),
+    }
+    return true;
+}
+
+pub fn dependsOnLazyPathShallow(step: *Step, lazy_path: Build.LazyPath) bool {
+    for (step.lazy_paths.items) |lp| {
+        if (lazy_path.eql(lp))
+            return true;
+    }
+    return false;
+}
+
+pub fn generates(step: *Step, lazy_path: Build.LazyPath) bool {
+    return switch (lazy_path) {
+        .generated => |g| g.file.step == step,
+        .src_path, .cwd_relative, .dependency => false,
+    };
 }
 
 pub fn getStackTrace(s: *Step) ?std.builtin.StackTrace {

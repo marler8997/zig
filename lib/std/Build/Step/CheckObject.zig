@@ -38,7 +38,7 @@ pub fn create(
         .checks = std.ArrayList(Check).init(gpa),
         .obj_format = obj_format,
     };
-    check_object.source.addStepDependencies(&check_object.step);
+    check_object.step.dependOnLazyPath(check_object.source);
     return check_object;
 }
 
@@ -348,6 +348,7 @@ fn checkExactInner(check_object: *CheckObject, phrase: []const u8, lazy_path: ?s
     assert(check_object.checks.items.len > 0);
     const last = &check_object.checks.items[check_object.checks.items.len - 1];
     last.exact(.{ .string = check_object.step.owner.dupe(phrase), .lazy_path = lazy_path });
+    if (lazy_path) |p| _ = check_object.step.dependOnLazyPathIfNotAlready(p);
 }
 
 /// Adds a fuzzy match phrase to the latest created Check.
@@ -369,6 +370,7 @@ fn checkContainsInner(check_object: *CheckObject, phrase: []const u8, lazy_path:
     assert(check_object.checks.items.len > 0);
     const last = &check_object.checks.items[check_object.checks.items.len - 1];
     last.contains(.{ .string = check_object.step.owner.dupe(phrase), .lazy_path = lazy_path });
+    if (lazy_path) |p| _ = check_object.step.dependOnLazyPathIfNotAlready(p);
 }
 
 /// Adds an exact match phrase with variable extractor to the latest created Check.
@@ -386,6 +388,7 @@ fn checkExtractInner(check_object: *CheckObject, phrase: []const u8, lazy_path: 
     assert(check_object.checks.items.len > 0);
     const last = &check_object.checks.items[check_object.checks.items.len - 1];
     last.extract(.{ .string = check_object.step.owner.dupe(phrase), .lazy_path = lazy_path });
+    if (lazy_path) |p| _ = check_object.step.dependOnLazyPathIfNotAlready(p);
 }
 
 /// Adds another searched phrase to the latest created Check
@@ -404,6 +407,7 @@ fn checkNotPresentInner(check_object: *CheckObject, phrase: []const u8, lazy_pat
     assert(check_object.checks.items.len > 0);
     const last = &check_object.checks.items[check_object.checks.items.len - 1];
     last.notPresent(.{ .string = check_object.step.owner.dupe(phrase), .lazy_path = lazy_path });
+    if (lazy_path) |p| _ = check_object.step.dependOnLazyPathIfNotAlready(p);
 }
 
 /// Creates a new check checking in the file headers (section, program headers, etc.).

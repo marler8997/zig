@@ -225,7 +225,7 @@ pub fn addPrefixedArtifactArg(run: *Run, prefix: []const u8, artifact: *Step.Com
     run.argv.append(b.allocator, .{ .artifact = prefixed_artifact }) catch @panic("OOM");
 
     const bin_file = artifact.getEmittedBin();
-    bin_file.addStepDependencies(&run.step);
+    run.step.dependOnLazyPath(bin_file);
 }
 
 /// Provides a file path as a command line argument to the command being run.
@@ -311,7 +311,7 @@ pub fn addPrefixedFileArg(run: *Run, prefix: []const u8, lp: std.Build.LazyPath)
         .lazy_path = lp.dupe(b),
     };
     run.argv.append(b.allocator, .{ .lazy_path = prefixed_file_source }) catch @panic("OOM");
-    lp.addStepDependencies(&run.step);
+    run.step.dependOnLazyPath(lp);
 }
 
 /// Provides a directory path as a command line argument to the command being run.
@@ -382,7 +382,7 @@ pub fn addPrefixedDirectoryArg(run: *Run, prefix: []const u8, directory_source: 
         .lazy_path = directory_source.dupe(b),
     };
     run.argv.append(b.allocator, .{ .directory_source = prefixed_directory_source }) catch @panic("OOM");
-    directory_source.addStepDependencies(&run.step);
+    run.step.dependOnLazyPath(directory_source);
 }
 
 /// Add a path argument to a dep file (.d) for the child process to write its
@@ -424,14 +424,14 @@ pub fn addArgs(run: *Run, args: []const []const u8) void {
 
 pub fn setStdIn(run: *Run, stdin: StdIn) void {
     switch (stdin) {
-        .lazy_path => |lazy_path| lazy_path.addStepDependencies(&run.step),
+        .lazy_path => |lazy_path| run.step.dependOnLazyPath(lazy_path),
         .bytes, .none => {},
     }
     run.stdin = stdin;
 }
 
 pub fn setCwd(run: *Run, cwd: Build.LazyPath) void {
-    cwd.addStepDependencies(&run.step);
+    run.step.dependOnLazyPath(cwd);
     run.cwd = cwd.dupe(run.step.owner);
 }
 

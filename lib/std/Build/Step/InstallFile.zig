@@ -31,7 +31,7 @@ pub fn create(
         .dir = dir.dupe(owner),
         .dest_rel_path = owner.dupePath(dest_rel_path),
     };
-    source.addStepDependencies(&install_file.step);
+    install_file.step.dependOnLazyPath(source);
     return install_file;
 }
 

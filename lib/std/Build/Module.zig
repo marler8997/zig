@@ -348,7 +348,7 @@ fn addLazyPathDependencies(m: *Module, module: *Module, lazy_path: LazyPath) voi
 
 fn addLazyPathDependenciesOnly(m: *Module, lazy_path: LazyPath) void {
     for (m.depending_steps.keys()) |compile| {
-        lazy_path.addStepDependencies(&compile.step);
+        _ = compile.step.dependOnLazyPathIfNotAlready(lazy_path);
     }
 }
 

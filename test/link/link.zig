@@ -153,7 +153,7 @@ pub fn addAsmSourceBytes(comp: *Compile, bytes: []const u8) void {
 pub fn expectLinkErrors(comp: *Compile, test_step: *Step, expected_errors: Compile.ExpectedCompileErrors) void {
     comp.expect_errors = expected_errors;
     const bin_file = comp.getEmittedBin();
-    bin_file.addStepDependencies(test_step);
+    test_step.dependOnLazyPath(bin_file);
 }
 
 const std = @import("std");

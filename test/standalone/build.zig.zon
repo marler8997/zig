@@ -18,6 +18,9 @@
         .shared_library = .{
             .path = "shared_library",
         },
+        .lazypath = .{
+            .path = "lazypath",
+        },
         .mix_o_files = .{
             .path = "mix_o_files",
         },

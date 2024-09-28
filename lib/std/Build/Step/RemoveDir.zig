@@ -20,6 +20,7 @@ pub fn create(owner: *std.Build, doomed_path: LazyPath) *RemoveDir {
         }),
         .doomed_path = doomed_path.dupe(owner),
     };
+    remove_dir.step.dependOnLazyPath(doomed_path);
     return remove_dir;
 }
 

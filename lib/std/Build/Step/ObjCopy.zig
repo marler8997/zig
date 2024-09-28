@@ -76,7 +76,7 @@ pub fn create(
         .strip = options.strip,
         .compress_debug = options.compress_debug,
     };
-    input_file.addStepDependencies(&objcopy.step);
+    objcopy.step.dependOnLazyPath(input_file);
     return objcopy;
 }
 

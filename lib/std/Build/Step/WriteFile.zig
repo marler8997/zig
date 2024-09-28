@@ -114,7 +114,7 @@ pub fn addCopyFile(write_file: *WriteFile, source: std.Build.LazyPath, sub_path:
     write_file.files.append(gpa, file) catch @panic("OOM");
 
     write_file.maybeUpdateName();
-    source.addStepDependencies(&write_file.step);
+    write_file.step.dependOnLazyPath(source);
     return .{
         .generated = .{
             .file = &write_file.generated_directory,
@@ -142,7 +142,7 @@ pub fn addCopyDirectory(
     write_file.directories.append(gpa, dir) catch @panic("OOM");
 
     write_file.maybeUpdateName();
-    source.addStepDependencies(&write_file.step);
+    write_file.step.dependOnLazyPath(source);
     return .{
         .generated = .{
             .file = &write_file.generated_directory,

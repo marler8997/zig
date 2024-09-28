@@ -51,7 +51,7 @@ pub fn create(owner: *std.Build, options: Options) *InstallDir {
         }),
         .options = options.dupe(owner),
     };
-    options.source_dir.addStepDependencies(&install_dir.step);
+    install_dir.step.dependOnLazyPath(options.source_dir);
     return install_dir;
 }
 
