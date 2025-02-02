@@ -1,0 +1,40 @@
+#!/usr/bin/env python3
+import traceback
+import subprocess
+import shlex
+import sys
+import os
+
+SCRIPT_DIR = os.path.dirname(__file__)
+REPO_ROOT = os.path.dirname(SCRIPT_DIR)
+
+LOG_FILE = "/tmp/lld-link.log"
+
+def main():
+    if os.path.exists(LOG_FILE):
+        os.unlink(LOG_FILE)
+
+    # llvm-lit removes the HOME directory which zig needs to find the appdata directory
+    os.environ["HOME"] = "/home/marler8997"
+
+    zig = os.path.join(REPO_ROOT, "stage4/bin/zig")
+    #zig = os.path.join(REPO_ROOT, "build/stage3/bin/zig")
+    cmd = [zig, "msvc-link"] + sys.argv[1:]
+    result = subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+    stdout = result.stdout.decode('utf8').strip()
+    stderr = result.stderr.decode('utf8').strip()
+    with open(LOG_FILE, "w") as f:
+        for i in range(0,len(cmd)):
+            f.write(f"[{i}] '{cmd[i]}'\n")
+        f.write("----------------------------------------\n")
+        if len(stdout) == 0:
+            f.write("STDOUT: none\n")
+        else:
+            f.write(f"STDOUT({len(stdout)} bytes):\n---\n{stdout}\n---\n")
+        if len(stderr) == 0:
+            f.write("STDOUT: none")
+        else:
+            f.write(f"STDERR({len(stderr)} bytes):\n---\n{stderr}\n---\n")
+    sys.exit(result.returncode)
+
+main()

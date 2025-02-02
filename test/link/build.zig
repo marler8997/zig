@@ -19,6 +19,9 @@ pub fn build(b: *std.Build) void {
     step.dependOn(@import("elf.zig").testAll(b, build_opts));
     step.dependOn(@import("macho.zig").testAll(b, build_opts));
 
+    const coff = b.step("coff", "");
+    _ = coff;
+
     add_dep_steps: for (b.available_deps) |available_dep| {
         const dep_name, const dep_hash = available_dep;
 

@@ -298,6 +298,9 @@ fn mainArgs(gpa: Allocator, arena: Allocator, args: []const []const u8) !void {
     {
         dev.check(.clang_command);
         return process.exit(try clangMain(arena, args));
+    } else if (mem.eql(u8, cmd, "msvc-link")) {
+        dev.check(.coff_linker);
+        return buildOutputType(gpa, arena, args, .msvc_link);
     } else if (mem.eql(u8, cmd, "ld.lld") or
         mem.eql(u8, cmd, "lld-link") or
         mem.eql(u8, cmd, "wasm-ld"))
@@ -752,6 +755,7 @@ const ArgMode = union(enum) {
     translate_c,
     zig_test,
     run,
+    msvc_link,
 };
 
 const Listen = union(enum) {
@@ -2805,6 +2809,45 @@ fn buildOutputType(
                 // There could be other reasons to punt to clang, for example, --help.
                 return process.exit(try clangMain(arena, all_args));
             }
+        },
+        .msvc_link => {
+            dev.check(.coff_linker);
+
+            emit_h = .no;
+            soname = .no;
+            create_module.object_format = "coff";
+
+            var maybe_out_path: ?[]const u8 = null;
+
+            var arg_index: usize = 2;
+            while (arg_index < all_args.len) {
+                switch (MsvcLinkArg.init(all_args, &arg_index)) {
+                    .out => |path| maybe_out_path = path,
+                    .subsystem => |s| subsystem = s,
+                    .entry => |name| entry = .{ .named = name },
+                    .@"export" => |symbol| try linker_export_symbol_names.append(arena, symbol),
+                    .positional => |p| switch (Compilation.classifyFileExt(p)) {
+                        .object => try create_module.cli_link_inputs.append(arena, .{ .path_query = .{
+                            .path = Path.initCwd(p),
+                            .query = .{
+                                .preferred_mode = lib_preferred_mode,
+                                .search_strategy = lib_search_strategy,
+                                .allow_so_scripts = allow_so_scripts,
+                            },
+                        } }),
+                        else => |c| fatal("TODO: what to do with file '{s}' of type {s}", .{ p, @tagName(c) }),
+                    },
+                }
+            }
+
+            // !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+            try log_scopes.append(arena, "link");
+
+            const out_path = maybe_out_path orelse fatal("TODO: what to do with not /out path?", .{});
+            // !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+            // we're just assuming exe for now
+            create_module.opts.output_mode = .Exe;
+            emit_bin = .{ .yes = out_path };
         },
     }
 
@@ -5777,6 +5820,49 @@ fn initArgIteratorResponseFile(allocator: Allocator, resp_file_path: []const u8)
 
     return ArgIteratorResponseFile.initTakeOwnership(allocator, cmd_line);
 }
+
+pub const MsvcLinkArg = union(enum) {
+    positional: []const u8,
+    out: []const u8,
+    subsystem: std.Target.SubSystem,
+    entry: []const u8,
+    @"export": []const u8,
+    pub fn init(all_args: []const []const u8, arg_index: *usize) MsvcLinkArg {
+        std.debug.assert(arg_index.* < all_args.len);
+        const arg = all_args[arg_index.*];
+        arg_index.* = arg_index.* + 1;
+
+        if (parseOpt("out", []const u8, arg)) |a| return .{ .out = a };
+        if (parseOpt("subsystem", std.Target.SubSystem, arg)) |a| return .{ .subsystem = a };
+        if (parseOpt("entry", []const u8, arg)) |a| return .{ .entry = a };
+        if (parseOpt("export", []const u8, arg)) |a| return .{ .@"export" = a };
+
+        if (!std.mem.startsWith(u8, arg, "-")) return .{ .positional = arg };
+        fatal("unknown cmdline option '{s}'", .{arg});
+    }
+
+    fn parseOpt(name: []const u8, comptime T: type, arg: []const u8) ?T {
+        if (!std.mem.startsWith(u8, arg, "/")) return null;
+        const arg_name_end = std.mem.indexOfScalarPos(u8, arg, 1, ':') orelse arg.len;
+        const arg_name = arg[1..arg_name_end];
+        if (!std.mem.eql(u8, arg_name, name)) return null;
+
+        if (T == bool) {
+            //if (name_end != name.len) fatal("cmdline option /{s} is a flag, it does not support arguments", .{name});
+            @compileError("todo");
+        }
+        if (arg_name_end == arg.len) fatal("cmdline option /{s} requires an argument (i.e. /{0s}:ARG)", .{name});
+        const opt_arg = arg[arg_name_end + 1 ..];
+        return switch (T) {
+            []const u8 => opt_arg,
+            std.Target.SubSystem => parseSubSystem(opt_arg) catch |e| {
+                switch (e) {}
+                fatal("invalid {s}", .{arg});
+            },
+            else => @compileError("unhandled link arg type: " ++ @typeName(T)),
+        };
+    }
+};
 
 const clang_args = @import("clang_options.zig").list;
 

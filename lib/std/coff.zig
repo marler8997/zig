@@ -65,30 +65,30 @@ pub const CoffHeaderFlags = packed struct {
 
 pub const CoffHeader = extern struct {
     /// The number that identifies the type of target machine.
-    machine: MachineType,
+    machine: MachineType align(2),
 
     /// The number of sections. This indicates the size of the section table, which immediately follows the headers.
-    number_of_sections: u16,
+    number_of_sections: u16 align(2),
 
     /// The low 32 bits of the number of seconds since 00:00 January 1, 1970 (a C run-time time_t value),
     /// which indicates when the file was created.
-    time_date_stamp: u32,
+    time_date_stamp: u32 align(2),
 
     /// The file offset of the COFF symbol table, or zero if no COFF symbol table is present.
     /// This value should be zero for an image because COFF debugging information is deprecated.
-    pointer_to_symbol_table: u32,
+    pointer_to_symbol_table: u32 align(2),
 
     /// The number of entries in the symbol table.
     /// This data can be used to locate the string table, which immediately follows the symbol table.
     /// This value should be zero for an image because COFF debugging information is deprecated.
-    number_of_symbols: u32,
+    number_of_symbols: u32 align(2),
 
     /// The size of the optional header, which is required for executable files but not for object files.
     /// This value should be zero for an object file. For a description of the header format, see Optional Header (Image Only).
-    size_of_optional_header: u16,
+    size_of_optional_header: u16 align(2),
 
     /// The flags that indicate the attributes of the file.
-    flags: CoffHeaderFlags,
+    flags: CoffHeaderFlags align(2),
 };
 
 // OptionalHeader.magic values
@@ -651,13 +651,13 @@ pub const SectionHeaderFlags = packed struct {
     MEM_WRITE: u1 = 0,
 };
 
-pub const Symbol = struct {
-    name: [8]u8,
-    value: u32,
-    section_number: SectionNumber,
-    type: SymType,
-    storage_class: StorageClass,
-    number_of_aux_symbols: u8,
+pub const Symbol = extern struct {
+    name: [8]u8 align(2),
+    value: u32 align(2),
+    section_number: SectionNumber align(2),
+    type: SymType align(2),
+    storage_class: StorageClass align(2),
+    number_of_aux_symbols: u8 align(1),
 
     pub fn sizeOf() usize {
         return 18;

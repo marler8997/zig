@@ -2420,7 +2420,7 @@ fn genBody(cg: *CodeGen, body: []const Air.Inst.Index) InnerError!void {
     const ip = &zcu.intern_pool;
     const air_tags = cg.air.instructions.items(.tag);
     const air_datas = cg.air.instructions.items(.data);
-    const use_old = cg.target.ofmt == .coff;
+    const use_old = false;
 
     cg.arg_index = 0;
     for (body) |inst| switch (air_tags[@intFromEnum(inst)]) {

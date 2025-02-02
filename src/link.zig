@@ -1037,7 +1037,7 @@ pub const File = struct {
         const use_lld = build_options.have_llvm and base.comp.config.use_lld;
         if (use_lld) return;
         switch (base.tag) {
-            inline .elf, .wasm => |tag| {
+            inline .coff, .elf, .wasm => |tag| {
                 dev.check(tag.devFeature());
                 return @as(*tag.Type(), @fieldParentPtr("base", base)).loadInput(input);
             },
@@ -1058,7 +1058,7 @@ pub const File = struct {
         if (base.zcu_object_sub_path != null) return;
 
         switch (base.tag) {
-            inline .wasm => |tag| {
+            inline .coff, .wasm => |tag| {
                 dev.check(tag.devFeature());
                 return @as(*tag.Type(), @fieldParentPtr("base", base)).prelink(prog_node);
             },

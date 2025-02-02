@@ -34,6 +34,8 @@ pub const Env = enum {
     /// - `zig build-* -fno-llvm -fno-lld -target wasm32-* --listen=-`
     wasm,
 
+    msvc_link,
+
     pub inline fn supports(comptime dev_env: Env, comptime feature: Feature) bool {
         return switch (dev_env) {
             .full => true,
@@ -156,6 +158,11 @@ pub const Env = enum {
                 .wasm_linker,
                 => true,
                 else => Env.sema.supports(feature),
+            },
+            .msvc_link => switch (feature) {
+                .coff_linker,
+                => true,
+                else => false,
             },
         };
     }

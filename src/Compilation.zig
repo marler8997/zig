@@ -3131,6 +3131,8 @@ pub fn saveState(comp: *Compilation) !void {
             // any_tls_relocs: bool
             // any_passive_inits: bool
         },
+        // !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+        // TODO: ensure that we can save Coff linker state
         else => log.err("TODO implement saving linker state for {s}", .{@tagName(lf.tag)}),
     }
 
@@ -3971,6 +3973,7 @@ fn processOneJob(tid: usize, comp: *Compilation, job: Job) JobError!void {
             };
         },
         .windows_import_lib => |index| {
+            if (comptime dev.env == .msvc_link) @panic("build import libs disabled for msvc-link build");
             const named_frame = tracy.namedFrame("windows_import_lib");
             defer named_frame.end();
 

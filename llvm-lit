@@ -1,0 +1,20 @@
+#!/usr/bin/env python3
+import sys
+import os
+import subprocess
+
+LLD_LOG = "/tmp/lld-link.log"
+
+def main():
+    try:
+        os.remove(LLD_LOG)
+    except OSError:
+        pass
+    result = subprocess.run(["./llvm19/build/bin/llvm-lit"] + sys.argv[1:])
+    if os.path.exists(LLD_LOG):
+        with open(LLD_LOG, "r") as f:
+            print(f"lld-output:\n-------------\n{f.read()}\n------------\n", file=sys.stderr)
+        os.unlink(LLD_LOG)
+    sys.exit(result.returncode)
+
+main()

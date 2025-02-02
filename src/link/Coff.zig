@@ -1,26 +1,23 @@
 //! The main driver of the COFF linker.
-//! Currently uses our own implementation for the incremental linker, and falls back to
-//! LLD for traditional linking (linking relocatable object files).
-//! LLD is also the default linker for LLVM.
 
 /// If this is not null, an object file is created by LLVM and emitted to zcu_object_sub_path.
 llvm_object: ?LlvmObject.Ptr = null,
 
 base: link.File,
+
 image_base: u64,
 subsystem: ?std.Target.SubSystem,
-tsaware: bool,
-nxcompat: bool,
-dynamicbase: bool,
-/// TODO this and minor_subsystem_version should be combined into one property and left as
-/// default or populated together. They should not be separate fields.
+// tsaware: bool,
+// nxcompat: bool,
+// dynamicbase: bool,
+// /// TODO this and minor_subsystem_version should be combined into one property and left as
+// /// default or populated together. They should not be separate fields.
 major_subsystem_version: u16,
 minor_subsystem_version: u16,
-lib_directories: []const Directory,
+// lib_directories: []const Directory,
 entry: link.File.OpenOptions.Entry,
-entry_addr: ?u32,
-module_definition_file: ?[]const u8,
-pdb_out_path: ?[]const u8,
+// module_definition_file: ?[]const u8,
+// pdb_out_path: ?[]const u8,
 repro: bool,
 
 ptr_width: PtrWidth,
@@ -84,19 +81,28 @@ relocs: RelocTable = .{},
 /// this will be a table indexed by index into the list of Atoms.
 base_relocs: BaseRelocationTable = .{},
 
-/// Hot-code swapping state.
-hot_state: if (is_hot_update_compatible) HotUpdateState else struct {} = .{},
+/// List of relocatable files to be linked into the final binary.
+objects: std.ArrayListUnmanaged(Object) = .{},
+
+prelinked: ?Prelinked = null,
+
+// /// Hot-code swapping state.
+// hot_state: if (is_hot_update_compatible) HotUpdateState else struct {} = .{},
 
 const is_hot_update_compatible = switch (builtin.target.os.tag) {
     .windows => true,
     else => false,
 };
 
-const HotUpdateState = struct {
-    /// Base address at which the process (image) got loaded.
-    /// We need this info to correctly slide pointers when relocating.
-    loaded_base_address: ?std.os.windows.HMODULE = null,
+const Prelinked = struct {
+    entry_addr: u32,
 };
+
+// const HotUpdateState = struct {
+//     /// Base address at which the process (image) got loaded.
+//     /// We need this info to correctly slide pointers when relocating.
+//     loaded_base_address: ?std.os.windows.HMODULE = null,
+// };
 
 const NavTable = std.AutoArrayHashMapUnmanaged(InternPool.Nav.Index, AvMetadata);
 const UavTable = std.AutoHashMapUnmanaged(InternPool.Index, AvMetadata);
@@ -108,6 +114,148 @@ const default_size_of_stack_reserve: u32 = 0x1000000;
 const default_size_of_stack_commit: u32 = 0x1000;
 const default_size_of_heap_reserve: u32 = 0x100000;
 const default_size_of_heap_commit: u32 = 0x1000;
+
+comptime {
+    assert(@sizeOf(std.coff.CoffHeader) == 20);
+    assert(@sizeOf(std.coff.SectionHeader) == 40);
+    assert(@sizeOf(std.coff.Symbol) == 18);
+}
+
+const Object = struct {
+    header: coff_util.CoffHeader,
+
+    pub fn deinit(self: *Object, gpa: Allocator) void {
+        _ = gpa;
+        //gpa.free(self.symbols);
+        self.* = undefined;
+    }
+    pub fn read(
+        gpa: Allocator,
+        stream: anytype,
+    ) !Object {
+        const header = try stream.context.reader().readStructEndian(std.coff.CoffHeader, .little);
+        std.log.info("coff header {}", .{header});
+        std.log.info("CoffHeaderSize is {} (0x{0x})", .{@sizeOf(@TypeOf(header))});
+
+        // code is currently assuming this
+        std.debug.assert(header.size_of_optional_header == 0);
+
+        const sections = try gpa.alloc(std.coff.SectionHeader, header.number_of_sections);
+        defer gpa.free(sections);
+
+        {
+            const bytes = std.mem.sliceAsBytes(sections);
+            const len = try stream.context.reader().readAll(bytes);
+            if (len != bytes.len) return error.ObjectFileTruncated;
+            // !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+            for (bytes, 0..) |b, i| {
+                std.log.info("[{}] 0x{x}", .{ i, b });
+            }
+        }
+
+        for (sections) |*s| {
+            const name = s.name[0 .. std.mem.indexOfScalar(u8, &s.name, 0) orelse 8];
+            if (s.virtual_size != 0) return error.InvalidObjectFile; // onliy valid for exe images
+            if (s.virtual_address != 0) return error.InvalidObjectFile; // onliy valid for exe images
+
+            // CNT_CODE (section contains exectuable code)
+            // CNT_INITIALIZED_DATA (section contains initialized data)
+            // CNT_UNINITIALIZED_DATA (section contains uninitialized data)
+            // LNK_INFO (section contains comments/info)
+            // LNK_REMOVE (remove this section when linking)
+            // LNK_COMDAT (section contains COMDAT data)
+            // GPREL (section contains data referenced through the global pointer "GP")
+            // ALIGN_XBYTES (X is 1, 2, 4... up to 8192) align data on this boundary
+            // LNK_NRELOC_OVFL (section contains extended relocations)
+            // MEM_DISCARDABLE (section can be discarded as needed)
+            // MEM_NOT_CACHED (section cannot be cached)
+            // MEM_NOT_PAGED (section is not pageable)
+            // MEM_SHARED (section can be in shared memory)
+            // MEM_EXECUTE (section can be executed as code)
+            // MEM_READ (section can be read)
+            // MEM_WRITE (section can be written to)
+            std.log.info(
+                "section '{s}' data-size={} data-ptr={} reloc={} ln={} reloc-count={} ln-count={} flags={}",
+                .{
+                    name,
+                    s.size_of_raw_data,
+                    s.pointer_to_raw_data,
+                    s.pointer_to_relocations,
+                    s.pointer_to_linenumbers,
+                    s.number_of_relocations,
+                    s.number_of_linenumbers,
+                    s.flags,
+                },
+            );
+        }
+
+        const symbols = try gpa.alloc(std.coff.Symbol, header.number_of_symbols);
+        defer gpa.free(symbols);
+
+        try stream.seekTo(header.pointer_to_symbol_table);
+        {
+            const bytes = std.mem.sliceAsBytes(symbols);
+            const len = try stream.context.reader().readAll(bytes);
+            if (len != bytes.len) return error.ObjectFileTruncated;
+        }
+
+        const string_table_size = try stream.context.reader().readInt(u32, .little);
+        std.log.info("string table size is {} (subtract 4 for data size)", .{string_table_size});
+        std.debug.assert(string_table_size >= 4);
+
+        const string_table = try gpa.alloc(u8, string_table_size - 4);
+        defer gpa.free(string_table);
+        {
+            const len = try stream.context.reader().readAll(string_table);
+            if (len != string_table.len) return error.ObjectFileTruncated;
+        }
+
+        {
+            var symbol_index: usize = 0;
+            while (symbol_index < symbols.len) {
+                const s = &symbols[symbol_index];
+                symbol_index += 1;
+
+                const name = blk: {
+                    if (!std.mem.eql(u8, s.name[0..4], "\x00\x00\x00\x00")) {
+                        break :blk s.name[0 .. std.mem.indexOfScalar(u8, &s.name, 0) orelse 8];
+                    }
+                    const offset = std.mem.readInt(u32, s.name[0..4], .little);
+                    std.log.info("string offset {} (table length is {})", .{ offset, string_table.len });
+                    break :blk string_table[offset..][0..std.mem.indexOfScalar(u8, string_table[offset..], 0).?];
+                };
+                std.log.info(
+                    "Symbol '{s}' value={} num={} type={} nx={} stor={}",
+                    .{ name, s.value, s.section_number, s.type, s.number_of_aux_symbols, s.storage_class },
+                );
+                if (symbol_index + s.number_of_aux_symbols > symbols.len)
+                    return error.InvalidObjectFile;
+                symbol_index += s.number_of_aux_symbols;
+            }
+        }
+
+        // // Look for exported symbols
+        // for (symbols) |symbol| {
+        //     // Typically, exported symbols will have:
+        //     // - storage_class = EXTERNAL (2)
+        //     // - section_number > 0 (indicating it's defined in this object)
+        //     if (symbol.storage_class == 2 and symbol.section_number > 0) {
+        //         // Get symbol name (either directly or from string table)
+        //         const name = if (symbol.name[7] == 0) {
+        //             // Name is directly in the symbol
+        //             symbol.name[0..std.mem.indexOfScalar(u8, &symbol.name, 0).?]
+        //         } else {
+        //             // Name is in string table, offset stored in first 4 bytes
+        //             const offset = std.mem.readIntLittle(u32, symbol.name[0..4]);
+        //             string_table[offset..][0..std.mem.indexOfScalar(u8, string_table[offset..], 0).?]
+        //         };
+        //         std.log.info("Found export: {s}", .{name});
+        //     }
+        // }
+
+        return .{ .header = header };
+    }
+};
 
 const Section = struct {
     header: coff_util.SectionHeader,
@@ -188,6 +336,8 @@ pub const PtrWidth = enum {
 
 pub const SymbolWithLoc = struct {
     // Index into the respective symbol table.
+    // !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+    // TODO: replace with SymbolIndex (enum(u32))?
     sym_index: u32,
 
     // null means it's a synthetic global or Zig source.
@@ -247,6 +397,8 @@ pub fn createEmpty(
     else
         try allocPrint(arena, "{s}.obj", .{emit.sub_path});
 
+    if (options.entry_addr) |_| @panic("todo: support entry address option");
+
     const coff = try arena.create(Coff);
     coff.* = .{
         .base = .{
@@ -290,16 +442,14 @@ pub fn createEmpty(
 
         .entry = options.entry,
 
-        .tsaware = options.tsaware,
-        .nxcompat = options.nxcompat,
-        .dynamicbase = options.dynamicbase,
+        // .tsaware = options.tsaware,
+        // .nxcompat = options.nxcompat,
+        // .dynamicbase = options.dynamicbase,
         .major_subsystem_version = options.major_subsystem_version orelse 6,
         .minor_subsystem_version = options.minor_subsystem_version orelse 0,
-        .lib_directories = options.lib_directories,
-        .entry_addr = math.cast(u32, options.entry_addr orelse 0) orelse
-            return error.EntryAddressTooBig,
-        .module_definition_file = options.module_definition_file,
-        .pdb_out_path = options.pdb_out_path,
+        // .lib_directories = options.lib_directories,
+        // .module_definition_file = options.module_definition_file,
+        // .pdb_out_path = options.pdb_out_path,
         .repro = options.repro,
     };
     if (use_llvm and comp.config.have_zcu) {
@@ -316,6 +466,8 @@ pub fn createEmpty(
     // If using LLD to link, this code should produce an object file so that it
     // can be passed to LLD.
     const sub_path = if (use_lld) zcu_object_sub_path.? else emit.sub_path;
+    // !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+    std.log.info("output file: {}{s}", .{ emit.root_dir, sub_path });
     coff.base.file = try emit.root_dir.handle.createFile(sub_path, .{
         .truncate = true,
         .read = true,
@@ -325,8 +477,8 @@ pub fn createEmpty(
     assert(coff.llvm_object == null);
     const gpa = comp.gpa;
 
-    try coff.strtab.buffer.ensureUnusedCapacity(gpa, @sizeOf(u32));
-    coff.strtab.buffer.appendNTimesAssumeCapacity(0, @sizeOf(u32));
+    // try coff.strtab.buffer.ensureUnusedCapacity(gpa, @sizeOf(u32));
+    // coff.strtab.buffer.appendNTimesAssumeCapacity(0, @sizeOf(u32));
 
     try coff.temp_strtab.buffer.append(gpa, 0);
 
@@ -397,19 +549,19 @@ pub fn createEmpty(
         log.debug("found strtab free space 0x{x} to 0x{x}", .{ coff.strtab_offset.?, coff.strtab_offset.? + file_size });
     }
 
-    {
-        // We need to find out what the max file offset is according to section headers.
-        // Otherwise, we may end up with an COFF binary with file size not matching the final section's
-        // offset + it's filesize.
-        // TODO I don't like this here one bit
-        var max_file_offset: u64 = 0;
-        for (coff.sections.items(.header)) |header| {
-            if (header.pointer_to_raw_data + header.size_of_raw_data > max_file_offset) {
-                max_file_offset = header.pointer_to_raw_data + header.size_of_raw_data;
-            }
-        }
-        try coff.pwriteAll(&[_]u8{0}, max_file_offset);
-    }
+    // {
+    //     // We need to find out what the max file offset is according to section headers.
+    //     // Otherwise, we may end up with an COFF binary with file size not matching the final section's
+    //     // offset + it's filesize.
+    //     // TODO I don't like this here one bit
+    //     var max_file_offset: u64 = 0;
+    //     for (coff.sections.items(.header)) |header| {
+    //         if (header.pointer_to_raw_data + header.size_of_raw_data > max_file_offset) {
+    //             max_file_offset = header.pointer_to_raw_data + header.size_of_raw_data;
+    //         }
+    //     }
+    //     try coff.pwriteAll(&[_]u8{0}, max_file_offset);
+    // }
 
     return coff;
 }
@@ -451,16 +603,16 @@ pub fn deinit(coff: *Coff) void {
     coff.need_got_table.deinit(gpa);
     coff.locals_free_list.deinit(gpa);
     coff.globals_free_list.deinit(gpa);
-    coff.strtab.deinit(gpa);
+    // coff.strtab.deinit(gpa);
     coff.temp_strtab.deinit(gpa);
     coff.got_table.deinit(gpa);
 
-    for (coff.import_tables.values()) |*itab| {
-        itab.deinit(gpa);
-    }
-    coff.import_tables.deinit(gpa);
+    // for (coff.import_tables.values()) |*itab| {
+    //     itab.deinit(gpa);
+    // }
+    // coff.import_tables.deinit(gpa);
 
-    coff.lazy_syms.deinit(gpa);
+    // coff.lazy_syms.deinit(gpa);
 
     for (coff.navs.values()) |*metadata| {
         metadata.deinit(gpa);
@@ -486,6 +638,11 @@ pub fn deinit(coff: *Coff) void {
         relocs.deinit(gpa);
     }
     coff.base_relocs.deinit(gpa);
+
+    for (coff.objects.items) |*obj| {
+        obj.deinit(gpa);
+    }
+    coff.objects.deinit(gpa);
 }
 
 fn allocateSection(coff: *Coff, name: []const u8, size: u32, flags: coff_util.SectionHeaderFlags) !u16 {
@@ -780,22 +937,22 @@ pub fn createAtom(coff: *Coff) !Atom.Index {
     return atom_index;
 }
 
-fn growAtom(coff: *Coff, atom_index: Atom.Index, new_atom_size: u32, alignment: u32) !u32 {
-    const atom = coff.getAtom(atom_index);
-    const sym = atom.getSymbol(coff);
-    const align_ok = mem.alignBackward(u32, sym.value, alignment) == sym.value;
-    const need_realloc = !align_ok or new_atom_size > atom.capacity(coff);
-    if (!need_realloc) return sym.value;
-    return coff.allocateAtom(atom_index, new_atom_size, alignment);
-}
+// fn growAtom(coff: *Coff, atom_index: Atom.Index, new_atom_size: u32, alignment: u32) !u32 {
+//     const atom = coff.getAtom(atom_index);
+//     const sym = atom.getSymbol(coff);
+//     const align_ok = mem.alignBackward(u32, sym.value, alignment) == sym.value;
+//     const need_realloc = !align_ok or new_atom_size > atom.capacity(coff);
+//     if (!need_realloc) return sym.value;
+//     return coff.allocateAtom(atom_index, new_atom_size, alignment);
+// }
 
-fn shrinkAtom(coff: *Coff, atom_index: Atom.Index, new_block_size: u32) void {
-    _ = coff;
-    _ = atom_index;
-    _ = new_block_size;
-    // TODO check the new capacity, and if it crosses the size threshold into a big enough
-    // capacity, insert a free list node for it.
-}
+// fn shrinkAtom(coff: *Coff, atom_index: Atom.Index, new_block_size: u32) void {
+//     _ = coff;
+//     _ = atom_index;
+//     _ = new_block_size;
+//     // TODO check the new capacity, and if it crosses the size threshold into a big enough
+//     // capacity, insert a free list node for it.
+// }
 
 fn writeAtom(coff: *Coff, atom_index: Atom.Index, code: []u8) !void {
     const atom = coff.getAtom(atom_index);
@@ -1004,22 +1161,22 @@ fn resolveRelocs(coff: *Coff, atom_index: Atom.Index, relocs: []const *const Rel
     }
 }
 
-pub fn ptraceAttach(coff: *Coff, handle: std.process.Child.Id) !void {
-    if (!is_hot_update_compatible) return;
+// pub fn ptraceAttach(coff: *Coff, handle: std.process.Child.Id) !void {
+//     if (!is_hot_update_compatible) return;
 
-    log.debug("attaching to process with handle {*}", .{handle});
-    coff.hot_state.loaded_base_address = std.os.windows.ProcessBaseAddress(handle) catch |err| {
-        log.warn("failed to get base address for the process with error: {s}", .{@errorName(err)});
-        return;
-    };
-}
+//     log.debug("attaching to process with handle {*}", .{handle});
+//     coff.hot_state.loaded_base_address = std.os.windows.ProcessBaseAddress(handle) catch |err| {
+//         log.warn("failed to get base address for the process with error: {s}", .{@errorName(err)});
+//         return;
+//     };
+// }
 
-pub fn ptraceDetach(coff: *Coff, handle: std.process.Child.Id) void {
-    if (!is_hot_update_compatible) return;
+// pub fn ptraceDetach(coff: *Coff, handle: std.process.Child.Id) void {
+//     if (!is_hot_update_compatible) return;
 
-    log.debug("detaching from process with handle {*}", .{handle});
-    coff.hot_state.loaded_base_address = null;
-}
+//     log.debug("detaching from process with handle {*}", .{handle});
+//     coff.hot_state.loaded_base_address = null;
+// }
 
 fn freeAtom(coff: *Coff, atom_index: Atom.Index) void {
     log.debug("freeAtom {d}", .{atom_index});
@@ -1100,55 +1257,61 @@ pub fn updateFunc(
     air: Air,
     liveness: Liveness,
 ) link.File.UpdateNavError!void {
-    if (build_options.skip_non_native and builtin.object_format != .coff) {
-        @panic("Attempted to compile for object format that was disabled by build configuration");
-    }
-    if (coff.llvm_object) |llvm_object| {
-        return llvm_object.updateFunc(pt, func_index, air, liveness);
-    }
-    const tracy = trace(@src());
-    defer tracy.end();
+    _ = coff;
+    _ = pt;
+    _ = func_index;
+    _ = air;
+    _ = liveness;
+    @panic("todo");
+    //     if (build_options.skip_non_native and builtin.object_format != .coff) {
+    //         @panic("Attempted to compile for object format that was disabled by build configuration");
+    //     }
+    //     if (coff.llvm_object) |llvm_object| {
+    //         return llvm_object.updateFunc(pt, func_index, air, liveness);
+    //     }
+    //     const tracy = trace(@src());
+    //     defer tracy.end();
 
-    const zcu = pt.zcu;
-    const gpa = zcu.gpa;
-    const func = zcu.funcInfo(func_index);
-    const nav_index = func.owner_nav;
+    //     const zcu = pt.zcu;
+    //     const gpa = zcu.gpa;
+    //     const func = zcu.funcInfo(func_index);
+    //     const nav_index = func.owner_nav;
 
-    const atom_index = try coff.getOrCreateAtomForNav(nav_index);
-    coff.freeRelocations(atom_index);
+    //     const atom_index = try coff.getOrCreateAtomForNav(nav_index);
+    //     coff.freeRelocations(atom_index);
 
-    coff.navs.getPtr(func.owner_nav).?.section = coff.text_section_index.?;
+    //     coff.navs.getPtr(func.owner_nav).?.section = coff.text_section_index.?;
 
-    var code_buffer: std.ArrayListUnmanaged(u8) = .empty;
-    defer code_buffer.deinit(gpa);
+    //     var code_buffer: std.ArrayListUnmanaged(u8) = .empty;
+    //     defer code_buffer.deinit(gpa);
 
-    codegen.generateFunction(
-        &coff.base,
-        pt,
-        zcu.navSrcLoc(nav_index),
-        func_index,
-        air,
-        liveness,
-        &code_buffer,
-        .none,
-    ) catch |err| switch (err) {
-        error.CodegenFail => return error.CodegenFail,
-        error.OutOfMemory => return error.OutOfMemory,
-        error.Overflow => |e| {
-            try zcu.failed_codegen.putNoClobber(gpa, nav_index, try Zcu.ErrorMsg.create(
-                gpa,
-                zcu.navSrcLoc(nav_index),
-                "unable to codegen: {s}",
-                .{@errorName(e)},
-            ));
-            try zcu.retryable_failures.append(zcu.gpa, AnalUnit.wrap(.{ .func = func_index }));
-            return error.CodegenFail;
-        },
-    };
+    //     codegen.generateFunction(
+    //         &coff.base,
+    //         pt,
+    //         zcu.navSrcLoc(nav_index),
+    //         func_index,
+    //         air,
+    //         liveness,
+    //         &code_buffer,
+    //         .none,
+    //     ) catch |err| switch (err) {
+    //         error.CodegenFail => return error.CodegenFail,
+    //         error.OutOfMemory => return error.OutOfMemory,
+    //         error.Overflow => |e| {
+    //             try zcu.failed_codegen.putNoClobber(gpa, nav_index, try Zcu.ErrorMsg.create(
+    //                 gpa,
+    //                 zcu.navSrcLoc(nav_index),
+    //                 "unable to codegen: {s}",
+    //                 .{@errorName(e)},
+    //             ));
+    //             try zcu.retryable_failures.append(zcu.gpa, AnalUnit.wrap(.{ .func = func_index }));
+    //             return error.CodegenFail;
+    //         },
+    //     };
 
-    try coff.updateNavCode(pt, nav_index, code_buffer.items, .FUNCTION);
+    //     try coff.updateNavCode(pt, nav_index, code_buffer.items, .FUNCTION);
 
-    // Exports will be updated by `Zcu.processExports` after the update.
+    //     // Exports will be updated by `Zcu.processExports` after the update.
 }
 
 const LowerConstResult = union(enum) {
@@ -1202,57 +1365,61 @@ pub fn updateNav(
     pt: Zcu.PerThread,
     nav_index: InternPool.Nav.Index,
 ) link.File.UpdateNavError!void {
-    if (build_options.skip_non_native and builtin.object_format != .coff) {
-        @panic("Attempted to compile for object format that was disabled by build configuration");
-    }
-    if (coff.llvm_object) |llvm_object| return llvm_object.updateNav(pt, nav_index);
-    const tracy = trace(@src());
-    defer tracy.end();
+    _ = coff;
+    _ = pt;
+    _ = nav_index;
+    @panic("todo: updateNav");
+    //     if (build_options.skip_non_native and builtin.object_format != .coff) {
+    //         @panic("Attempted to compile for object format that was disabled by build configuration");
+    //     }
+    //     if (coff.llvm_object) |llvm_object| return llvm_object.updateNav(pt, nav_index);
+    //     const tracy = trace(@src());
+    //     defer tracy.end();
 
-    const zcu = pt.zcu;
-    const gpa = zcu.gpa;
-    const ip = &zcu.intern_pool;
-    const nav = ip.getNav(nav_index);
+    //     const zcu = pt.zcu;
+    //     const gpa = zcu.gpa;
+    //     const ip = &zcu.intern_pool;
+    //     const nav = ip.getNav(nav_index);
 
-    const nav_val = zcu.navValue(nav_index);
-    const nav_init = switch (ip.indexToKey(nav_val.toIntern())) {
-        .func => return,
-        .variable => |variable| Value.fromInterned(variable.init),
-        .@"extern" => |@"extern"| {
-            if (ip.isFunctionType(@"extern".ty)) return;
-            // TODO make this part of getGlobalSymbol
-            const name = nav.name.toSlice(ip);
-            const lib_name = @"extern".lib_name.toSlice(ip);
-            const global_index = try coff.getGlobalSymbol(name, lib_name);
-            try coff.need_got_table.put(gpa, global_index, {});
-            return;
-        },
-        else => nav_val,
-    };
+    //     const nav_val = zcu.navValue(nav_index);
+    //     const nav_init = switch (ip.indexToKey(nav_val.toIntern())) {
+    //         .func => return,
+    //         .variable => |variable| Value.fromInterned(variable.init),
+    //         .@"extern" => |@"extern"| {
+    //             if (ip.isFunctionType(@"extern".ty)) return;
+    //             // TODO make this part of getGlobalSymbol
+    //             const name = nav.name.toSlice(ip);
+    //             const lib_name = @"extern".lib_name.toSlice(ip);
+    //             const global_index = try coff.getGlobalSymbol(name, lib_name);
+    //             try coff.need_got_table.put(gpa, global_index, {});
+    //             return;
+    //         },
+    //         else => nav_val,
+    //     };
 
-    if (nav_init.typeOf(zcu).hasRuntimeBits(zcu)) {
-        const atom_index = try coff.getOrCreateAtomForNav(nav_index);
-        coff.freeRelocations(atom_index);
-        const atom = coff.getAtom(atom_index);
+    //     if (nav_init.typeOf(zcu).hasRuntimeBits(zcu)) {
+    //         const atom_index = try coff.getOrCreateAtomForNav(nav_index);
+    //         coff.freeRelocations(atom_index);
+    //         const atom = coff.getAtom(atom_index);
 
-        coff.navs.getPtr(nav_index).?.section = coff.getNavOutputSection(nav_index);
+    //         coff.navs.getPtr(nav_index).?.section = coff.getNavOutputSection(nav_index);
 
-        var code_buffer: std.ArrayListUnmanaged(u8) = .empty;
-        defer code_buffer.deinit(gpa);
+    //         var code_buffer: std.ArrayListUnmanaged(u8) = .empty;
+    //         defer code_buffer.deinit(gpa);
 
-        try codegen.generateSymbol(
-            &coff.base,
-            pt,
-            zcu.navSrcLoc(nav_index),
-            nav_init,
-            &code_buffer,
-            .{ .atom_index = atom.getSymbolIndex().? },
-        );
+    //         try codegen.generateSymbol(
+    //             &coff.base,
+    //             pt,
+    //             zcu.navSrcLoc(nav_index),
+    //             nav_init,
+    //             &code_buffer,
+    //             .{ .atom_index = atom.getSymbolIndex().? },
+    //         );
 
-        try coff.updateNavCode(pt, nav_index, code_buffer.items, .NULL);
-    }
+    //         try coff.updateNavCode(pt, nav_index, code_buffer.items, .NULL);
+    //     }
 
-    // Exports will be updated by `Zcu.processExports` after the update.
+    //     // Exports will be updated by `Zcu.processExports` after the update.
 }
 
 fn updateLazySymbolAtom(
@@ -1316,26 +1483,30 @@ pub fn getOrCreateAtomForLazySymbol(
     pt: Zcu.PerThread,
     lazy_sym: link.File.LazySymbol,
 ) !Atom.Index {
-    const gop = try coff.lazy_syms.getOrPut(pt.zcu.gpa, lazy_sym.ty);
-    errdefer _ = if (!gop.found_existing) coff.lazy_syms.pop();
-    if (!gop.found_existing) gop.value_ptr.* = .{};
-    const atom_ptr, const state_ptr = switch (lazy_sym.kind) {
-        .code => .{ &gop.value_ptr.text_atom, &gop.value_ptr.text_state },
-        .const_data => .{ &gop.value_ptr.rdata_atom, &gop.value_ptr.rdata_state },
-    };
-    switch (state_ptr.*) {
-        .unused => atom_ptr.* = try coff.createAtom(),
-        .pending_flush => return atom_ptr.*,
-        .flushed => {},
-    }
-    state_ptr.* = .pending_flush;
-    const atom = atom_ptr.*;
-    // anyerror needs to be deferred until flushModule
-    if (lazy_sym.ty != .anyerror_type) try coff.updateLazySymbolAtom(pt, lazy_sym, atom, switch (lazy_sym.kind) {
-        .code => coff.text_section_index.?,
-        .const_data => coff.rdata_section_index.?,
-    });
-    return atom;
+    _ = coff;
+    _ = pt;
+    _ = lazy_sym;
+    @panic("todo");
+    // const gop = try coff.lazy_syms.getOrPut(pt.zcu.gpa, lazy_sym.ty);
+    // errdefer _ = if (!gop.found_existing) coff.lazy_syms.pop();
+    // if (!gop.found_existing) gop.value_ptr.* = .{};
+    // const atom_ptr, const state_ptr = switch (lazy_sym.kind) {
+    //     .code => .{ &gop.value_ptr.text_atom, &gop.value_ptr.text_state },
+    //     .const_data => .{ &gop.value_ptr.rdata_atom, &gop.value_ptr.rdata_state },
+    // };
+    // switch (state_ptr.*) {
+    //     .unused => atom_ptr.* = try coff.createAtom(),
+    //     .pending_flush => return atom_ptr.*,
+    //     .flushed => {},
+    // }
+    // state_ptr.* = .pending_flush;
+    // const atom = atom_ptr.*;
+    // // anyerror needs to be deferred until flushModule
+    // if (lazy_sym.ty != .anyerror_type) try coff.updateLazySymbolAtom(pt, lazy_sym, atom, switch (lazy_sym.kind) {
+    //     .code => coff.text_section_index.?,
+    //     .const_data => coff.rdata_section_index.?,
+    // });
+    // return atom;
 }
 
 pub fn getOrCreateAtomForNav(coff: *Coff, nav_index: InternPool.Nav.Index) !Atom.Index {
@@ -1352,127 +1523,127 @@ pub fn getOrCreateAtomForNav(coff: *Coff, nav_index: InternPool.Nav.Index) !Atom
     return gop.value_ptr.atom;
 }
 
-fn getNavOutputSection(coff: *Coff, nav_index: InternPool.Nav.Index) u16 {
-    const zcu = coff.base.comp.zcu.?;
-    const ip = &zcu.intern_pool;
-    const nav = ip.getNav(nav_index);
-    const ty = Type.fromInterned(nav.typeOf(ip));
-    const zig_ty = ty.zigTypeTag(zcu);
-    const val = Value.fromInterned(nav.status.fully_resolved.val);
-    const index: u16 = blk: {
-        if (val.isUndefDeep(zcu)) {
-            // TODO in release-fast and release-small, we should put undef in .bss
-            break :blk coff.data_section_index.?;
-        }
+// fn getNavOutputSection(coff: *Coff, nav_index: InternPool.Nav.Index) u16 {
+//     const zcu = coff.base.comp.zcu.?;
+//     const ip = &zcu.intern_pool;
+//     const nav = ip.getNav(nav_index);
+//     const ty = Type.fromInterned(nav.typeOf(ip));
+//     const zig_ty = ty.zigTypeTag(zcu);
+//     const val = Value.fromInterned(nav.status.fully_resolved.val);
+//     const index: u16 = blk: {
+//         if (val.isUndefDeep(zcu)) {
+//             // TODO in release-fast and release-small, we should put undef in .bss
+//             break :blk coff.data_section_index.?;
+//         }
 
-        switch (zig_ty) {
-            // TODO: what if this is a function pointer?
-            .@"fn" => break :blk coff.text_section_index.?,
-            else => {
-                if (val.getVariable(zcu)) |_| {
-                    break :blk coff.data_section_index.?;
-                }
-                break :blk coff.rdata_section_index.?;
-            },
-        }
-    };
-    return index;
-}
+//         switch (zig_ty) {
+//             // TODO: what if this is a function pointer?
+//             .@"fn" => break :blk coff.text_section_index.?,
+//             else => {
+//                 if (val.getVariable(zcu)) |_| {
+//                     break :blk coff.data_section_index.?;
+//                 }
+//                 break :blk coff.rdata_section_index.?;
+//             },
+//         }
+//     };
+//     return index;
+// }
 
-fn updateNavCode(
-    coff: *Coff,
-    pt: Zcu.PerThread,
-    nav_index: InternPool.Nav.Index,
-    code: []u8,
-    complex_type: coff_util.ComplexType,
-) link.File.UpdateNavError!void {
-    const zcu = pt.zcu;
-    const ip = &zcu.intern_pool;
-    const nav = ip.getNav(nav_index);
+// fn updateNavCode(
+//     coff: *Coff,
+//     pt: Zcu.PerThread,
+//     nav_index: InternPool.Nav.Index,
+//     code: []u8,
+//     complex_type: coff_util.ComplexType,
+// ) link.File.UpdateNavError!void {
+//     const zcu = pt.zcu;
+//     const ip = &zcu.intern_pool;
+//     const nav = ip.getNav(nav_index);
 
-    log.debug("updateNavCode {} 0x{x}", .{ nav.fqn.fmt(ip), nav_index });
+//     log.debug("updateNavCode {} 0x{x}", .{ nav.fqn.fmt(ip), nav_index });
 
-    const target = zcu.navFileScope(nav_index).mod.resolved_target.result;
-    const required_alignment = switch (pt.navAlignment(nav_index)) {
-        .none => target_util.defaultFunctionAlignment(target),
-        else => |a| a.maxStrict(target_util.minFunctionAlignment(target)),
-    };
+//     const target = zcu.navFileScope(nav_index).mod.resolved_target.result;
+//     const required_alignment = switch (pt.navAlignment(nav_index)) {
+//         .none => target_util.defaultFunctionAlignment(target),
+//         else => |a| a.maxStrict(target_util.minFunctionAlignment(target)),
+//     };
 
-    const nav_metadata = coff.navs.get(nav_index).?;
-    const atom_index = nav_metadata.atom;
-    const atom = coff.getAtom(atom_index);
-    const sym_index = atom.getSymbolIndex().?;
-    const sect_index = nav_metadata.section;
-    const code_len: u32 = @intCast(code.len);
+//     const nav_metadata = coff.navs.get(nav_index).?;
+//     const atom_index = nav_metadata.atom;
+//     const atom = coff.getAtom(atom_index);
+//     const sym_index = atom.getSymbolIndex().?;
+//     const sect_index = nav_metadata.section;
+//     const code_len: u32 = @intCast(code.len);
 
-    if (atom.size != 0) {
-        const sym = atom.getSymbolPtr(coff);
-        try coff.setSymbolName(sym, nav.fqn.toSlice(ip));
-        sym.section_number = @enumFromInt(sect_index + 1);
-        sym.type = .{ .complex_type = complex_type, .base_type = .NULL };
+//     if (atom.size != 0) {
+//         const sym = atom.getSymbolPtr(coff);
+//         try coff.setSymbolName(sym, nav.fqn.toSlice(ip));
+//         sym.section_number = @enumFromInt(sect_index + 1);
+//         sym.type = .{ .complex_type = complex_type, .base_type = .NULL };
 
-        const capacity = atom.capacity(coff);
-        const need_realloc = code.len > capacity or !required_alignment.check(sym.value);
-        if (need_realloc) {
-            const vaddr = coff.growAtom(atom_index, code_len, @intCast(required_alignment.toByteUnits() orelse 0)) catch |err| switch (err) {
-                error.OutOfMemory => return error.OutOfMemory,
-                else => |e| return coff.base.cgFail(nav_index, "failed to grow atom: {s}", .{@errorName(e)}),
-            };
-            log.debug("growing {} from 0x{x} to 0x{x}", .{ nav.fqn.fmt(ip), sym.value, vaddr });
-            log.debug("  (required alignment 0x{x}", .{required_alignment});
+//         const capacity = atom.capacity(coff);
+//         const need_realloc = code.len > capacity or !required_alignment.check(sym.value);
+//         if (need_realloc) {
+//             const vaddr = coff.growAtom(atom_index, code_len, @intCast(required_alignment.toByteUnits() orelse 0)) catch |err| switch (err) {
+//                 error.OutOfMemory => return error.OutOfMemory,
+//                 else => |e| return coff.base.cgFail(nav_index, "failed to grow atom: {s}", .{@errorName(e)}),
+//             };
+//             log.debug("growing {} from 0x{x} to 0x{x}", .{ nav.fqn.fmt(ip), sym.value, vaddr });
+//             log.debug("  (required alignment 0x{x}", .{required_alignment});
 
-            if (vaddr != sym.value) {
-                sym.value = vaddr;
-                log.debug("  (updating GOT entry)", .{});
-                const got_entry_index = coff.got_table.lookup.get(.{ .sym_index = sym_index }).?;
-                coff.writeOffsetTableEntry(got_entry_index) catch |err| switch (err) {
-                    error.OutOfMemory => return error.OutOfMemory,
-                    else => |e| return coff.base.cgFail(nav_index, "failed to write offset table entry: {s}", .{@errorName(e)}),
-                };
-                coff.markRelocsDirtyByTarget(.{ .sym_index = sym_index });
-            }
-        } else if (code_len < atom.size) {
-            coff.shrinkAtom(atom_index, code_len);
-        }
-        coff.getAtomPtr(atom_index).size = code_len;
-    } else {
-        const sym = atom.getSymbolPtr(coff);
-        try coff.setSymbolName(sym, nav.fqn.toSlice(ip));
-        sym.section_number = @enumFromInt(sect_index + 1);
-        sym.type = .{ .complex_type = complex_type, .base_type = .NULL };
+//             if (vaddr != sym.value) {
+//                 sym.value = vaddr;
+//                 log.debug("  (updating GOT entry)", .{});
+//                 const got_entry_index = coff.got_table.lookup.get(.{ .sym_index = sym_index }).?;
+//                 coff.writeOffsetTableEntry(got_entry_index) catch |err| switch (err) {
+//                     error.OutOfMemory => return error.OutOfMemory,
+//                     else => |e| return coff.base.cgFail(nav_index, "failed to write offset table entry: {s}", .{@errorName(e)}),
+//                 };
+//                 coff.markRelocsDirtyByTarget(.{ .sym_index = sym_index });
+//             }
+//         } else if (code_len < atom.size) {
+//             coff.shrinkAtom(atom_index, code_len);
+//         }
+//         coff.getAtomPtr(atom_index).size = code_len;
+//     } else {
+//         const sym = atom.getSymbolPtr(coff);
+//         try coff.setSymbolName(sym, nav.fqn.toSlice(ip));
+//         sym.section_number = @enumFromInt(sect_index + 1);
+//         sym.type = .{ .complex_type = complex_type, .base_type = .NULL };
 
-        const vaddr = coff.allocateAtom(atom_index, code_len, @intCast(required_alignment.toByteUnits() orelse 0)) catch |err| switch (err) {
-            error.OutOfMemory => return error.OutOfMemory,
-            else => |e| return coff.base.cgFail(nav_index, "failed to allocate atom: {s}", .{@errorName(e)}),
-        };
-        errdefer coff.freeAtom(atom_index);
-        log.debug("allocated atom for {} at 0x{x}", .{ nav.fqn.fmt(ip), vaddr });
-        coff.getAtomPtr(atom_index).size = code_len;
-        sym.value = vaddr;
+//         const vaddr = coff.allocateAtom(atom_index, code_len, @intCast(required_alignment.toByteUnits() orelse 0)) catch |err| switch (err) {
+//             error.OutOfMemory => return error.OutOfMemory,
+//             else => |e| return coff.base.cgFail(nav_index, "failed to allocate atom: {s}", .{@errorName(e)}),
+//         };
+//         errdefer coff.freeAtom(atom_index);
+//         log.debug("allocated atom for {} at 0x{x}", .{ nav.fqn.fmt(ip), vaddr });
+//         coff.getAtomPtr(atom_index).size = code_len;
+//         sym.value = vaddr;
 
-        coff.addGotEntry(.{ .sym_index = sym_index }) catch |err| switch (err) {
-            error.OutOfMemory => return error.OutOfMemory,
-            else => |e| return coff.base.cgFail(nav_index, "failed to add GOT entry: {s}", .{@errorName(e)}),
-        };
-    }
+//         coff.addGotEntry(.{ .sym_index = sym_index }) catch |err| switch (err) {
+//             error.OutOfMemory => return error.OutOfMemory,
+//             else => |e| return coff.base.cgFail(nav_index, "failed to add GOT entry: {s}", .{@errorName(e)}),
+//         };
+//     }
 
-    coff.writeAtom(atom_index, code) catch |err| switch (err) {
-        error.OutOfMemory => return error.OutOfMemory,
-        else => |e| return coff.base.cgFail(nav_index, "failed to write atom: {s}", .{@errorName(e)}),
-    };
-}
+//     coff.writeAtom(atom_index, code) catch |err| switch (err) {
+//         error.OutOfMemory => return error.OutOfMemory,
+//         else => |e| return coff.base.cgFail(nav_index, "failed to write atom: {s}", .{@errorName(e)}),
+//     };
+// }
 
-pub fn freeNav(coff: *Coff, nav_index: InternPool.NavIndex) void {
-    if (coff.llvm_object) |llvm_object| return llvm_object.freeNav(nav_index);
+// pub fn freeNav(coff: *Coff, nav_index: InternPool.NavIndex) void {
+//     if (coff.llvm_object) |llvm_object| return llvm_object.freeNav(nav_index);
 
-    const gpa = coff.base.comp.gpa;
+//     const gpa = coff.base.comp.gpa;
 
-    if (coff.decls.fetchOrderedRemove(nav_index)) |const_kv| {
-        var kv = const_kv;
-        coff.freeAtom(kv.value.atom);
-        kv.value.exports.deinit(gpa);
-    }
-}
+//     if (coff.decls.fetchOrderedRemove(nav_index)) |const_kv| {
+//         var kv = const_kv;
+//         coff.freeAtom(kv.value.atom);
+//         kv.value.exports.deinit(gpa);
+//     }
+// }
 
 pub fn updateExports(
     coff: *Coff,
@@ -1480,140 +1651,166 @@ pub fn updateExports(
     exported: Zcu.Exported,
     export_indices: []const Zcu.Export.Index,
 ) link.File.UpdateExportsError!void {
-    if (build_options.skip_non_native and builtin.object_format != .coff) {
-        @panic("Attempted to compile for object format that was disabled by build configuration");
+    _ = coff;
+    _ = pt;
+    _ = exported;
+    _ = export_indices;
+    @panic("todo");
+
+    // if (build_options.skip_non_native and builtin.object_format != .coff) {
+    //     @panic("Attempted to compile for object format that was disabled by build configuration");
+    // }
+
+    // const zcu = pt.zcu;
+    // const ip = &zcu.intern_pool;
+    // const comp = coff.base.comp;
+    // const target = comp.root_mod.resolved_target.result;
+
+    // if (comp.config.use_llvm) {
+    //     // Even in the case of LLVM, we need to notice certain exported symbols in order to
+    //     // detect the default subsystem.
+    //     for (export_indices) |export_idx| {
+    //         const exp = export_idx.ptr(zcu);
+    //         const exported_nav_index = switch (exp.exported) {
+    //             .nav => |nav| nav,
+    //             .uav => continue,
+    //         };
+    //         const exported_nav = ip.getNav(exported_nav_index);
+    //         const exported_ty = exported_nav.typeOf(ip);
+    //         if (!ip.isFunctionType(exported_ty)) continue;
+    //         const c_cc = target.cCallingConvention().?;
+    //         const winapi_cc: std.builtin.CallingConvention = switch (target.cpu.arch) {
+    //             .x86 => .{ .x86_stdcall = .{} },
+    //             else => c_cc,
+    //         };
+    //         const exported_cc = Type.fromInterned(exported_ty).fnCallingConvention(zcu);
+    //         const CcTag = std.builtin.CallingConvention.Tag;
+    //         if (@as(CcTag, exported_cc) == @as(CcTag, c_cc) and exp.opts.name.eqlSlice("main", ip) and comp.config.link_libc) {
+    //             zcu.stage1_flags.have_c_main = true;
+    //         } else if (@as(CcTag, exported_cc) == @as(CcTag, winapi_cc) and target.os.tag == .windows) {
+    //             if (exp.opts.name.eqlSlice("WinMain", ip)) {
+    //                 zcu.stage1_flags.have_winmain = true;
+    //             } else if (exp.opts.name.eqlSlice("wWinMain", ip)) {
+    //                 zcu.stage1_flags.have_wwinmain = true;
+    //             } else if (exp.opts.name.eqlSlice("WinMainCRTStartup", ip)) {
+    //                 zcu.stage1_flags.have_winmain_crt_startup = true;
+    //             } else if (exp.opts.name.eqlSlice("wWinMainCRTStartup", ip)) {
+    //                 zcu.stage1_flags.have_wwinmain_crt_startup = true;
+    //             } else if (exp.opts.name.eqlSlice("DllMainCRTStartup", ip)) {
+    //                 zcu.stage1_flags.have_dllmain_crt_startup = true;
+    //             }
+    //         }
+    //     }
+    // }
+
+    // if (coff.llvm_object) |llvm_object| return llvm_object.updateExports(pt, exported, export_indices);
+
+    // const gpa = comp.gpa;
+
+    // const metadata = switch (exported) {
+    //     .nav => |nav| blk: {
+    //         _ = try coff.getOrCreateAtomForNav(nav);
+    //         break :blk coff.navs.getPtr(nav).?;
+    //     },
+    //     .uav => |uav| coff.uavs.getPtr(uav) orelse blk: {
+    //         const first_exp = export_indices[0].ptr(zcu);
+    //         const res = try coff.lowerUav(pt, uav, .none, first_exp.src);
+    //         switch (res) {
+    //             .mcv => {},
+    //             .fail => |em| {
+    //                 // TODO maybe it's enough to return an error here and let Module.processExportsInner
+    //                 // handle the error?
+    //                 try zcu.failed_exports.ensureUnusedCapacity(zcu.gpa, 1);
+    //                 zcu.failed_exports.putAssumeCapacityNoClobber(export_indices[0], em);
+    //                 return;
+    //             },
+    //         }
+    //         break :blk coff.uavs.getPtr(uav).?;
+    //     },
+    // };
+    // const atom_index = metadata.atom;
+    // const atom = coff.getAtom(atom_index);
+
+    // for (export_indices) |export_idx| {
+    //     const exp = export_idx.ptr(zcu);
+    //     log.debug("adding new export '{}'", .{exp.opts.name.fmt(&zcu.intern_pool)});
+
+    //     if (exp.opts.section.toSlice(&zcu.intern_pool)) |section_name| {
+    //         if (!mem.eql(u8, section_name, ".text")) {
+    //             try zcu.failed_exports.putNoClobber(gpa, export_idx, try Zcu.ErrorMsg.create(
+    //                 gpa,
+    //                 exp.src,
+    //                 "Unimplemented: ExportOptions.section",
+    //                 .{},
+    //             ));
+    //             continue;
+    //         }
+    //     }
+
+    //     if (exp.opts.linkage == .link_once) {
+    //         try zcu.failed_exports.putNoClobber(gpa, export_idx, try Zcu.ErrorMsg.create(
+    //             gpa,
+    //             exp.src,
+    //             "Unimplemented: GlobalLinkage.link_once",
+    //             .{},
+    //         ));
+    //         continue;
+    //     }
+
+    //     const exp_name = exp.opts.name.toSlice(&zcu.intern_pool);
+    //     const sym_index = metadata.getExport(coff, exp_name) orelse blk: {
+    //         const sym_index = if (coff.getGlobalIndex(exp_name)) |global_index| ind: {
+    //             const global = coff.globals.items[global_index];
+    //             // TODO this is just plain wrong as it all should happen in a single `resolveSymbols`
+    //             // pass. This will go away once we abstact away Zig's incremental compilation into
+    //             // its own module.
+    //             if (global.file == null and coff.getSymbol(global).section_number == .UNDEFINED) {
+    //                 _ = coff.unresolved.swapRemove(global_index);
+    //                 break :ind global.sym_index;
+    //             }
+    //             break :ind try coff.allocateSymbol();
+    //         } else try coff.allocateSymbol();
+    //         try metadata.exports.append(gpa, sym_index);
+    //         break :blk sym_index;
+    //     };
+    //     const sym_loc = SymbolWithLoc{ .sym_index = sym_index, .file = null };
+    //     const sym = coff.getSymbolPtr(sym_loc);
+    //     try coff.setSymbolName(sym, exp_name);
+    //     sym.value = atom.getSymbol(coff).value;
+    //     sym.section_number = @as(coff_util.SectionNumber, @enumFromInt(metadata.section + 1));
+    //     sym.type = atom.getSymbol(coff).type;
+
+    //     switch (exp.opts.linkage) {
+    //         .strong => {
+    //             sym.storage_class = .EXTERNAL;
+    //         },
+    //         .internal => @panic("TODO Internal"),
+    //         .weak => @panic("TODO WeakExternal"),
+    //         else => unreachable,
+    //     }
+
+    //     try coff.resolveGlobalSymbol(sym_loc);
+    // }
+}
+
+pub fn loadInput(coff: *Coff, input: link.Input) !void {
+    switch (input) {
+        .object => |obj| try coff.loadObject(obj),
+        inline .archive, .res => |i| std.debug.panic("todo: implement linking {}", .{i.path}),
+        .dso, .dso_exact => unreachable,
     }
+}
 
-    const zcu = pt.zcu;
-    const ip = &zcu.intern_pool;
-    const comp = coff.base.comp;
-    const target = comp.root_mod.resolved_target.result;
+fn loadObject(coff: *Coff, obj: link.Input.Object) !void {
+    log.debug("parseObject {}", .{obj.path});
+    const gpa = coff.base.comp.gpa;
+    //const gc_sections = coff.base.gc_sections;
 
-    if (comp.config.use_llvm) {
-        // Even in the case of LLVM, we need to notice certain exported symbols in order to
-        // detect the default subsystem.
-        for (export_indices) |export_idx| {
-            const exp = export_idx.ptr(zcu);
-            const exported_nav_index = switch (exp.exported) {
-                .nav => |nav| nav,
-                .uav => continue,
-            };
-            const exported_nav = ip.getNav(exported_nav_index);
-            const exported_ty = exported_nav.typeOf(ip);
-            if (!ip.isFunctionType(exported_ty)) continue;
-            const c_cc = target.cCallingConvention().?;
-            const winapi_cc: std.builtin.CallingConvention = switch (target.cpu.arch) {
-                .x86 => .{ .x86_stdcall = .{} },
-                else => c_cc,
-            };
-            const exported_cc = Type.fromInterned(exported_ty).fnCallingConvention(zcu);
-            const CcTag = std.builtin.CallingConvention.Tag;
-            if (@as(CcTag, exported_cc) == @as(CcTag, c_cc) and exp.opts.name.eqlSlice("main", ip) and comp.config.link_libc) {
-                zcu.stage1_flags.have_c_main = true;
-            } else if (@as(CcTag, exported_cc) == @as(CcTag, winapi_cc) and target.os.tag == .windows) {
-                if (exp.opts.name.eqlSlice("WinMain", ip)) {
-                    zcu.stage1_flags.have_winmain = true;
-                } else if (exp.opts.name.eqlSlice("wWinMain", ip)) {
-                    zcu.stage1_flags.have_wwinmain = true;
-                } else if (exp.opts.name.eqlSlice("WinMainCRTStartup", ip)) {
-                    zcu.stage1_flags.have_winmain_crt_startup = true;
-                } else if (exp.opts.name.eqlSlice("wWinMainCRTStartup", ip)) {
-                    zcu.stage1_flags.have_wwinmain_crt_startup = true;
-                } else if (exp.opts.name.eqlSlice("DllMainCRTStartup", ip)) {
-                    zcu.stage1_flags.have_dllmain_crt_startup = true;
-                }
-            }
-        }
-    }
+    defer obj.file.close();
 
-    if (coff.llvm_object) |llvm_object| return llvm_object.updateExports(pt, exported, export_indices);
-
-    const gpa = comp.gpa;
-
-    const metadata = switch (exported) {
-        .nav => |nav| blk: {
-            _ = try coff.getOrCreateAtomForNav(nav);
-            break :blk coff.navs.getPtr(nav).?;
-        },
-        .uav => |uav| coff.uavs.getPtr(uav) orelse blk: {
-            const first_exp = export_indices[0].ptr(zcu);
-            const res = try coff.lowerUav(pt, uav, .none, first_exp.src);
-            switch (res) {
-                .mcv => {},
-                .fail => |em| {
-                    // TODO maybe it's enough to return an error here and let Module.processExportsInner
-                    // handle the error?
-                    try zcu.failed_exports.ensureUnusedCapacity(zcu.gpa, 1);
-                    zcu.failed_exports.putAssumeCapacityNoClobber(export_indices[0], em);
-                    return;
-                },
-            }
-            break :blk coff.uavs.getPtr(uav).?;
-        },
-    };
-    const atom_index = metadata.atom;
-    const atom = coff.getAtom(atom_index);
-
-    for (export_indices) |export_idx| {
-        const exp = export_idx.ptr(zcu);
-        log.debug("adding new export '{}'", .{exp.opts.name.fmt(&zcu.intern_pool)});
-
-        if (exp.opts.section.toSlice(&zcu.intern_pool)) |section_name| {
-            if (!mem.eql(u8, section_name, ".text")) {
-                try zcu.failed_exports.putNoClobber(gpa, export_idx, try Zcu.ErrorMsg.create(
-                    gpa,
-                    exp.src,
-                    "Unimplemented: ExportOptions.section",
-                    .{},
-                ));
-                continue;
-            }
-        }
-
-        if (exp.opts.linkage == .link_once) {
-            try zcu.failed_exports.putNoClobber(gpa, export_idx, try Zcu.ErrorMsg.create(
-                gpa,
-                exp.src,
-                "Unimplemented: GlobalLinkage.link_once",
-                .{},
-            ));
-            continue;
-        }
-
-        const exp_name = exp.opts.name.toSlice(&zcu.intern_pool);
-        const sym_index = metadata.getExport(coff, exp_name) orelse blk: {
-            const sym_index = if (coff.getGlobalIndex(exp_name)) |global_index| ind: {
-                const global = coff.globals.items[global_index];
-                // TODO this is just plain wrong as it all should happen in a single `resolveSymbols`
-                // pass. This will go away once we abstact away Zig's incremental compilation into
-                // its own module.
-                if (global.file == null and coff.getSymbol(global).section_number == .UNDEFINED) {
-                    _ = coff.unresolved.swapRemove(global_index);
-                    break :ind global.sym_index;
-                }
-                break :ind try coff.allocateSymbol();
-            } else try coff.allocateSymbol();
-            try metadata.exports.append(gpa, sym_index);
-            break :blk sym_index;
-        };
-        const sym_loc = SymbolWithLoc{ .sym_index = sym_index, .file = null };
-        const sym = coff.getSymbolPtr(sym_loc);
-        try coff.setSymbolName(sym, exp_name);
-        sym.value = atom.getSymbol(coff).value;
-        sym.section_number = @as(coff_util.SectionNumber, @enumFromInt(metadata.section + 1));
-        sym.type = atom.getSymbol(coff).type;
-
-        switch (exp.opts.linkage) {
-            .strong => {
-                sym.storage_class = .EXTERNAL;
-            },
-            .internal => @panic("TODO Internal"),
-            .weak => @panic("TODO WeakExternal"),
-            else => unreachable,
-        }
-
-        try coff.resolveGlobalSymbol(sym_loc);
-    }
+    try coff.objects.ensureUnusedCapacity(gpa, 1);
+    const object = try Object.read(gpa, obj.file.seekableStream());
+    coff.objects.appendAssumeCapacity(object);
 }
 
 pub fn deleteExport(
@@ -1657,579 +1854,581 @@ pub fn deleteExport(
     sym_index.* = 0;
 }
 
-fn resolveGlobalSymbol(coff: *Coff, current: SymbolWithLoc) !void {
-    const gpa = coff.base.comp.gpa;
-    const sym = coff.getSymbol(current);
-    const sym_name = coff.getSymbolName(current);
+// fn resolveGlobalSymbol(coff: *Coff, current: SymbolWithLoc) !void {
+//     const gpa = coff.base.comp.gpa;
+//     const sym = coff.getSymbol(current);
+//     const sym_name = coff.getSymbolName(current);
 
-    const gop = try coff.getOrPutGlobalPtr(sym_name);
-    if (!gop.found_existing) {
-        gop.value_ptr.* = current;
-        if (sym.section_number == .UNDEFINED) {
-            try coff.unresolved.putNoClobber(gpa, coff.getGlobalIndex(sym_name).?, false);
-        }
-        return;
-    }
+//     const gop = try coff.getOrPutGlobalPtr(sym_name);
+//     if (!gop.found_existing) {
+//         gop.value_ptr.* = current;
+//         if (sym.section_number == .UNDEFINED) {
+//             try coff.unresolved.putNoClobber(gpa, coff.getGlobalIndex(sym_name).?, false);
+//         }
+//         return;
+//     }
 
-    log.debug("TODO finish resolveGlobalSymbols implementation", .{});
+//     log.debug("TODO finish resolveGlobalSymbols implementation", .{});
 
-    if (sym.section_number == .UNDEFINED) return;
+//     if (sym.section_number == .UNDEFINED) return;
 
-    _ = coff.unresolved.swapRemove(coff.getGlobalIndex(sym_name).?);
+//     _ = coff.unresolved.swapRemove(coff.getGlobalIndex(sym_name).?);
 
-    gop.value_ptr.* = current;
-}
+//     gop.value_ptr.* = current;
+// }
 
 pub fn flush(coff: *Coff, arena: Allocator, tid: Zcu.PerThread.Id, prog_node: std.Progress.Node) link.File.FlushError!void {
     const comp = coff.base.comp;
-    const use_lld = build_options.have_llvm and comp.config.use_lld;
+    // const use_lld = build_options.have_llvm and comp.config.use_lld;
     const diags = &comp.link_diags;
-    if (use_lld) {
-        return coff.linkWithLLD(arena, tid, prog_node) catch |err| switch (err) {
-            error.OutOfMemory => return error.OutOfMemory,
-            error.LinkFailure => return error.LinkFailure,
-            else => |e| return diags.fail("failed to link with LLD: {s}", .{@errorName(e)}),
-        };
-    }
+
+    if (comp.config.use_lld) @panic("remove lld");
+    // if (use_lld) {
+    //     return coff.linkWithLLD(arena, tid, prog_node) catch |err| switch (err) {
+    //         error.OutOfMemory => return error.OutOfMemory,
+    //         error.LinkFailure => return error.LinkFailure,
+    //         else => |e| return diags.fail("failed to link with LLD: {s}", .{@errorName(e)}),
+    //     };
+    // }
     switch (comp.config.output_mode) {
         .Exe, .Obj => return coff.flushModule(arena, tid, prog_node),
         .Lib => return diags.fail("writing lib files not yet implemented for COFF", .{}),
     }
 }
 
-fn linkWithLLD(coff: *Coff, arena: Allocator, tid: Zcu.PerThread.Id, prog_node: std.Progress.Node) !void {
-    dev.check(.lld_linker);
+// fn linkWithLLD(coff: *Coff, arena: Allocator, tid: Zcu.PerThread.Id, prog_node: std.Progress.Node) !void {
+//     dev.check(.lld_linker);
 
-    const tracy = trace(@src());
-    defer tracy.end();
+//     const tracy = trace(@src());
+//     defer tracy.end();
 
-    const comp = coff.base.comp;
-    const gpa = comp.gpa;
+//     const comp = coff.base.comp;
+//     const gpa = comp.gpa;
 
-    const directory = coff.base.emit.root_dir; // Just an alias to make it shorter to type.
-    const full_out_path = try directory.join(arena, &[_][]const u8{coff.base.emit.sub_path});
+//     const directory = coff.base.emit.root_dir; // Just an alias to make it shorter to type.
+//     const full_out_path = try directory.join(arena, &[_][]const u8{coff.base.emit.sub_path});
 
-    // If there is no Zig code to compile, then we should skip flushing the output file because it
-    // will not be part of the linker line anyway.
-    const module_obj_path: ?[]const u8 = if (comp.zcu != null) blk: {
-        try coff.flushModule(arena, tid, prog_node);
+//     // If there is no Zig code to compile, then we should skip flushing the output file because it
+//     // will not be part of the linker line anyway.
+//     const module_obj_path: ?[]const u8 = if (comp.zcu != null) blk: {
+//         try coff.flushModule(arena, tid, prog_node);
 
-        if (fs.path.dirname(full_out_path)) |dirname| {
-            break :blk try fs.path.join(arena, &.{ dirname, coff.base.zcu_object_sub_path.? });
-        } else {
-            break :blk coff.base.zcu_object_sub_path.?;
-        }
-    } else null;
+//         if (fs.path.dirname(full_out_path)) |dirname| {
+//             break :blk try fs.path.join(arena, &.{ dirname, coff.base.zcu_object_sub_path.? });
+//         } else {
+//             break :blk coff.base.zcu_object_sub_path.?;
+//         }
+//     } else null;
 
-    const sub_prog_node = prog_node.start("LLD Link", 0);
-    defer sub_prog_node.end();
+//     const sub_prog_node = prog_node.start("LLD Link", 0);
+//     defer sub_prog_node.end();
 
-    const is_lib = comp.config.output_mode == .Lib;
-    const is_dyn_lib = comp.config.link_mode == .dynamic and is_lib;
-    const is_exe_or_dyn_lib = is_dyn_lib or comp.config.output_mode == .Exe;
-    const link_in_crt = comp.config.link_libc and is_exe_or_dyn_lib;
-    const target = comp.root_mod.resolved_target.result;
-    const optimize_mode = comp.root_mod.optimize_mode;
-    const entry_name: ?[]const u8 = switch (coff.entry) {
-        // This logic isn't quite right for disabled or enabled. No point in fixing it
-        // when the goal is to eliminate dependency on LLD anyway.
-        // https://github.com/ziglang/zig/issues/17751
-        .disabled, .default, .enabled => null,
-        .named => |name| name,
-    };
+//     const is_lib = comp.config.output_mode == .Lib;
+//     const is_dyn_lib = comp.config.link_mode == .dynamic and is_lib;
+//     const is_exe_or_dyn_lib = is_dyn_lib or comp.config.output_mode == .Exe;
+//     const link_in_crt = comp.config.link_libc and is_exe_or_dyn_lib;
+//     const target = comp.root_mod.resolved_target.result;
+//     const optimize_mode = comp.root_mod.optimize_mode;
+//     const entry_name: ?[]const u8 = switch (coff.entry) {
+//         // This logic isn't quite right for disabled or enabled. No point in fixing it
+//         // when the goal is to eliminate dependency on LLD anyway.
+//         // https://github.com/ziglang/zig/issues/17751
+//         .disabled, .default, .enabled => null,
+//         .named => |name| name,
+//     };
 
-    // See link/Elf.zig for comments on how this mechanism works.
-    const id_symlink_basename = "lld.id";
+//     // See link/Elf.zig for comments on how this mechanism works.
+//     const id_symlink_basename = "lld.id";
 
-    var man: Cache.Manifest = undefined;
-    defer if (!coff.base.disable_lld_caching) man.deinit();
+//     var man: Cache.Manifest = undefined;
+//     defer if (!coff.base.disable_lld_caching) man.deinit();
 
-    var digest: [Cache.hex_digest_len]u8 = undefined;
+//     var digest: [Cache.hex_digest_len]u8 = undefined;
 
-    if (!coff.base.disable_lld_caching) {
-        man = comp.cache_parent.obtain();
-        coff.base.releaseLock();
+//     if (!coff.base.disable_lld_caching) {
+//         man = comp.cache_parent.obtain();
+//         coff.base.releaseLock();
 
-        comptime assert(Compilation.link_hash_implementation_version == 14);
+//         comptime assert(Compilation.link_hash_implementation_version == 14);
 
-        try link.hashInputs(&man, comp.link_inputs);
-        for (comp.c_object_table.keys()) |key| {
-            _ = try man.addFilePath(key.status.success.object_path, null);
-        }
-        for (comp.win32_resource_table.keys()) |key| {
-            _ = try man.addFile(key.status.success.res_path, null);
-        }
-        try man.addOptionalFile(module_obj_path);
-        man.hash.addOptionalBytes(entry_name);
-        man.hash.add(coff.base.stack_size);
-        man.hash.add(coff.image_base);
-        {
-            // TODO remove this, libraries must instead be resolved by the frontend.
-            for (coff.lib_directories) |lib_directory| man.hash.addOptionalBytes(lib_directory.path);
-        }
-        man.hash.add(comp.skip_linker_dependencies);
-        if (comp.config.link_libc) {
-            man.hash.add(comp.libc_installation != null);
-            if (comp.libc_installation) |libc_installation| {
-                man.hash.addBytes(libc_installation.crt_dir.?);
-                if (target.abi == .msvc or target.abi == .itanium) {
-                    man.hash.addBytes(libc_installation.msvc_lib_dir.?);
-                    man.hash.addBytes(libc_installation.kernel32_lib_dir.?);
-                }
-            }
-        }
-        man.hash.addListOfBytes(comp.windows_libs.keys());
-        man.hash.addListOfBytes(comp.force_undefined_symbols.keys());
-        man.hash.addOptional(coff.subsystem);
-        man.hash.add(comp.config.is_test);
-        man.hash.add(coff.tsaware);
-        man.hash.add(coff.nxcompat);
-        man.hash.add(coff.dynamicbase);
-        man.hash.add(coff.base.allow_shlib_undefined);
-        // strip does not need to go into the linker hash because it is part of the hash namespace
-        man.hash.add(coff.major_subsystem_version);
-        man.hash.add(coff.minor_subsystem_version);
-        man.hash.add(coff.repro);
-        man.hash.addOptional(comp.version);
-        try man.addOptionalFile(coff.module_definition_file);
+//         try link.hashInputs(&man, comp.link_inputs);
+//         for (comp.c_object_table.keys()) |key| {
+//             _ = try man.addFilePath(key.status.success.object_path, null);
+//         }
+//         for (comp.win32_resource_table.keys()) |key| {
+//             _ = try man.addFile(key.status.success.res_path, null);
+//         }
+//         try man.addOptionalFile(module_obj_path);
+//         man.hash.addOptionalBytes(entry_name);
+//         man.hash.add(coff.base.stack_size);
+//         man.hash.add(coff.image_base);
+//         {
+//             // TODO remove this, libraries must instead be resolved by the frontend.
+//             for (coff.lib_directories) |lib_directory| man.hash.addOptionalBytes(lib_directory.path);
+//         }
+//         man.hash.add(comp.skip_linker_dependencies);
+//         if (comp.config.link_libc) {
+//             man.hash.add(comp.libc_installation != null);
+//             if (comp.libc_installation) |libc_installation| {
+//                 man.hash.addBytes(libc_installation.crt_dir.?);
+//                 if (target.abi == .msvc or target.abi == .itanium) {
+//                     man.hash.addBytes(libc_installation.msvc_lib_dir.?);
+//                     man.hash.addBytes(libc_installation.kernel32_lib_dir.?);
+//                 }
+//             }
+//         }
+//         man.hash.addListOfBytes(comp.windows_libs.keys());
+//         man.hash.addListOfBytes(comp.force_undefined_symbols.keys());
+//         man.hash.addOptional(coff.subsystem);
+//         man.hash.add(comp.config.is_test);
+//         man.hash.add(coff.tsaware);
+//         man.hash.add(coff.nxcompat);
+//         man.hash.add(coff.dynamicbase);
+//         man.hash.add(coff.base.allow_shlib_undefined);
+//         // strip does not need to go into the linker hash because it is part of the hash namespace
+//         man.hash.add(coff.major_subsystem_version);
+//         man.hash.add(coff.minor_subsystem_version);
+//         man.hash.add(coff.repro);
+//         man.hash.addOptional(comp.version);
+//         try man.addOptionalFile(coff.module_definition_file);
 
-        // We don't actually care whether it's a cache hit or miss; we just need the digest and the lock.
-        _ = try man.hit();
-        digest = man.final();
-        var prev_digest_buf: [digest.len]u8 = undefined;
-        const prev_digest: []u8 = Cache.readSmallFile(
-            directory.handle,
-            id_symlink_basename,
-            &prev_digest_buf,
-        ) catch |err| blk: {
-            log.debug("COFF LLD new_digest={s} error: {s}", .{ std.fmt.fmtSliceHexLower(&digest), @errorName(err) });
-            // Handle this as a cache miss.
-            break :blk prev_digest_buf[0..0];
-        };
-        if (mem.eql(u8, prev_digest, &digest)) {
-            log.debug("COFF LLD digest={s} match - skipping invocation", .{std.fmt.fmtSliceHexLower(&digest)});
-            // Hot diggity dog! The output binary is already there.
-            coff.base.lock = man.toOwnedLock();
-            return;
-        }
-        log.debug("COFF LLD prev_digest={s} new_digest={s}", .{ std.fmt.fmtSliceHexLower(prev_digest), std.fmt.fmtSliceHexLower(&digest) });
+//         // We don't actually care whether it's a cache hit or miss; we just need the digest and the lock.
+//         _ = try man.hit();
+//         digest = man.final();
+//         var prev_digest_buf: [digest.len]u8 = undefined;
+//         const prev_digest: []u8 = Cache.readSmallFile(
+//             directory.handle,
+//             id_symlink_basename,
+//             &prev_digest_buf,
+//         ) catch |err| blk: {
+//             log.debug("COFF LLD new_digest={s} error: {s}", .{ std.fmt.fmtSliceHexLower(&digest), @errorName(err) });
+//             // Handle this as a cache miss.
+//             break :blk prev_digest_buf[0..0];
+//         };
+//         if (mem.eql(u8, prev_digest, &digest)) {
+//             log.debug("COFF LLD digest={s} match - skipping invocation", .{std.fmt.fmtSliceHexLower(&digest)});
+//             // Hot diggity dog! The output binary is already there.
+//             coff.base.lock = man.toOwnedLock();
+//             return;
+//         }
+//         log.debug("COFF LLD prev_digest={s} new_digest={s}", .{ std.fmt.fmtSliceHexLower(prev_digest), std.fmt.fmtSliceHexLower(&digest) });
 
-        // We are about to change the output file to be different, so we invalidate the build hash now.
-        directory.handle.deleteFile(id_symlink_basename) catch |err| switch (err) {
-            error.FileNotFound => {},
-            else => |e| return e,
-        };
-    }
+//         // We are about to change the output file to be different, so we invalidate the build hash now.
+//         directory.handle.deleteFile(id_symlink_basename) catch |err| switch (err) {
+//             error.FileNotFound => {},
+//             else => |e| return e,
+//         };
+//     }
 
-    if (comp.config.output_mode == .Obj) {
-        // LLD's COFF driver does not support the equivalent of `-r` so we do a simple file copy
-        // here. TODO: think carefully about how we can avoid this redundant operation when doing
-        // build-obj. See also the corresponding TODO in linkAsArchive.
-        const the_object_path = blk: {
-            if (link.firstObjectInput(comp.link_inputs)) |obj| break :blk obj.path;
+//     if (comp.config.output_mode == .Obj) {
+//         // LLD's COFF driver does not support the equivalent of `-r` so we do a simple file copy
+//         // here. TODO: think carefully about how we can avoid this redundant operation when doing
+//         // build-obj. See also the corresponding TODO in linkAsArchive.
+//         const the_object_path = blk: {
+//             if (link.firstObjectInput(comp.link_inputs)) |obj| break :blk obj.path;
 
-            if (comp.c_object_table.count() != 0)
-                break :blk comp.c_object_table.keys()[0].status.success.object_path;
+//             if (comp.c_object_table.count() != 0)
+//                 break :blk comp.c_object_table.keys()[0].status.success.object_path;
 
-            if (module_obj_path) |p|
-                break :blk Path.initCwd(p);
+//             if (module_obj_path) |p|
+//                 break :blk Path.initCwd(p);
 
-            // TODO I think this is unreachable. Audit this situation when solving the above TODO
-            // regarding eliding redundant object -> object transformations.
-            return error.NoObjectsToLink;
-        };
-        try std.fs.Dir.copyFile(
-            the_object_path.root_dir.handle,
-            the_object_path.sub_path,
-            directory.handle,
-            coff.base.emit.sub_path,
-            .{},
-        );
-    } else {
-        // Create an LLD command line and invoke it.
-        var argv = std.ArrayList([]const u8).init(gpa);
-        defer argv.deinit();
-        // We will invoke ourselves as a child process to gain access to LLD.
-        // This is necessary because LLD does not behave properly as a library -
-        // it calls exit() and does not reset all global data between invocations.
-        const linker_command = "lld-link";
-        try argv.appendSlice(&[_][]const u8{ comp.self_exe_path.?, linker_command });
+//             // TODO I think this is unreachable. Audit this situation when solving the above TODO
+//             // regarding eliding redundant object -> object transformations.
+//             return error.NoObjectsToLink;
+//         };
+//         try std.fs.Dir.copyFile(
+//             the_object_path.root_dir.handle,
+//             the_object_path.sub_path,
+//             directory.handle,
+//             coff.base.emit.sub_path,
+//             .{},
+//         );
+//     } else {
+//         // Create an LLD command line and invoke it.
+//         var argv = std.ArrayList([]const u8).init(gpa);
+//         defer argv.deinit();
+//         // We will invoke ourselves as a child process to gain access to LLD.
+//         // This is necessary because LLD does not behave properly as a library -
+//         // it calls exit() and does not reset all global data between invocations.
+//         const linker_command = "lld-link";
+//         try argv.appendSlice(&[_][]const u8{ comp.self_exe_path.?, linker_command });
 
-        if (target.isMinGW()) {
-            try argv.append("-lldmingw");
-        }
+//         if (target.isMinGW()) {
+//             try argv.append("-lldmingw");
+//         }
 
-        try argv.append("-ERRORLIMIT:0");
-        try argv.append("-NOLOGO");
-        if (comp.config.debug_format != .strip) {
-            try argv.append("-DEBUG");
+//         try argv.append("-ERRORLIMIT:0");
+//         try argv.append("-NOLOGO");
+//         if (comp.config.debug_format != .strip) {
+//             try argv.append("-DEBUG");
 
-            const out_ext = std.fs.path.extension(full_out_path);
-            const out_pdb = coff.pdb_out_path orelse try allocPrint(arena, "{s}.pdb", .{
-                full_out_path[0 .. full_out_path.len - out_ext.len],
-            });
-            const out_pdb_basename = std.fs.path.basename(out_pdb);
+//             const out_ext = std.fs.path.extension(full_out_path);
+//             const out_pdb = coff.pdb_out_path orelse try allocPrint(arena, "{s}.pdb", .{
+//                 full_out_path[0 .. full_out_path.len - out_ext.len],
+//             });
+//             const out_pdb_basename = std.fs.path.basename(out_pdb);
 
-            try argv.append(try allocPrint(arena, "-PDB:{s}", .{out_pdb}));
-            try argv.append(try allocPrint(arena, "-PDBALTPATH:{s}", .{out_pdb_basename}));
-        }
-        if (comp.version) |version| {
-            try argv.append(try allocPrint(arena, "-VERSION:{}.{}", .{ version.major, version.minor }));
-        }
+//             try argv.append(try allocPrint(arena, "-PDB:{s}", .{out_pdb}));
+//             try argv.append(try allocPrint(arena, "-PDBALTPATH:{s}", .{out_pdb_basename}));
+//         }
+//         if (comp.version) |version| {
+//             try argv.append(try allocPrint(arena, "-VERSION:{}.{}", .{ version.major, version.minor }));
+//         }
 
-        if (target_util.llvmMachineAbi(target)) |mabi| {
-            try argv.append(try allocPrint(arena, "-MLLVM:-target-abi={s}", .{mabi}));
-        }
+//         if (target_util.llvmMachineAbi(target)) |mabi| {
+//             try argv.append(try allocPrint(arena, "-MLLVM:-target-abi={s}", .{mabi}));
+//         }
 
-        try argv.append(try allocPrint(arena, "-MLLVM:-float-abi={s}", .{if (target.abi.floatAbi() == .hard) "hard" else "soft"}));
+//         try argv.append(try allocPrint(arena, "-MLLVM:-float-abi={s}", .{if (target.abi.floatAbi() == .hard) "hard" else "soft"}));
 
-        if (comp.config.lto != .none) {
-            switch (optimize_mode) {
-                .Debug => {},
-                .ReleaseSmall => try argv.append("-OPT:lldlto=2"),
-                .ReleaseFast, .ReleaseSafe => try argv.append("-OPT:lldlto=3"),
-            }
-        }
-        if (comp.config.output_mode == .Exe) {
-            try argv.append(try allocPrint(arena, "-STACK:{d}", .{coff.base.stack_size}));
-        }
-        try argv.append(try allocPrint(arena, "-BASE:{d}", .{coff.image_base}));
+//         if (comp.config.lto != .none) {
+//             switch (optimize_mode) {
+//                 .Debug => {},
+//                 .ReleaseSmall => try argv.append("-OPT:lldlto=2"),
+//                 .ReleaseFast, .ReleaseSafe => try argv.append("-OPT:lldlto=3"),
+//             }
+//         }
+//         if (comp.config.output_mode == .Exe) {
+//             try argv.append(try allocPrint(arena, "-STACK:{d}", .{coff.base.stack_size}));
+//         }
+//         try argv.append(try allocPrint(arena, "-BASE:{d}", .{coff.image_base}));
 
-        if (target.cpu.arch == .x86) {
-            try argv.append("-MACHINE:X86");
-        } else if (target.cpu.arch == .x86_64) {
-            try argv.append("-MACHINE:X64");
-        } else if (target.cpu.arch == .thumb) {
-            try argv.append("-MACHINE:ARM");
-        } else if (target.cpu.arch == .aarch64) {
-            try argv.append("-MACHINE:ARM64");
-        }
+//         if (target.cpu.arch == .x86) {
+//             try argv.append("-MACHINE:X86");
+//         } else if (target.cpu.arch == .x86_64) {
+//             try argv.append("-MACHINE:X64");
+//         } else if (target.cpu.arch == .thumb) {
+//             try argv.append("-MACHINE:ARM");
+//         } else if (target.cpu.arch == .aarch64) {
+//             try argv.append("-MACHINE:ARM64");
+//         }
 
-        for (comp.force_undefined_symbols.keys()) |symbol| {
-            try argv.append(try allocPrint(arena, "-INCLUDE:{s}", .{symbol}));
-        }
+//         for (comp.force_undefined_symbols.keys()) |symbol| {
+//             try argv.append(try allocPrint(arena, "-INCLUDE:{s}", .{symbol}));
+//         }
 
-        if (is_dyn_lib) {
-            try argv.append("-DLL");
-        }
+//         if (is_dyn_lib) {
+//             try argv.append("-DLL");
+//         }
 
-        if (entry_name) |name| {
-            try argv.append(try allocPrint(arena, "-ENTRY:{s}", .{name}));
-        }
+//         if (entry_name) |name| {
+//             try argv.append(try allocPrint(arena, "-ENTRY:{s}", .{name}));
+//         }
 
-        if (coff.repro) {
-            try argv.append("-BREPRO");
-        }
+//         if (coff.repro) {
+//             try argv.append("-BREPRO");
+//         }
 
-        if (coff.tsaware) {
-            try argv.append("-tsaware");
-        }
-        if (coff.nxcompat) {
-            try argv.append("-nxcompat");
-        }
-        if (!coff.dynamicbase) {
-            try argv.append("-dynamicbase:NO");
-        }
-        if (coff.base.allow_shlib_undefined) {
-            try argv.append("-FORCE:UNRESOLVED");
-        }
+//         if (coff.tsaware) {
+//             try argv.append("-tsaware");
+//         }
+//         if (coff.nxcompat) {
+//             try argv.append("-nxcompat");
+//         }
+//         if (!coff.dynamicbase) {
+//             try argv.append("-dynamicbase:NO");
+//         }
+//         if (coff.base.allow_shlib_undefined) {
+//             try argv.append("-FORCE:UNRESOLVED");
+//         }
 
-        try argv.append(try allocPrint(arena, "-OUT:{s}", .{full_out_path}));
+//         try argv.append(try allocPrint(arena, "-OUT:{s}", .{full_out_path}));
 
-        if (comp.implib_emit) |emit| {
-            const implib_out_path = try emit.root_dir.join(arena, &[_][]const u8{emit.sub_path});
-            try argv.append(try allocPrint(arena, "-IMPLIB:{s}", .{implib_out_path}));
-        }
+//         if (comp.implib_emit) |emit| {
+//             const implib_out_path = try emit.root_dir.join(arena, &[_][]const u8{emit.sub_path});
+//             try argv.append(try allocPrint(arena, "-IMPLIB:{s}", .{implib_out_path}));
+//         }
 
-        if (comp.config.link_libc) {
-            if (comp.libc_installation) |libc_installation| {
-                try argv.append(try allocPrint(arena, "-LIBPATH:{s}", .{libc_installation.crt_dir.?}));
+//         if (comp.config.link_libc) {
+//             if (comp.libc_installation) |libc_installation| {
+//                 try argv.append(try allocPrint(arena, "-LIBPATH:{s}", .{libc_installation.crt_dir.?}));
 
-                if (target.abi == .msvc or target.abi == .itanium) {
-                    try argv.append(try allocPrint(arena, "-LIBPATH:{s}", .{libc_installation.msvc_lib_dir.?}));
-                    try argv.append(try allocPrint(arena, "-LIBPATH:{s}", .{libc_installation.kernel32_lib_dir.?}));
-                }
-            }
-        }
+//                 if (target.abi == .msvc or target.abi == .itanium) {
+//                     try argv.append(try allocPrint(arena, "-LIBPATH:{s}", .{libc_installation.msvc_lib_dir.?}));
+//                     try argv.append(try allocPrint(arena, "-LIBPATH:{s}", .{libc_installation.kernel32_lib_dir.?}));
+//                 }
+//             }
+//         }
 
-        for (coff.lib_directories) |lib_directory| {
-            try argv.append(try allocPrint(arena, "-LIBPATH:{s}", .{lib_directory.path orelse "."}));
-        }
+//         for (coff.lib_directories) |lib_directory| {
+//             try argv.append(try allocPrint(arena, "-LIBPATH:{s}", .{lib_directory.path orelse "."}));
+//         }
 
-        try argv.ensureUnusedCapacity(comp.link_inputs.len);
-        for (comp.link_inputs) |link_input| switch (link_input) {
-            .dso_exact => unreachable, // not applicable to PE/COFF
-            inline .dso, .res => |x| {
-                argv.appendAssumeCapacity(try x.path.toString(arena));
-            },
-            .object, .archive => |obj| {
-                if (obj.must_link) {
-                    argv.appendAssumeCapacity(try allocPrint(arena, "-WHOLEARCHIVE:{}", .{@as(Path, obj.path)}));
-                } else {
-                    argv.appendAssumeCapacity(try obj.path.toString(arena));
-                }
-            },
-        };
+//         try argv.ensureUnusedCapacity(comp.link_inputs.len);
+//         for (comp.link_inputs) |link_input| switch (link_input) {
+//             .dso_exact => unreachable, // not applicable to PE/COFF
+//             inline .dso, .res => |x| {
+//                 argv.appendAssumeCapacity(try x.path.toString(arena));
+//             },
+//             .object, .archive => |obj| {
+//                 if (obj.must_link) {
+//                     argv.appendAssumeCapacity(try allocPrint(arena, "-WHOLEARCHIVE:{}", .{@as(Path, obj.path)}));
+//                 } else {
+//                     argv.appendAssumeCapacity(try obj.path.toString(arena));
+//                 }
+//             },
+//         };
 
-        for (comp.c_object_table.keys()) |key| {
-            try argv.append(try key.status.success.object_path.toString(arena));
-        }
+//         for (comp.c_object_table.keys()) |key| {
+//             try argv.append(try key.status.success.object_path.toString(arena));
+//         }
 
-        for (comp.win32_resource_table.keys()) |key| {
-            try argv.append(key.status.success.res_path);
-        }
+//         for (comp.win32_resource_table.keys()) |key| {
+//             try argv.append(key.status.success.res_path);
+//         }
 
-        if (module_obj_path) |p| {
-            try argv.append(p);
-        }
+//         if (module_obj_path) |p| {
+//             try argv.append(p);
+//         }
 
-        if (coff.module_definition_file) |def| {
-            try argv.append(try allocPrint(arena, "-DEF:{s}", .{def}));
-        }
+//         if (coff.module_definition_file) |def| {
+//             try argv.append(try allocPrint(arena, "-DEF:{s}", .{def}));
+//         }
 
-        const resolved_subsystem: ?std.Target.SubSystem = blk: {
-            if (coff.subsystem) |explicit| break :blk explicit;
-            switch (target.os.tag) {
-                .windows => {
-                    if (comp.zcu) |module| {
-                        if (module.stage1_flags.have_dllmain_crt_startup or is_dyn_lib)
-                            break :blk null;
-                        if (module.stage1_flags.have_c_main or comp.config.is_test or
-                            module.stage1_flags.have_winmain_crt_startup or
-                            module.stage1_flags.have_wwinmain_crt_startup)
-                        {
-                            break :blk .Console;
-                        }
-                        if (module.stage1_flags.have_winmain or module.stage1_flags.have_wwinmain)
-                            break :blk .Windows;
-                    }
-                },
-                .uefi => break :blk .EfiApplication,
-                else => {},
-            }
-            break :blk null;
-        };
+//         const resolved_subsystem: ?std.Target.SubSystem = blk: {
+//             if (coff.subsystem) |explicit| break :blk explicit;
+//             switch (target.os.tag) {
+//                 .windows => {
+//                     if (comp.zcu) |module| {
+//                         if (module.stage1_flags.have_dllmain_crt_startup or is_dyn_lib)
+//                             break :blk null;
+//                         if (module.stage1_flags.have_c_main or comp.config.is_test or
+//                             module.stage1_flags.have_winmain_crt_startup or
+//                             module.stage1_flags.have_wwinmain_crt_startup)
+//                         {
+//                             break :blk .Console;
+//                         }
+//                         if (module.stage1_flags.have_winmain or module.stage1_flags.have_wwinmain)
+//                             break :blk .Windows;
+//                     }
+//                 },
+//                 .uefi => break :blk .EfiApplication,
+//                 else => {},
+//             }
+//             break :blk null;
+//         };
 
-        const Mode = enum { uefi, win32 };
-        const mode: Mode = mode: {
-            if (resolved_subsystem) |subsystem| {
-                const subsystem_suffix = try allocPrint(arena, ",{d}.{d}", .{
-                    coff.major_subsystem_version, coff.minor_subsystem_version,
-                });
+//         const Mode = enum { uefi, win32 };
+//         const mode: Mode = mode: {
+//             if (resolved_subsystem) |subsystem| {
+//                 const subsystem_suffix = try allocPrint(arena, ",{d}.{d}", .{
+//                     coff.major_subsystem_version, coff.minor_subsystem_version,
+//                 });
 
-                switch (subsystem) {
-                    .Console => {
-                        try argv.append(try allocPrint(arena, "-SUBSYSTEM:console{s}", .{
-                            subsystem_suffix,
-                        }));
-                        break :mode .win32;
-                    },
-                    .EfiApplication => {
-                        try argv.append(try allocPrint(arena, "-SUBSYSTEM:efi_application{s}", .{
-                            subsystem_suffix,
-                        }));
-                        break :mode .uefi;
-                    },
-                    .EfiBootServiceDriver => {
-                        try argv.append(try allocPrint(arena, "-SUBSYSTEM:efi_boot_service_driver{s}", .{
-                            subsystem_suffix,
-                        }));
-                        break :mode .uefi;
-                    },
-                    .EfiRom => {
-                        try argv.append(try allocPrint(arena, "-SUBSYSTEM:efi_rom{s}", .{
-                            subsystem_suffix,
-                        }));
-                        break :mode .uefi;
-                    },
-                    .EfiRuntimeDriver => {
-                        try argv.append(try allocPrint(arena, "-SUBSYSTEM:efi_runtime_driver{s}", .{
-                            subsystem_suffix,
-                        }));
-                        break :mode .uefi;
-                    },
-                    .Native => {
-                        try argv.append(try allocPrint(arena, "-SUBSYSTEM:native{s}", .{
-                            subsystem_suffix,
-                        }));
-                        break :mode .win32;
-                    },
-                    .Posix => {
-                        try argv.append(try allocPrint(arena, "-SUBSYSTEM:posix{s}", .{
-                            subsystem_suffix,
-                        }));
-                        break :mode .win32;
-                    },
-                    .Windows => {
-                        try argv.append(try allocPrint(arena, "-SUBSYSTEM:windows{s}", .{
-                            subsystem_suffix,
-                        }));
-                        break :mode .win32;
-                    },
-                }
-            } else if (target.os.tag == .uefi) {
-                break :mode .uefi;
-            } else {
-                break :mode .win32;
-            }
-        };
+//                 switch (subsystem) {
+//                     .Console => {
+//                         try argv.append(try allocPrint(arena, "-SUBSYSTEM:console{s}", .{
+//                             subsystem_suffix,
+//                         }));
+//                         break :mode .win32;
+//                     },
+//                     .EfiApplication => {
+//                         try argv.append(try allocPrint(arena, "-SUBSYSTEM:efi_application{s}", .{
+//                             subsystem_suffix,
+//                         }));
+//                         break :mode .uefi;
+//                     },
+//                     .EfiBootServiceDriver => {
+//                         try argv.append(try allocPrint(arena, "-SUBSYSTEM:efi_boot_service_driver{s}", .{
+//                             subsystem_suffix,
+//                         }));
+//                         break :mode .uefi;
+//                     },
+//                     .EfiRom => {
+//                         try argv.append(try allocPrint(arena, "-SUBSYSTEM:efi_rom{s}", .{
+//                             subsystem_suffix,
+//                         }));
+//                         break :mode .uefi;
+//                     },
+//                     .EfiRuntimeDriver => {
+//                         try argv.append(try allocPrint(arena, "-SUBSYSTEM:efi_runtime_driver{s}", .{
+//                             subsystem_suffix,
+//                         }));
+//                         break :mode .uefi;
+//                     },
+//                     .Native => {
+//                         try argv.append(try allocPrint(arena, "-SUBSYSTEM:native{s}", .{
+//                             subsystem_suffix,
+//                         }));
+//                         break :mode .win32;
+//                     },
+//                     .Posix => {
+//                         try argv.append(try allocPrint(arena, "-SUBSYSTEM:posix{s}", .{
+//                             subsystem_suffix,
+//                         }));
+//                         break :mode .win32;
+//                     },
+//                     .Windows => {
+//                         try argv.append(try allocPrint(arena, "-SUBSYSTEM:windows{s}", .{
+//                             subsystem_suffix,
+//                         }));
+//                         break :mode .win32;
+//                     },
+//                 }
+//             } else if (target.os.tag == .uefi) {
+//                 break :mode .uefi;
+//             } else {
+//                 break :mode .win32;
+//             }
+//         };
 
-        switch (mode) {
-            .uefi => try argv.appendSlice(&[_][]const u8{
-                "-BASE:0",
-                "-ENTRY:EfiMain",
-                "-OPT:REF",
-                "-SAFESEH:NO",
-                "-MERGE:.rdata=.data",
-                "-NODEFAULTLIB",
-                "-SECTION:.xdata,D",
-            }),
-            .win32 => {
-                if (link_in_crt) {
-                    if (target.abi.isGnu()) {
-                        if (target.cpu.arch == .x86) {
-                            try argv.append("-ALTERNATENAME:__image_base__=___ImageBase");
-                        } else {
-                            try argv.append("-ALTERNATENAME:__image_base__=__ImageBase");
-                        }
+//         switch (mode) {
+//             .uefi => try argv.appendSlice(&[_][]const u8{
+//                 "-BASE:0",
+//                 "-ENTRY:EfiMain",
+//                 "-OPT:REF",
+//                 "-SAFESEH:NO",
+//                 "-MERGE:.rdata=.data",
+//                 "-NODEFAULTLIB",
+//                 "-SECTION:.xdata,D",
+//             }),
+//             .win32 => {
+//                 if (link_in_crt) {
+//                     if (target.abi.isGnu()) {
+//                         if (target.cpu.arch == .x86) {
+//                             try argv.append("-ALTERNATENAME:__image_base__=___ImageBase");
+//                         } else {
+//                             try argv.append("-ALTERNATENAME:__image_base__=__ImageBase");
+//                         }
 
-                        if (is_dyn_lib) {
-                            try argv.append(try comp.crtFileAsString(arena, "dllcrt2.obj"));
-                            if (target.cpu.arch == .x86) {
-                                try argv.append("-ALTERNATENAME:__DllMainCRTStartup@12=_DllMainCRTStartup@12");
-                            } else {
-                                try argv.append("-ALTERNATENAME:_DllMainCRTStartup=DllMainCRTStartup");
-                            }
-                        } else {
-                            try argv.append(try comp.crtFileAsString(arena, "crt2.obj"));
-                        }
+//                         if (is_dyn_lib) {
+//                             try argv.append(try comp.crtFileAsString(arena, "dllcrt2.obj"));
+//                             if (target.cpu.arch == .x86) {
+//                                 try argv.append("-ALTERNATENAME:__DllMainCRTStartup@12=_DllMainCRTStartup@12");
+//                             } else {
+//                                 try argv.append("-ALTERNATENAME:_DllMainCRTStartup=DllMainCRTStartup");
+//                             }
+//                         } else {
+//                             try argv.append(try comp.crtFileAsString(arena, "crt2.obj"));
+//                         }
 
-                        try argv.append(try comp.crtFileAsString(arena, "mingw32.lib"));
-                    } else {
-                        const lib_str = switch (comp.config.link_mode) {
-                            .dynamic => "",
-                            .static => "lib",
-                        };
-                        const d_str = switch (optimize_mode) {
-                            .Debug => "d",
-                            else => "",
-                        };
-                        switch (comp.config.link_mode) {
-                            .static => try argv.append(try allocPrint(arena, "libcmt{s}.lib", .{d_str})),
-                            .dynamic => try argv.append(try allocPrint(arena, "msvcrt{s}.lib", .{d_str})),
-                        }
+//                         try argv.append(try comp.crtFileAsString(arena, "mingw32.lib"));
+//                     } else {
+//                         const lib_str = switch (comp.config.link_mode) {
+//                             .dynamic => "",
+//                             .static => "lib",
+//                         };
+//                         const d_str = switch (optimize_mode) {
+//                             .Debug => "d",
+//                             else => "",
+//                         };
+//                         switch (comp.config.link_mode) {
+//                             .static => try argv.append(try allocPrint(arena, "libcmt{s}.lib", .{d_str})),
+//                             .dynamic => try argv.append(try allocPrint(arena, "msvcrt{s}.lib", .{d_str})),
+//                         }
 
-                        try argv.append(try allocPrint(arena, "{s}vcruntime{s}.lib", .{ lib_str, d_str }));
-                        try argv.append(try allocPrint(arena, "{s}ucrt{s}.lib", .{ lib_str, d_str }));
+//                         try argv.append(try allocPrint(arena, "{s}vcruntime{s}.lib", .{ lib_str, d_str }));
+//                         try argv.append(try allocPrint(arena, "{s}ucrt{s}.lib", .{ lib_str, d_str }));
 
-                        //Visual C++ 2015 Conformance Changes
-                        //https://msdn.microsoft.com/en-us/library/bb531344.aspx
-                        try argv.append("legacy_stdio_definitions.lib");
+//                         //Visual C++ 2015 Conformance Changes
+//                         //https://msdn.microsoft.com/en-us/library/bb531344.aspx
+//                         try argv.append("legacy_stdio_definitions.lib");
 
-                        // msvcrt depends on kernel32 and ntdll
-                        try argv.append("kernel32.lib");
-                        try argv.append("ntdll.lib");
-                    }
-                } else {
-                    try argv.append("-NODEFAULTLIB");
-                    if (!is_lib and entry_name == null) {
-                        if (comp.zcu) |module| {
-                            if (module.stage1_flags.have_winmain_crt_startup) {
-                                try argv.append("-ENTRY:WinMainCRTStartup");
-                            } else {
-                                try argv.append("-ENTRY:wWinMainCRTStartup");
-                            }
-                        } else {
-                            try argv.append("-ENTRY:wWinMainCRTStartup");
-                        }
-                    }
-                }
-            },
-        }
+//                         // msvcrt depends on kernel32 and ntdll
+//                         try argv.append("kernel32.lib");
+//                         try argv.append("ntdll.lib");
+//                     }
+//                 } else {
+//                     try argv.append("-NODEFAULTLIB");
+//                     if (!is_lib and entry_name == null) {
+//                         if (comp.zcu) |module| {
+//                             if (module.stage1_flags.have_winmain_crt_startup) {
+//                                 try argv.append("-ENTRY:WinMainCRTStartup");
+//                             } else {
+//                                 try argv.append("-ENTRY:wWinMainCRTStartup");
+//                             }
+//                         } else {
+//                             try argv.append("-ENTRY:wWinMainCRTStartup");
+//                         }
+//                     }
+//                 }
+//             },
+//         }
 
-        // libc++ dep
-        if (comp.config.link_libcpp) {
-            try argv.append(try comp.libcxxabi_static_lib.?.full_object_path.toString(arena));
-            try argv.append(try comp.libcxx_static_lib.?.full_object_path.toString(arena));
-        }
+//         // libc++ dep
+//         if (comp.config.link_libcpp) {
+//             try argv.append(try comp.libcxxabi_static_lib.?.full_object_path.toString(arena));
+//             try argv.append(try comp.libcxx_static_lib.?.full_object_path.toString(arena));
+//         }
 
-        // libunwind dep
-        if (comp.config.link_libunwind) {
-            try argv.append(try comp.libunwind_static_lib.?.full_object_path.toString(arena));
-        }
+//         // libunwind dep
+//         if (comp.config.link_libunwind) {
+//             try argv.append(try comp.libunwind_static_lib.?.full_object_path.toString(arena));
+//         }
 
-        if (comp.config.any_fuzz) {
-            try argv.append(try comp.fuzzer_lib.?.full_object_path.toString(arena));
-        }
+//         if (comp.config.any_fuzz) {
+//             try argv.append(try comp.fuzzer_lib.?.full_object_path.toString(arena));
+//         }
 
-        if (is_exe_or_dyn_lib and !comp.skip_linker_dependencies) {
-            if (!comp.config.link_libc) {
-                if (comp.libc_static_lib) |lib| {
-                    try argv.append(try lib.full_object_path.toString(arena));
-                }
-            }
-            // MSVC compiler_rt is missing some stuff, so we build it unconditionally but
-            // and rely on weak linkage to allow MSVC compiler_rt functions to override ours.
-            if (comp.compiler_rt_obj) |obj| try argv.append(try obj.full_object_path.toString(arena));
-            if (comp.compiler_rt_lib) |lib| try argv.append(try lib.full_object_path.toString(arena));
-        }
+//         if (is_exe_or_dyn_lib and !comp.skip_linker_dependencies) {
+//             if (!comp.config.link_libc) {
+//                 if (comp.libc_static_lib) |lib| {
+//                     try argv.append(try lib.full_object_path.toString(arena));
+//                 }
+//             }
+//             // MSVC compiler_rt is missing some stuff, so we build it unconditionally but
+//             // and rely on weak linkage to allow MSVC compiler_rt functions to override ours.
+//             if (comp.compiler_rt_obj) |obj| try argv.append(try obj.full_object_path.toString(arena));
+//             if (comp.compiler_rt_lib) |lib| try argv.append(try lib.full_object_path.toString(arena));
+//         }
 
-        try argv.ensureUnusedCapacity(comp.windows_libs.count());
-        for (comp.windows_libs.keys()) |key| {
-            const lib_basename = try allocPrint(arena, "{s}.lib", .{key});
-            if (comp.crt_files.get(lib_basename)) |crt_file| {
-                argv.appendAssumeCapacity(try crt_file.full_object_path.toString(arena));
-                continue;
-            }
-            if (try findLib(arena, lib_basename, coff.lib_directories)) |full_path| {
-                argv.appendAssumeCapacity(full_path);
-                continue;
-            }
-            if (target.abi.isGnu()) {
-                const fallback_name = try allocPrint(arena, "lib{s}.dll.a", .{key});
-                if (try findLib(arena, fallback_name, coff.lib_directories)) |full_path| {
-                    argv.appendAssumeCapacity(full_path);
-                    continue;
-                }
-            }
-            if (target.abi == .msvc or target.abi == .itanium) {
-                argv.appendAssumeCapacity(lib_basename);
-                continue;
-            }
+//         try argv.ensureUnusedCapacity(comp.windows_libs.count());
+//         for (comp.windows_libs.keys()) |key| {
+//             const lib_basename = try allocPrint(arena, "{s}.lib", .{key});
+//             if (comp.crt_files.get(lib_basename)) |crt_file| {
+//                 argv.appendAssumeCapacity(try crt_file.full_object_path.toString(arena));
+//                 continue;
+//             }
+//             if (try findLib(arena, lib_basename, coff.lib_directories)) |full_path| {
+//                 argv.appendAssumeCapacity(full_path);
+//                 continue;
+//             }
+//             if (target.abi.isGnu()) {
+//                 const fallback_name = try allocPrint(arena, "lib{s}.dll.a", .{key});
+//                 if (try findLib(arena, fallback_name, coff.lib_directories)) |full_path| {
+//                     argv.appendAssumeCapacity(full_path);
+//                     continue;
+//                 }
+//             }
+//             if (target.abi == .msvc or target.abi == .itanium) {
+//                 argv.appendAssumeCapacity(lib_basename);
+//                 continue;
+//             }
 
-            log.err("DLL import library for -l{s} not found", .{key});
-            return error.DllImportLibraryNotFound;
-        }
+//             log.err("DLL import library for -l{s} not found", .{key});
+//             return error.DllImportLibraryNotFound;
+//         }
 
-        try link.spawnLld(comp, arena, argv.items);
-    }
+//         try link.spawnLld(comp, arena, argv.items);
+//     }
 
-    if (!coff.base.disable_lld_caching) {
-        // Update the file with the digest. If it fails we can continue; it only
-        // means that the next invocation will have an unnecessary cache miss.
-        Cache.writeSmallFile(directory.handle, id_symlink_basename, &digest) catch |err| {
-            log.warn("failed to save linking hash digest file: {s}", .{@errorName(err)});
-        };
-        // Again failure here only means an unnecessary cache miss.
-        man.writeManifest() catch |err| {
-            log.warn("failed to write cache manifest when linking: {s}", .{@errorName(err)});
-        };
-        // We hang on to this lock so that the output file path can be used without
-        // other processes clobbering it.
-        coff.base.lock = man.toOwnedLock();
-    }
-}
+//     if (!coff.base.disable_lld_caching) {
+//         // Update the file with the digest. If it fails we can continue; it only
+//         // means that the next invocation will have an unnecessary cache miss.
+//         Cache.writeSmallFile(directory.handle, id_symlink_basename, &digest) catch |err| {
+//             log.warn("failed to save linking hash digest file: {s}", .{@errorName(err)});
+//         };
+//         // Again failure here only means an unnecessary cache miss.
+//         man.writeManifest() catch |err| {
+//             log.warn("failed to write cache manifest when linking: {s}", .{@errorName(err)});
+//         };
+//         // We hang on to this lock so that the output file path can be used without
+//         // other processes clobbering it.
+//         coff.base.lock = man.toOwnedLock();
+//     }
+// }
 
-fn findLib(arena: Allocator, name: []const u8, lib_directories: []const Directory) !?[]const u8 {
-    for (lib_directories) |lib_directory| {
-        lib_directory.handle.access(name, .{}) catch |err| switch (err) {
-            error.FileNotFound => continue,
-            else => |e| return e,
-        };
-        return try lib_directory.join(arena, &.{name});
-    }
-    return null;
-}
+// fn findLib(arena: Allocator, name: []const u8, lib_directories: []const Directory) !?[]const u8 {
+//     for (lib_directories) |lib_directory| {
+//         lib_directory.handle.access(name, .{}) catch |err| switch (err) {
+//             error.FileNotFound => continue,
+//             else => |e| return e,
+//         };
+//         return try lib_directory.join(arena, &.{name});
+//     }
+//     return null;
+// }
 
 pub fn flushModule(
     coff: *Coff,
@@ -2240,8 +2439,8 @@ pub fn flushModule(
     const tracy = trace(@src());
     defer tracy.end();
 
-    const comp = coff.base.comp;
-    const diags = &comp.link_diags;
+    //const comp = coff.base.comp;
+    //const diags = &comp.link_diags;
 
     if (coff.llvm_object) |llvm_object| {
         try coff.base.emitLlvmObject(arena, llvm_object, prog_node);
@@ -2254,128 +2453,293 @@ pub fn flushModule(
     return flushModuleInner(coff, arena, tid) catch |err| switch (err) {
         error.OutOfMemory => return error.OutOfMemory,
         error.LinkFailure => return error.LinkFailure,
-        else => |e| return diags.fail("COFF flush failed: {s}", .{@errorName(e)}),
+        //else => |e| return diags.fail("COFF flush failed: {s}", .{@errorName(e)}),
     };
 }
 
 fn flushModuleInner(coff: *Coff, arena: Allocator, tid: Zcu.PerThread.Id) !void {
+    assert(coff.llvm_object == null);
+
+    // The goal is to never use this because it's only needed if we need to
+    // write to InternPool, but flushModule is too late to be writing to the
+    // InternPool.
+    _ = tid;
+
     _ = arena;
 
+    // const comp = coff.base.comp;
+    // const gpa = comp.gpa;
+    // const diags = &comp.link_diags;
+
+    const prelinked: *const Prelinked = &(coff.prelinked orelse unreachable);
+
+    // const pt: Zcu.PerThread = .activate(
+    //     comp.zcu orelse return diags.fail("linking without zig source is not yet implemented", .{}),
+    //     tid,
+    // );
+    // defer pt.deactivate();
+
+    // if (coff.lazy_syms.getPtr(.anyerror_type)) |metadata| {
+    //     // Most lazy symbols can be updated on first use, but
+    //     // anyerror needs to wait for everything to be flushed.
+    //     if (metadata.text_state != .unused) try coff.updateLazySymbolAtom(
+    //         pt,
+    //         .{ .kind = .code, .ty = .anyerror_type },
+    //         metadata.text_atom,
+    //         coff.text_section_index.?,
+    //     );
+    //     if (metadata.rdata_state != .unused) try coff.updateLazySymbolAtom(
+    //         pt,
+    //         .{ .kind = .const_data, .ty = .anyerror_type },
+    //         metadata.rdata_atom,
+    //         coff.rdata_section_index.?,
+    //     );
+    // }
+    // for (coff.lazy_syms.values()) |*metadata| {
+    //     if (metadata.text_state != .unused) metadata.text_state = .flushed;
+    //     if (metadata.rdata_state != .unused) metadata.rdata_state = .flushed;
+    // }
+
+    // {
+    //     var it = coff.need_got_table.iterator();
+    //     while (it.next()) |entry| {
+    //         const global = coff.globals.items[entry.key_ptr.*];
+    //         try coff.addGotEntry(global);
+    //     }
+    // }
+
+    // while (coff.unresolved.popOrNull()) |entry| {
+    //     assert(entry.value);
+    //     const global = coff.globals.items[entry.key];
+    //     const sym = coff.getSymbol(global);
+    //     const res = try coff.import_tables.getOrPut(gpa, sym.value);
+    //     const itable = res.value_ptr;
+    //     if (!res.found_existing) {
+    //         itable.* = .{};
+    //     }
+    //     if (itable.lookup.contains(global)) continue;
+    //     // TODO: we could technically write the pointer placeholder for to-be-bound import here,
+    //     // but since this happens in flush, there is currently no point.
+    //     _ = try itable.addImport(gpa, global);
+    //     coff.imports_count_dirty = true;
+    // }
+
+    // try coff.writeImportTables();
+
+    // for (coff.relocs.keys(), coff.relocs.values()) |atom_index, relocs| {
+    //     const needs_update = for (relocs.items) |reloc| {
+    //         if (reloc.dirty) break true;
+    //     } else false;
+
+    //     if (!needs_update) continue;
+
+    //     const atom = coff.getAtom(atom_index);
+    //     const sym = atom.getSymbol(coff);
+    //     const section = coff.sections.get(@intFromEnum(sym.section_number) - 1).header;
+    //     const file_offset = section.pointer_to_raw_data + sym.value - section.virtual_address;
+
+    //     var code = std.ArrayList(u8).init(gpa);
+    //     defer code.deinit();
+    //     try code.resize(math.cast(usize, atom.size) orelse return error.Overflow);
+    //     assert(atom.size > 0);
+
+    //     const amt = try coff.base.file.?.preadAll(code.items, file_offset);
+    //     if (amt != code.items.len) return error.InputOutput;
+
+    //     try coff.writeAtom(atom_index, code.items);
+    // }
+
+    // // Update GOT if it got moved in memory.
+    // if (coff.got_table_contents_dirty) {
+    //     for (coff.got_table.entries.items, 0..) |entry, i| {
+    //         if (!coff.got_table.lookup.contains(entry)) continue;
+    //         // TODO: write all in one go rather than incrementally.
+    //         try coff.writeOffsetTableEntry(i);
+    //     }
+    //     coff.got_table_contents_dirty = false;
+    // }
+
+    // try coff.writeBaseRelocations();
+
+    // if (build_options.enable_logging) {
+    //     coff.logSymtab();
+    //     coff.logImportTables();
+    // }
+
+    // try coff.writeStrtab();
+    // try coff.writeDataDirectoriesHeaders();
+    // try coff.writeSectionHeaders();
+
+    // if (entry_addr == null and comp.config.output_mode == .Exe) {
+    //     log.debug("flushing. no_entry_point_found = true\n", .{});
+    //     diags.flags.no_entry_point_found = true;
+    // } else {
+    //     log.debug("flushing. no_entry_point_found = false\n", .{});
+    //     diags.flags.no_entry_point_found = false;
+    //     try coff.writeHeader(entry_addr orelse 0);
+    // }
+    try coff.writeHeader(prelinked.entry_addr);
+
+    // assert(!coff.imports_count_dirty);
+}
+
+pub fn prelink(coff: *Coff, prog_node: std.Progress.Node) link.File.FlushError!void {
+    const tracy = trace(@src());
+    defer tracy.end();
+
+    const sub_prog_node = prog_node.start("Coff Prelink", 0);
+    defer sub_prog_node.end();
+
+    std.debug.assert(coff.prelinked == null);
+    coff.prelinked = try coff.prelink2();
+}
+
+fn prelink2(coff: *Coff) !Prelinked {
     const comp = coff.base.comp;
     const gpa = comp.gpa;
     const diags = &comp.link_diags;
+    // const rdynamic = comp.config.rdynamic;
+    // const is_obj = comp.config.output_mode == .Obj;
 
-    const pt: Zcu.PerThread = .activate(
-        comp.zcu orelse return diags.fail("linking without zig source is not yet implemented", .{}),
-        tid,
-    );
-    defer pt.deactivate();
+    _ = gpa;
+    // assert(wasm.missing_exports.entries.len == 0);
+    // for (wasm.export_symbol_names) |exp_name| {
+    //     const exp_name_interned = try wasm.internString(exp_name);
+    //     if (wasm.object_function_imports.getPtr(exp_name_interned)) |import| {
+    //         if (import.resolution != .unresolved) {
+    //             import.flags.exported = true;
+    //             continue;
+    //         }
+    //     }
+    //     if (wasm.object_global_imports.getPtr(exp_name_interned)) |import| {
+    //         if (import.resolution != .unresolved) {
+    //             import.flags.exported = true;
+    //             continue;
+    //         }
+    //     }
+    //     if (wasm.object_table_imports.getPtr(exp_name_interned)) |import| {
+    //         if (import.resolution != .unresolved) {
+    //             import.flags.exported = true;
+    //             continue;
+    //         }
+    //     }
+    //     try wasm.missing_exports.put(gpa, exp_name_interned, {});
+    // }
 
-    if (coff.lazy_syms.getPtr(.anyerror_type)) |metadata| {
-        // Most lazy symbols can be updated on first use, but
-        // anyerror needs to wait for everything to be flushed.
-        if (metadata.text_state != .unused) try coff.updateLazySymbolAtom(
-            pt,
-            .{ .kind = .code, .ty = .anyerror_type },
-            metadata.text_atom,
-            coff.text_section_index.?,
-        );
-        if (metadata.rdata_state != .unused) try coff.updateLazySymbolAtom(
-            pt,
-            .{ .kind = .const_data, .ty = .anyerror_type },
-            metadata.rdata_atom,
-            coff.rdata_section_index.?,
-        );
-    }
-    for (coff.lazy_syms.values()) |*metadata| {
-        if (metadata.text_state != .unused) metadata.text_state = .flushed;
-        if (metadata.rdata_state != .unused) metadata.rdata_state = .flushed;
-    }
+    // if (wasm.entry_name.unwrap()) |entry_name| {
+    //     if (wasm.object_function_imports.getPtr(entry_name)) |import| {
+    //         if (import.resolution != .unresolved) {
+    //             import.flags.exported = true;
+    //             wasm.entry_resolution = import.resolution;
+    //         }
+    //     }
+    // }
 
-    {
-        var it = coff.need_got_table.iterator();
-        while (it.next()) |entry| {
-            const global = coff.globals.items[entry.key_ptr.*];
-            try coff.addGotEntry(global);
+    // if (comp.zcu != null) {
+    //     // Zig always depends on a stack pointer global.
+    //     // If emitting an object, it's an import. Otherwise, the linker synthesizes it.
+    //     if (is_obj) {
+    //         @panic("TODO");
+    //     } else {
+    //         try wasm.globals.put(gpa, .__stack_pointer, {});
+    //         assert(wasm.globals.entries.len - 1 == @intFromEnum(GlobalIndex.stack_pointer));
+    //     }
+    // }
+
+    // // These loops do both recursive marking of alive symbols well as checking for undefined symbols.
+    // // At the end, output functions and globals will be populated.
+    // for (wasm.object_function_imports.keys(), wasm.object_function_imports.values(), 0..) |name, *import, i| {
+    //     if (import.flags.isIncluded(rdynamic)) {
+    //         try markFunctionImport(wasm, name, import, @enumFromInt(i));
+    //     }
+    // }
+    // // Also treat init functions as roots.
+    // for (wasm.object_init_funcs.items) |init_func| {
+    //     const func = init_func.function_index.ptr(wasm);
+    //     if (func.object_index.ptr(wasm).is_included) {
+    //         try markFunction(wasm, init_func.function_index, false);
+    //     }
+    // }
+    // wasm.functions_end_prelink = @intCast(wasm.functions.entries.len);
+
+    // for (wasm.object_global_imports.keys(), wasm.object_global_imports.values(), 0..) |name, *import, i| {
+    //     if (import.flags.isIncluded(rdynamic)) {
+    //         try markGlobalImport(wasm, name, import, @enumFromInt(i));
+    //     }
+    // }
+    // wasm.globals_end_prelink = @intCast(wasm.globals.entries.len);
+    // wasm.global_exports_len = @intCast(wasm.global_exports.items.len);
+
+    // for (wasm.object_table_imports.keys(), wasm.object_table_imports.values(), 0..) |name, *import, i| {
+    //     if (import.flags.isIncluded(rdynamic)) {
+    //         try markTableImport(wasm, name, import, @enumFromInt(i));
+    //     }
+    // }
+
+    // for (wasm.object_data_imports.keys(), wasm.object_data_imports.values(), 0..) |name, *import, i| {
+    //     if (import.flags.isIncluded(rdynamic)) {
+    //         try markDataImport(wasm, name, import, @enumFromInt(i));
+    //     }
+    // }
+
+    // // This is a wild ass guess at how to merge memories, haven't checked yet
+    // // what the proper way to do this is.
+    // for (wasm.object_memory_imports.values()) |*memory_import| {
+    //     wasm.memories.limits.min = @min(wasm.memories.limits.min, memory_import.limits_min);
+    //     wasm.memories.limits.max = @max(wasm.memories.limits.max, memory_import.limits_max);
+    //     wasm.memories.limits.flags.has_max = wasm.memories.limits.flags.has_max or memory_import.limits_has_max;
+    // }
+
+    // wasm.function_imports_len_prelink = @intCast(wasm.function_imports.entries.len);
+    // wasm.data_imports_len_prelink = @intCast(wasm.data_imports.entries.len);
+
+    // TODO This is incomplete.
+    // The entry symbol name depends on the subsystem as well as the set of
+    // public symbol names from linked objects.
+    // See LinkerDriver::findDefaultEntry from the LLD project for the flow chart.
+    const entry_addr: u32 = blk: {
+        switch (coff.entry) {
+            .disabled => break :blk 0,
+            .default => {
+                switch (comp.config.output_mode) {
+                    .Exe => {},
+                    .Obj, .Lib => @panic("what to do here?"),
+                }
+
+                const default_entry = if (coff.subsystem) |s| switch (s) {
+                    .Console => "mainCRTStartup",
+                    // !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+                    // TODO: use wWinMainCRTStartup depending on some flag?
+                    .Windows => "WinMainCRTStartup",
+                    else => |s2| std.debug.panic("TODO: handle subsystem '{s}'", .{@tagName(s2)}),
+                } else @panic("todo: handle no subsystem specified");
+
+                // !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+                if (true) {
+                    std.log.warn("hack, ignoring missing entry '{s}'", .{default_entry});
+                    break :blk 0;
+                }
+                break :blk coff.resolver.get(default_entry) orelse return diags.fail(
+                    "default entry '{s}' is undefined",
+                    .{default_entry},
+                );
+            },
+            // switch (comp.config.output_mode) {
+            //     .Exe => "wWinMainCRTStartup",
+            //     .Obj, .Lib => break :blk null,
+            // },
+            // .enabled => break :blk "wWinMainCRTStartup",
+            .enabled => @panic("todo"),
+            .named => |name| break :blk coff.resolver.get(name) orelse return diags.fail(
+                "entry '{s}' not found",
+                .{name},
+            ),
         }
-    }
+        //const global_index = coff.resolver.get(entry_name) orelse return null;
+        //return coff.globals.items[global_index];
+    };
 
-    while (coff.unresolved.popOrNull()) |entry| {
-        assert(entry.value);
-        const global = coff.globals.items[entry.key];
-        const sym = coff.getSymbol(global);
-        const res = try coff.import_tables.getOrPut(gpa, sym.value);
-        const itable = res.value_ptr;
-        if (!res.found_existing) {
-            itable.* = .{};
-        }
-        if (itable.lookup.contains(global)) continue;
-        // TODO: we could technically write the pointer placeholder for to-be-bound import here,
-        // but since this happens in flush, there is currently no point.
-        _ = try itable.addImport(gpa, global);
-        coff.imports_count_dirty = true;
-    }
-
-    try coff.writeImportTables();
-
-    for (coff.relocs.keys(), coff.relocs.values()) |atom_index, relocs| {
-        const needs_update = for (relocs.items) |reloc| {
-            if (reloc.dirty) break true;
-        } else false;
-
-        if (!needs_update) continue;
-
-        const atom = coff.getAtom(atom_index);
-        const sym = atom.getSymbol(coff);
-        const section = coff.sections.get(@intFromEnum(sym.section_number) - 1).header;
-        const file_offset = section.pointer_to_raw_data + sym.value - section.virtual_address;
-
-        var code = std.ArrayList(u8).init(gpa);
-        defer code.deinit();
-        try code.resize(math.cast(usize, atom.size) orelse return error.Overflow);
-        assert(atom.size > 0);
-
-        const amt = try coff.base.file.?.preadAll(code.items, file_offset);
-        if (amt != code.items.len) return error.InputOutput;
-
-        try coff.writeAtom(atom_index, code.items);
-    }
-
-    // Update GOT if it got moved in memory.
-    if (coff.got_table_contents_dirty) {
-        for (coff.got_table.entries.items, 0..) |entry, i| {
-            if (!coff.got_table.lookup.contains(entry)) continue;
-            // TODO: write all in one go rather than incrementally.
-            try coff.writeOffsetTableEntry(i);
-        }
-        coff.got_table_contents_dirty = false;
-    }
-
-    try coff.writeBaseRelocations();
-
-    if (coff.getEntryPoint()) |entry_sym_loc| {
-        coff.entry_addr = coff.getSymbol(entry_sym_loc).value;
-    }
-
-    if (build_options.enable_logging) {
-        coff.logSymtab();
-        coff.logImportTables();
-    }
-
-    try coff.writeStrtab();
-    try coff.writeDataDirectoriesHeaders();
-    try coff.writeSectionHeaders();
-
-    if (coff.entry_addr == null and comp.config.output_mode == .Exe) {
-        log.debug("flushing. no_entry_point_found = true\n", .{});
-        diags.flags.no_entry_point_found = true;
-    } else {
-        log.debug("flushing. no_entry_point_found = false\n", .{});
-        diags.flags.no_entry_point_found = false;
-        try coff.writeHeader();
-    }
-
-    assert(!coff.imports_count_dirty);
+    return .{ .entry_addr = entry_addr };
 }
 
 pub fn getNavVAddr(
@@ -2816,7 +3180,7 @@ fn writeDataDirectoriesHeaders(coff: *Coff) !void {
     try coff.pwriteAll(mem.sliceAsBytes(&coff.data_directories), offset);
 }
 
-fn writeHeader(coff: *Coff) !void {
+fn writeHeader(coff: *Coff, entry_addr: u32) !void {
     const target = coff.base.comp.root_mod.resolved_target.result;
     const gpa = coff.base.comp.gpa;
     var buffer = std.ArrayList(u8).init(gpa);
@@ -2890,7 +3254,7 @@ fn writeHeader(coff: *Coff) !void {
                 .size_of_code = size_of_code,
                 .size_of_initialized_data = size_of_initialized_data,
                 .size_of_uninitialized_data = size_of_uninitialized_data,
-                .address_of_entry_point = coff.entry_addr orelse 0,
+                .address_of_entry_point = entry_addr,
                 .base_of_code = base_of_code,
                 .base_of_data = base_of_data,
                 .image_base = @intCast(coff.image_base),
@@ -2925,7 +3289,7 @@ fn writeHeader(coff: *Coff) !void {
                 .size_of_code = size_of_code,
                 .size_of_initialized_data = size_of_initialized_data,
                 .size_of_uninitialized_data = size_of_uninitialized_data,
-                .address_of_entry_point = coff.entry_addr orelse 0,
+                .address_of_entry_point = entry_addr,
                 .base_of_code = base_of_code,
                 .image_base = coff.image_base,
                 .section_alignment = coff.page_size,
@@ -3057,27 +3421,6 @@ fn getSizeOfImage(coff: Coff) u32 {
         image_size += mem.alignForward(u32, header.virtual_size, coff.page_size);
     }
     return image_size;
-}
-
-/// Returns symbol location corresponding to the set entrypoint (if any).
-pub fn getEntryPoint(coff: Coff) ?SymbolWithLoc {
-    const comp = coff.base.comp;
-
-    // TODO This is incomplete.
-    // The entry symbol name depends on the subsystem as well as the set of
-    // public symbol names from linked objects.
-    // See LinkerDriver::findDefaultEntry from the LLD project for the flow chart.
-    const entry_name = switch (coff.entry) {
-        .disabled => return null,
-        .default => switch (comp.config.output_mode) {
-            .Exe => "wWinMainCRTStartup",
-            .Obj, .Lib => return null,
-        },
-        .enabled => "wWinMainCRTStartup",
-        .named => |name| name,
-    };
-    const global_index = coff.resolver.get(entry_name) orelse return null;
-    return coff.globals.items[global_index];
 }
 
 /// Returns pointer-to-symbol described by `sym_loc` descriptor.
@@ -3764,6 +4107,7 @@ const std = @import("std");
 const build_options = @import("build_options");
 const builtin = @import("builtin");
 const assert = std.debug.assert;
+// TODO: remove this
 const coff_util = std.coff;
 const fmt = std.fmt;
 const fs = std.fs;
@@ -3780,7 +4124,7 @@ const aarch64_util = @import("../arch/aarch64/bits.zig");
 const allocPrint = std.fmt.allocPrint;
 const codegen = @import("../codegen.zig");
 const link = @import("../link.zig");
-const target_util = @import("../target.zig");
+// const target_util = @import("../target.zig");
 const trace = @import("../tracy.zig").trace;
 
 const Air = @import("../Air.zig");
@@ -3793,8 +4137,8 @@ const TableSection = @import("table_section.zig").TableSection;
 const StringTable = @import("StringTable.zig");
 const Type = @import("../Type.zig");
 const Value = @import("../Value.zig");
-const AnalUnit = InternPool.AnalUnit;
-const dev = @import("../dev.zig");
+// const AnalUnit = InternPool.AnalUnit;
+// const dev = @import("../dev.zig");
 
 /// This is the start of a Portable Executable (PE) file.
 /// It starts with a MS-DOS header followed by a MS-DOS stub program.
