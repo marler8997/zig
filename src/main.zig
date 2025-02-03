@@ -6984,7 +6984,7 @@ const usage_fetch =
     \\
 ;
 
-fn cmdFetch(
+pub fn cmdFetch(
     gpa: Allocator,
     arena: Allocator,
     args: []const []const u8,
