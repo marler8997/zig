@@ -2857,12 +2857,12 @@ fn writeHeader(coff: *Coff) !void {
         flags.DLL = 1;
     }
 
-    const timestamp = if (coff.repro) 0 else std.time.timestamp();
+    const timestamp = if (coff.repro) 0 else (std.time.now().convert(.posix, .secs, .fromInt(u32)) catch unreachable).offset;
     const size_of_optional_header = @as(u16, @intCast(coff.getOptionalHeaderSize() + coff.getDataDirectoryHeadersSize()));
     var coff_header = coff_util.CoffHeader{
         .machine = target.toCoffMachine(),
         .number_of_sections = @as(u16, @intCast(coff.sections.slice().len)), // TODO what if we prune a section
-        .time_date_stamp = @as(u32, @truncate(@as(u64, @bitCast(timestamp)))),
+        .time_date_stamp = timestamp,
         .pointer_to_symbol_table = coff.strtab_offset orelse 0,
         .number_of_symbols = 0,
         .size_of_optional_header = size_of_optional_header,

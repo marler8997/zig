@@ -160,12 +160,12 @@ test "updateTimes" {
     const stat_old = try file.stat();
     // Set atime and mtime to 5s before
     try file.updateTimes(
-        stat_old.atime - 5 * std.time.ns_per_s,
-        stat_old.mtime - 5 * std.time.ns_per_s,
+        .{ .offset = stat_old.atime.offset - 5 * fs.File.Time.unit.perSecond() },
+        .{ .offset = stat_old.mtime.offset - 5 * fs.File.Time.unit.perSecond() },
     );
     const stat_new = try file.stat();
-    try expect(stat_new.atime < stat_old.atime);
-    try expect(stat_new.mtime < stat_old.mtime);
+    try expect(stat_new.atime.offset < stat_old.atime.offset);
+    try expect(stat_new.mtime.offset < stat_old.mtime.offset);
 }
 
 test "GenericReader methods can return error.EndOfStream" {

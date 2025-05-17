@@ -22,13 +22,13 @@ pub fn Writer(comptime WriterType: type) type {
             /// File system permission mode.
             mode: u32 = 0,
             /// File system modification time.
-            mtime: u64 = 0,
+            mtime: std.time.Moment(.posix, .secs, .fromInt(u64)) = .{ .offset = 0 },
         };
         const Self = @This();
 
         underlying_writer: WriterType,
         prefix: []const u8 = "",
-        mtime_now: u64 = 0,
+        mtime_now: std.time.Moment(.posix, .secs, .fromInt(u64)) = .{ .offset = 0 },
 
         /// Sets prefix for all other write* method paths.
         pub fn setRoot(self: *Self, root: []const u8) !void {
@@ -46,12 +46,11 @@ pub fn Writer(comptime WriterType: type) type {
         /// Writes file system file.
         pub fn writeFile(self: *Self, sub_path: []const u8, file: std.fs.File) !void {
             const stat = try file.stat();
-            const mtime: u64 = @intCast(@divFloor(stat.mtime, std.time.ns_per_s));
 
             var header = Header{};
             try self.setPath(&header, sub_path);
             try header.setSize(stat.size);
-            try header.setMtime(mtime);
+            try header.setMtime(try stat.mtime.convert(.posix, .secs, .fromInt(u64)));
             try header.write(self.underlying_writer);
 
             try self.underlying_writer.writeFile(file);
@@ -116,7 +115,7 @@ pub fn Writer(comptime WriterType: type) type {
             var header = Header.init(typeflag);
             try self.setPath(&header, sub_path);
             try header.setSize(size);
-            try header.setMtime(if (opt.mtime != 0) opt.mtime else self.mtimeNow());
+            try header.setMtime(if (opt.mtime.offset != 0) opt.mtime else self.mtimeNow());
             if (opt.mode != 0)
                 try header.setMode(opt.mode);
             if (typeflag == .symbolic_link)
@@ -127,9 +126,9 @@ pub fn Writer(comptime WriterType: type) type {
             try header.write(self.underlying_writer);
         }
 
-        fn mtimeNow(self: *Self) u64 {
-            if (self.mtime_now == 0)
-                self.mtime_now = @intCast(std.time.timestamp());
+        fn mtimeNow(self: *Self) std.time.Moment(.posix, .secs, .fromInt(u64)) {
+            if (self.mtime_now.offset == 0)
+                self.mtime_now = std.time.now().convert(.posix, .secs, .fromInt(u64)) catch unreachable;
             return self.mtime_now;
         }
 
@@ -264,8 +263,8 @@ const Header = extern struct {
 
     // Integer number of seconds since January 1, 1970, 00:00 Coordinated Universal Time.
     // mtime == 0 will use current time
-    pub fn setMtime(self: *Header, mtime: u64) !void {
-        try octal(&self.mtime, mtime);
+    pub fn setMtime(self: *Header, mtime: std.time.Moment(.posix, .secs, .fromInt(u64))) !void {
+        try octal(&self.mtime, mtime.offset);
     }
 
     pub fn updateChecksum(self: *Header) !void {

@@ -34,7 +34,7 @@ coverage_mutex: std.Thread.Mutex,
 coverage_condition: std.Thread.Condition,
 
 /// Time at initialization of WebServer.
-base_timestamp: i128,
+base_timestamp: std.time.Now,
 
 const fuzzer_bin_name = "fuzzer";
 const fuzzer_arch_os_abi = "wasm32-freestanding";
@@ -91,8 +91,8 @@ pub fn run(ws: *WebServer) void {
     }
 }
 
-fn now(s: *const WebServer) i64 {
-    return @intCast(std.time.nanoTimestamp() - s.base_timestamp);
+fn now(s: *const WebServer) std.time.Now.range.Int() {
+    return std.time.now().offset - s.base_timestamp.offset;
 }
 
 fn accept(ws: *WebServer, connection: std.net.Server.Connection) void {

@@ -324,7 +324,7 @@ pub fn init(stream: anytype, options: Options) InitError(@TypeOf(stream))!Client
     var handshake_state: HandshakeState = .hello;
     var handshake_cipher: tls.HandshakeCipher = undefined;
     var main_cert_pub_key: CertificatePublicKey = undefined;
-    const now_sec = std.time.timestamp();
+    const now = std.time.timestamp();
 
     var cleartext_fragment_start: usize = 0;
     var cleartext_fragment_end: usize = 0;
@@ -634,7 +634,7 @@ pub fn init(stream: anytype, options: Options) InitError(@TypeOf(stream))!Client
                                 // certificate_verify message later.
                                 try main_cert_pub_key.init(subject.pub_key_algo, subject.pubKey());
                             } else {
-                                try prev_cert.verify(subject, now_sec);
+                                try prev_cert.verify(subject, now);
                             }
 
                             switch (options.ca) {
@@ -643,11 +643,11 @@ pub fn init(stream: anytype, options: Options) InitError(@TypeOf(stream))!Client
                                     break :cert;
                                 },
                                 .self_signed => {
-                                    try subject.verify(subject, now_sec);
+                                    try subject.verify(subject, now);
                                     handshake_state = .trust_chain_established;
                                     break :cert;
                                 },
-                                .bundle => |ca_bundle| if (ca_bundle.verify(subject, now_sec)) |_| {
+                                .bundle => |ca_bundle| if (ca_bundle.verify(subject, now)) |_| {
                                     handshake_state = .trust_chain_established;
                                     break :cert;
                                 } else |err| switch (err) {

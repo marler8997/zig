@@ -13,7 +13,7 @@ pub const VerifyError = Certificate.Parsed.VerifyError || error{
     CertificateIssuerNotFound,
 };
 
-pub fn verify(cb: Bundle, subject: Certificate.Parsed, now_sec: i64) VerifyError!void {
+pub fn verify(cb: Bundle, subject: Certificate.Parsed, now: std.time.Moment(.posix, .secs, .fromInt(i64))) VerifyError!void {
     const bytes_index = cb.find(subject.issuer()) orelse return error.CertificateIssuerNotFound;
     const issuer_cert: Certificate = .{
         .buffer = cb.bytes.items,
@@ -22,7 +22,7 @@ pub fn verify(cb: Bundle, subject: Certificate.Parsed, now_sec: i64) VerifyError
     // Every certificate in the bundle is pre-parsed before adding it, ensuring
     // that parsing will succeed here.
     const issuer = issuer_cert.parse() catch unreachable;
-    try subject.verify(issuer, now_sec);
+    try subject.verify(issuer, now);
 }
 
 /// The returned bytes become invalid after calling any of the rescan functions
@@ -259,7 +259,7 @@ pub fn addCertsFromFile(cb: *Bundle, gpa: Allocator, file: fs.File) AddCertsFrom
 
 pub const ParseCertError = Allocator.Error || Certificate.ParseError;
 
-pub fn parseCert(cb: *Bundle, gpa: Allocator, decoded_start: u32, now_sec: i64) ParseCertError!void {
+pub fn parseCert(cb: *Bundle, gpa: Allocator, decoded_start: u32, now: std.time.Moment(.posix, .secs, .fromInt(i64))) ParseCertError!void {
     // Even though we could only partially parse the certificate to find
     // the subject name, we pre-parse all of them to make sure and only
     // include in the bundle ones that we know will parse. This way we can
@@ -274,7 +274,7 @@ pub fn parseCert(cb: *Bundle, gpa: Allocator, decoded_start: u32, now_sec: i64) 
         },
         else => |e| return e,
     };
-    if (now_sec > parsed_cert.validity.not_after) {
+    if (now.offset > parsed_cert.validity.not_after.offset) {
         // Ignore expired cert.
         cb.bytes.items.len = decoded_start;
         return;
