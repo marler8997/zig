@@ -6,7 +6,7 @@ gpa: Allocator,
 manifest_dir: fs.Dir,
 hash: HashHelper = .{},
 /// This value is accessed from multiple threads, protected by mutex.
-recent_problematic_timestamp: i128 = 0,
+recent_problematic_timestamp: fs.File.Time = .{ .offset = 0 },
 mutex: std.Thread.Mutex = .{},
 
 /// A set of strings such as the zig library directory or project source root, which
@@ -152,7 +152,7 @@ pub const File = struct {
     pub const Stat = struct {
         inode: fs.File.INode,
         size: u64,
-        mtime: i128,
+        mtime: fs.File.Time,
 
         pub fn fromFs(fs_stat: fs.File.Stat) Stat {
             return .{
@@ -330,7 +330,7 @@ pub const Manifest = struct {
     diagnostic: Diagnostic = .none,
     /// Keeps track of the last time we performed a file system write to observe
     /// what time the file system thinks it is, according to its own granularity.
-    recent_problematic_timestamp: i128 = 0,
+    recent_problematic_timestamp: fs.File.Time = .{ .offset = 0 },
 
     pub const Diagnostic = union(enum) {
         none,
@@ -706,7 +706,8 @@ pub const Manifest = struct {
 
             const stat_size = fmt.parseInt(u64, size, 10) catch return error.InvalidFormat;
             const stat_inode = fmt.parseInt(fs.File.INode, inode, 10) catch return error.InvalidFormat;
-            const stat_mtime = fmt.parseInt(i64, mtime_nsec_str, 10) catch return error.InvalidFormat;
+            const stat_mtime_posix: std.time.Moment(.posix, .secs, .fromInt(i64)) = .{ .offset = fmt.parseInt(i64, mtime_nsec_str, 10) catch return error.InvalidFormat };
+            const stat_mtime: fs.File.Time = stat_mtime_posix.convertMoment(fs.File.Time) catch return error.InvalidFormat;
             const file_bin_digest = b: {
                 if (digest_str.len != hex_digest_len) return error.InvalidFormat;
                 var bd: BinDigest = undefined;
@@ -784,7 +785,7 @@ pub const Manifest = struct {
                 return error.CacheCheckFailed;
             };
             const size_match = actual_stat.size == cache_hash_file.stat.size;
-            const mtime_match = actual_stat.mtime == cache_hash_file.stat.mtime;
+            const mtime_match = actual_stat.mtime.eq(cache_hash_file.stat.mtime);
             const inode_match = actual_stat.inode == cache_hash_file.stat.inode;
 
             if (!size_match or !mtime_match or !inode_match) {
@@ -796,7 +797,7 @@ pub const Manifest = struct {
 
                 if (self.isProblematicTimestamp(cache_hash_file.stat.mtime)) {
                     // The actual file has an unreliable timestamp, force it to be hashed
-                    cache_hash_file.stat.mtime = 0;
+                    cache_hash_file.stat.mtime = .{ .offset = 0 };
                     cache_hash_file.stat.inode = 0;
                 }
 
@@ -852,10 +853,10 @@ pub const Manifest = struct {
         }
     }
 
-    fn isProblematicTimestamp(man: *Manifest, file_time: i128) bool {
+    fn isProblematicTimestamp(man: *Manifest, file_time: fs.File.Time) bool {
         // If the file_time is prior to the most recent problematic timestamp
         // then we don't need to access the filesystem.
-        if (file_time < man.recent_problematic_timestamp)
+        if (file_time.offset < man.recent_problematic_timestamp.offset)
             return false;
 
         // Next we will check the globally shared Cache timestamp, which is accessed
@@ -865,7 +866,7 @@ pub const Manifest = struct {
 
         // Save the global one to our local one to avoid locking next time.
         man.recent_problematic_timestamp = man.cache.recent_problematic_timestamp;
-        if (file_time < man.recent_problematic_timestamp)
+        if (file_time.offset < man.recent_problematic_timestamp.offset)
             return false;
 
         // This flag prevents multiple filesystem writes for the same hit() call.
@@ -883,7 +884,7 @@ pub const Manifest = struct {
             man.cache.recent_problematic_timestamp = man.recent_problematic_timestamp;
         }
 
-        return file_time >= man.recent_problematic_timestamp;
+        return file_time.offset >= man.recent_problematic_timestamp.offset;
     }
 
     fn populateFileHash(self: *Manifest, ch_file: *File) !void {
@@ -908,7 +909,7 @@ pub const Manifest = struct {
 
         if (self.isProblematicTimestamp(ch_file.stat.mtime)) {
             // The actual file has an unreliable timestamp, force it to be hashed
-            ch_file.stat.mtime = 0;
+            ch_file.stat.mtime = .{ .offset = 0 };
             ch_file.stat.inode = 0;
         }
 
@@ -1137,7 +1138,7 @@ pub const Manifest = struct {
                 try writer.print("{d} {d} {d} {} {d} {s}\n", .{
                     file.stat.size,
                     file.stat.inode,
-                    file.stat.mtime,
+                    file.stat.mtime.offset,
                     fmt.fmtSliceHexLower(&file.bin_digest),
                     file.prefixed_path.prefix,
                     file.prefixed_path.sub_path,
@@ -1306,7 +1307,7 @@ fn hashFile(file: fs.File, bin_digest: *[Hasher.mac_length]u8) fs.File.PReadErro
 }
 
 // Create/Write a file, close it, then grab its stat.mtime timestamp.
-fn testGetCurrentFileTimestamp(dir: fs.Dir) !i128 {
+fn testGetCurrentFileTimestamp(dir: fs.Dir) !fs.File.Time {
     const test_out_file = "test-filetimestamp.tmp";
 
     var file = try dir.createFile(test_out_file, .{
@@ -1332,7 +1333,7 @@ test "cache file and then recall it" {
 
     // Wait for file timestamps to tick
     const initial_time = try testGetCurrentFileTimestamp(tmp.dir);
-    while ((try testGetCurrentFileTimestamp(tmp.dir)) == initial_time) {
+    while ((try testGetCurrentFileTimestamp(tmp.dir)).eq(initial_time)) {
         std.time.sleep(1);
     }
 
@@ -1395,7 +1396,7 @@ test "check that changing a file makes cache fail" {
 
     // Wait for file timestamps to tick
     const initial_time = try testGetCurrentFileTimestamp(tmp.dir);
-    while ((try testGetCurrentFileTimestamp(tmp.dir)) == initial_time) {
+    while ((try testGetCurrentFileTimestamp(tmp.dir)).eq(initial_time)) {
         std.time.sleep(1);
     }
 
@@ -1507,7 +1508,7 @@ test "Manifest with files added after initial hash work" {
 
     // Wait for file timestamps to tick
     const initial_time = try testGetCurrentFileTimestamp(tmp.dir);
-    while ((try testGetCurrentFileTimestamp(tmp.dir)) == initial_time) {
+    while ((try testGetCurrentFileTimestamp(tmp.dir)).eq(initial_time)) {
         std.time.sleep(1);
     }
 
@@ -1557,7 +1558,7 @@ test "Manifest with files added after initial hash work" {
 
         // Wait for file timestamps to tick
         const initial_time2 = try testGetCurrentFileTimestamp(tmp.dir);
-        while ((try testGetCurrentFileTimestamp(tmp.dir)) == initial_time2) {
+        while ((try testGetCurrentFileTimestamp(tmp.dir)).eq(initial_time2)) {
             std.time.sleep(1);
         }
 

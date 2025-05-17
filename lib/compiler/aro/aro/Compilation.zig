@@ -1,7 +1,6 @@
 const std = @import("std");
 const Allocator = mem.Allocator;
 const assert = std.debug.assert;
-const EpochSeconds = std.time.epoch.EpochSeconds;
 const mem = std.mem;
 const Interner = @import("../backend.zig").Interner;
 const Builtins = @import("Builtins.zig");
@@ -177,60 +176,59 @@ pub fn deinit(comp: *Compilation) void {
     comp.environment.deinit(comp.gpa);
 }
 
-pub fn getSourceEpoch(self: *const Compilation, max: i64) !?i64 {
+const Timestamp = std.time.Moment(.posix, .secs, .{
+    .min = 0,
+    .max = 253402300799, // Dec 31 9999 23:59:59
+});
+
+pub fn getSourceEpoch(self: *const Compilation) !?Timestamp {
     const provided = self.environment.source_date_epoch orelse return null;
-    const parsed = std.fmt.parseInt(i64, provided, 10) catch return error.InvalidEpoch;
-    if (parsed < 0 or parsed > max) return error.InvalidEpoch;
-    return parsed;
+    const parsed = std.fmt.parseInt(Timestamp.range.Int(), provided, 10) catch return error.InvalidEpoch;
+    if (parsed < 0 or parsed > Timestamp.range.max) return error.InvalidEpoch;
+    return .{ .offset = parsed };
 }
 
-/// Dec 31 9999 23:59:59
-const max_timestamp = 253402300799;
-
-fn getTimestamp(comp: *Compilation) !u47 {
-    const provided: ?i64 = comp.getSourceEpoch(max_timestamp) catch blk: {
+fn getTimestamp(comp: *Compilation) !Timestamp {
+    const provided: ?Timestamp = comp.getSourceEpoch() catch blk: {
         try comp.addDiagnostic(.{
             .tag = .invalid_source_epoch,
             .loc = .{ .id = .unused, .byte_offset = 0, .line = 0 },
         }, &.{});
         break :blk null;
     };
-    const timestamp = provided orelse std.time.timestamp();
-    return @intCast(std.math.clamp(timestamp, 0, max_timestamp));
+    return provided orelse return std.time.now().convert(.posix, .secs, Timestamp.range);
 }
 
-fn generateDateAndTime(w: anytype, timestamp: u47) !void {
-    const epoch_seconds = EpochSeconds{ .secs = timestamp };
-    const epoch_day = epoch_seconds.getEpochDay();
-    const day_seconds = epoch_seconds.getDaySeconds();
-    const year_day = epoch_day.calculateYearDay();
-    const month_day = year_day.calculateMonthDay();
+fn generateDateAndTime(w: anytype, timestamp: Timestamp) !void {
+    const day = timestamp.asDay();
+    const time_of_day = timestamp.timeOfDay();
+    const day_of_year = day.dayOfYear();
+    const day_of_month = day_of_year.dayOfMonth();
 
     const month_names = [_][]const u8{ "Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec" };
-    std.debug.assert(std.time.epoch.Month.jan.numeric() == 1);
-
-    const month_name = month_names[month_day.month.numeric() - 1];
+    const month_name = month_names[day_of_month.month.index()];
     try w.print("#define __DATE__ \"{s} {d: >2} {d}\"\n", .{
         month_name,
-        month_day.day_index + 1,
-        year_day.year,
+        day_of_month.day_index + 1,
+        day_of_year.year,
     });
     try w.print("#define __TIME__ \"{d:0>2}:{d:0>2}:{d:0>2}\"\n", .{
-        day_seconds.getHoursIntoDay(),
-        day_seconds.getMinutesIntoHour(),
-        day_seconds.getSecondsIntoMinute(),
+        time_of_day.hour(),
+        time_of_day.minute(),
+        time_of_day.second(),
     });
 
     const day_names = [_][]const u8{ "Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun" };
-    const day_name = day_names[@intCast((epoch_day.day + 3) % 7)];
+    // TODO: maybe add a "weekday" method to the Day type?
+    const day_name = day_names[@intCast((day.offset + 3) % 7)];
     try w.print("#define __TIMESTAMP__ \"{s} {s} {d: >2} {d:0>2}:{d:0>2}:{d:0>2} {d}\"\n", .{
         day_name,
         month_name,
-        month_day.day_index + 1,
-        day_seconds.getHoursIntoDay(),
-        day_seconds.getMinutesIntoHour(),
-        day_seconds.getSecondsIntoMinute(),
-        year_day.year,
+        day_of_month.day_index + 1,
+        time_of_day.hour(),
+        time_of_day.minute(),
+        time_of_day.second(),
+        day_of_year.year,
     });
 }
 

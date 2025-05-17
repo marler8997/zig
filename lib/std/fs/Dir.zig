@@ -2537,7 +2537,7 @@ pub fn updateFile(
         };
 
         if (src_stat.size == dest_stat.size and
-            src_stat.mtime == dest_stat.mtime and
+            src_stat.mtime.eq(dest_stat.mtime) and
             actual_mode == dest_stat.mode)
         {
             return PrevStatus.fresh;

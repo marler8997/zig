@@ -6,79 +6,103 @@ const math = std.math;
 const windows = std.os.windows;
 const posix = std.posix;
 
-pub const epoch = @import("time/epoch.zig");
+pub const Epoch = @import("time/Epoch.zig");
 
 /// Deprecated: moved to std.Thread.sleep
 pub const sleep = std.Thread.sleep;
 
-/// Get a calendar timestamp, in seconds, relative to UTC 1970-01-01.
+pub const Now = switch (builtin.os.tag) {
+    .windows => Moment(.windows, .hectonanos, .fromInt(i64)),
+    .wasi => Moment(.posix, .nanos, .fromInt(std.os.wasi.timestamp_t)),
+    .uefi => Moment(.posix, .nanos, .fromInt(u64)),
+    else => Moment(.posix, .nanos, .fromInt(PosixNsec)),
+};
+
+pub fn now() Now {
+    return switch (builtin.os.tag) {
+        .windows => .{ .offset = windows.ntdll.RtlGetSystemTimePrecise() },
+        .wasi => {
+            var ns: std.os.wasi.timestamp_t = undefined;
+            const err = std.os.wasi.clock_time_get(.REALTIME, 1, &ns);
+            assert(err == .SUCCESS);
+            return .{ .offset = ns };
+        },
+        .uefi => {
+            var value: std.os.uefi.Time = undefined;
+            const status = std.os.uefi.system_table.runtime_services.getTime(&value, null);
+            assert(status == .success);
+            return .{ .offset = value.toEpoch() };
+        },
+        else => {
+            const ts = posix.clock_gettime(.REALTIME) catch |err| switch (err) {
+                error.UnsupportedClock, error.Unexpected => return .{ .offset = 0 }, // "Precision of timing depends on hardware and OS".
+            };
+            return .{ .offset = (@as(PosixNsec, ts.sec) * ns_per_s) + ts.nsec };
+        },
+    };
+}
+
+const PosixNsec = @TypeOf(@as(std.posix.timespec, undefined).nsec);
+
+test now {
+    const time_0 = now().convertUnit(.millis);
+    std.Thread.sleep(ns_per_ms);
+    const time_1 = now().convertUnit(.millis);
+    const interval = time_1.offset - time_0.offset;
+    try testing.expect(interval > 0);
+}
+
+/// Deprecated: use now
+///
+/// Get a calendar timestamp in the given unit, relative to UTC 1970-01-01.
 /// Precision of timing depends on the hardware and operating system.
 /// The return value is signed because it is possible to have a date that is
 /// before the epoch.
 /// See `posix.clock_gettime` for a POSIX timestamp.
-pub fn timestamp() i64 {
-    return @divFloor(milliTimestamp(), ms_per_s);
+pub fn timestamp() Moment(.posix, .secs, .fromInt(i64)) {
+    return now().convert(.posix, .secs, .fromInt(i64)) catch |e| switch (e) {
+        error.MomentOutOfRange => unreachable,
+    };
 }
 
+/// Deprecated: use now
+///
 /// Get a calendar timestamp, in milliseconds, relative to UTC 1970-01-01.
 /// Precision of timing depends on the hardware and operating system.
 /// The return value is signed because it is possible to have a date that is
 /// before the epoch.
 /// See `posix.clock_gettime` for a POSIX timestamp.
-pub fn milliTimestamp() i64 {
-    return @as(i64, @intCast(@divFloor(nanoTimestamp(), ns_per_ms)));
+pub fn milliTimestamp() Moment(.posix, .millis, .fromInt(i64)) {
+    return now().convert(.posix, .millis, .fromInt(i64)) catch |e| switch (e) {
+        error.MomentOutOfRange => unreachable,
+    };
 }
 
+/// Deprecated: use now
+///
 /// Get a calendar timestamp, in microseconds, relative to UTC 1970-01-01.
 /// Precision of timing depends on the hardware and operating system.
 /// The return value is signed because it is possible to have a date that is
 /// before the epoch.
 /// See `posix.clock_gettime` for a POSIX timestamp.
-pub fn microTimestamp() i64 {
-    return @as(i64, @intCast(@divFloor(nanoTimestamp(), ns_per_us)));
+pub fn microTimestamp() Moment(.posix, .micros, .fromInt(i64)) {
+    return now().convert(.posix, .micros, .fromInt(i64)) catch |e| switch (e) {
+        error.MomentOutOfRange => unreachable,
+    };
 }
 
+/// Deprecated: use now
+///
 /// Get a calendar timestamp, in nanoseconds, relative to UTC 1970-01-01.
 /// Precision of timing depends on the hardware and operating system.
 /// On Windows this has a maximum granularity of 100 nanoseconds.
 /// The return value is signed because it is possible to have a date that is
 /// before the epoch.
 /// See `posix.clock_gettime` for a POSIX timestamp.
-pub fn nanoTimestamp() i128 {
-    switch (builtin.os.tag) {
-        .windows => {
-            // RtlGetSystemTimePrecise() has a granularity of 100 nanoseconds and uses the NTFS/Windows epoch,
-            // which is 1601-01-01.
-            const epoch_adj = epoch.windows * (ns_per_s / 100);
-            return @as(i128, windows.ntdll.RtlGetSystemTimePrecise() + epoch_adj) * 100;
-        },
-        .wasi => {
-            var ns: std.os.wasi.timestamp_t = undefined;
-            const err = std.os.wasi.clock_time_get(.REALTIME, 1, &ns);
-            assert(err == .SUCCESS);
-            return ns;
-        },
-        .uefi => {
-            var value: std.os.uefi.Time = undefined;
-            const status = std.os.uefi.system_table.runtime_services.getTime(&value, null);
-            assert(status == .success);
-            return value.toEpoch();
-        },
-        else => {
-            const ts = posix.clock_gettime(.REALTIME) catch |err| switch (err) {
-                error.UnsupportedClock, error.Unexpected => return 0, // "Precision of timing depends on hardware and OS".
-            };
-            return (@as(i128, ts.sec) * ns_per_s) + ts.nsec;
-        },
-    }
-}
-
-test milliTimestamp {
-    const time_0 = milliTimestamp();
-    std.Thread.sleep(ns_per_ms);
-    const time_1 = milliTimestamp();
-    const interval = time_1 - time_0;
-    try testing.expect(interval > 0);
+pub fn nanoTimestamp() Moment(.posix, .nanos, .fromInt(i128)) {
+    return now().convert(.posix, .nanos, .fromInt(i128)) catch |e| switch (e) {
+        error.MomentOutOfRange => unreachable,
+    };
 }
 
 // Divisions of a nanosecond.
@@ -110,6 +134,380 @@ pub const s_per_min = 60;
 pub const s_per_hour = s_per_min * 60;
 pub const s_per_day = s_per_hour * 24;
 pub const s_per_week = s_per_day * 7;
+
+/// A "Moment" is moment in time, specifically, a time of day and a calendar day/year.
+/// A moment is represented by an offset to an epoch where the epoch defines the time
+/// at offset 0. The offset is a time unit that can be one of seconds, milliseconds,
+/// microseconds, hectonanoseconds or nanoseconds.
+pub fn Moment(
+    comptime epoch_arg: Epoch,
+    comptime unit_arg: Unit,
+    comptime range_arg: ComptimeRange,
+) type {
+    return struct {
+        /// The number of time units offset from the epoch.
+        offset: range.Int(),
+
+        pub const epoch = epoch_arg;
+        pub const range = range_arg;
+        pub const unit = unit_arg;
+        pub const DayInteger = std.math.IntFittingRange(
+            @divFloor(std.math.minInt(range.Int()), @as(range.Int(), unit.perDay())),
+            @divFloor(std.math.maxInt(range.Int()), @as(range.Int(), unit.perDay())),
+        );
+        pub const Year = std.math.IntFittingRange(
+            yearLowerBound(epoch, DayInteger),
+            yearUpperBound(epoch, DayInteger),
+        );
+
+        const Self = @This();
+
+        pub fn eq(self: Self, other: Self) bool {
+            return self.offset == other.offset;
+        }
+
+        /// Performs a division to return the day this moment occurred.
+        /// The resulting day is used to calculate the calendar year/month.
+        pub fn asDay(self: Self) Day(epoch, DayInteger) {
+            return .{ .offset = @intCast(@divFloor(self.offset, unit.perDay())) };
+        }
+
+        /// Performs a modulus to return the time of day this moment occurred.
+        /// This operation should be performed after converting to the least granular
+        /// time unit needed.
+        pub fn timeOfDay(self: Self) TimeOfDay(unit) {
+            return TimeOfDay(unit){
+                .value = std.math.comptimeMod(self.offset, unit.perDay()),
+            };
+        }
+
+        pub fn ConvertUnit(comptime target_unit: Unit) type {
+            return Moment(epoch, target_unit, range.scale(unit.scaleTo(target_unit)));
+        }
+
+        /// Returns this moment converted to the given time unit.
+        pub fn convertUnit(self: Self, comptime target_unit: Unit) ConvertUnit(target_unit) {
+            const target_range = range.scale(unit.scaleTo(target_unit));
+            return switch (unit.scaleTo(target_unit)) {
+                .multiply => |mult| if (comptime mult == 1) .{ .offset = self.offset } else .{ .offset = target_range.clamp(
+                    @as(target_range.Int(), self.offset) * @as(target_range.Int(), mult),
+                ) },
+                .divide => |divisor| .{ .offset = target_range.clamp(
+                    @intCast(@divFloor((self.offset +% (divisor / 2)), divisor)),
+                ) },
+            };
+        }
+
+        pub fn convertMoment(self: Self, TargetMoment: type) error{MomentOutOfRange}!TargetMoment {
+            return self.convert(TargetMoment.epoch, TargetMoment.unit, TargetMoment.range);
+        }
+
+        pub fn convert(
+            self: Self,
+            comptime target_epoch: Epoch,
+            comptime target_unit: Unit,
+            comptime target_range: ComptimeRange,
+        ) error{MomentOutOfRange}!Moment(target_epoch, target_unit, target_range) {
+            const converted_unit = self.convertUnit(target_unit);
+            const epoch_diff = epoch.diff(target_epoch, target_unit);
+            const Int = std.math.IntFittingRange(
+                @min(range.min, ConvertUnit(target_unit).range.min, target_range.min, epoch_diff),
+                @max(range.max, ConvertUnit(target_unit).range.max, target_range.max, epoch_diff),
+            );
+            const new_offset: Int = @as(Int, converted_unit.offset) + @as(Int, epoch_diff);
+            if (new_offset < target_range.min) return error.MomentOutOfRange;
+            if (new_offset > target_range.max) return error.MomentOutOfRange;
+            return Moment(target_epoch, target_unit, target_range){ .offset = @intCast(new_offset) };
+        }
+    };
+}
+
+pub fn Day(comptime epoch: Epoch, comptime IntegerArg: type) type {
+    return struct {
+        offset: Integer,
+
+        pub const Integer = IntegerArg;
+        pub const Year = std.math.IntFittingRange(
+            yearLowerBound(epoch, Integer),
+            yearUpperBound(epoch, Integer),
+        );
+
+        const Self = @This();
+
+        pub fn dayOfYear(self: Self) DayOfYear(Year) {
+            var year: Year = epoch.year;
+            if (epoch.days_into_year != 0) @compileError("todo");
+
+            // TODO: make this more efficient, to do so, we can make a function
+            // that can return the number of days in any given range of years.
+            // We use that to get "close" to the year and calculate the new day
+            // offset, then iterate until we're there.
+
+            var offset_remaining = self.offset;
+            if (offset_remaining >= 0) {
+                while (true) {
+                    const year_size = daysInYear(.fromYear(year));
+                    if (offset_remaining < year_size)
+                        return .{ .year = year, .day_index = @intCast(offset_remaining) };
+                    offset_remaining -= @intCast(year_size);
+                    year += 1;
+                }
+            } else {
+                while (true) {
+                    year -= 1;
+                    const year_size = daysInYear(.fromYear(year));
+                    if (offset_remaining >= -@as(i10, year_size)) {
+                        return .{
+                            .year = year,
+                            // i10 is the smallest signed integer to represent the year size (a u9)
+                            .day_index = @intCast(@as(i10, year_size) + @as(i10, @intCast(offset_remaining))),
+                        };
+                    }
+                    offset_remaining += @intCast(year_size);
+                }
+            }
+        }
+    };
+}
+
+pub fn TimeOfDay(unit: Unit) type {
+    return struct {
+        value: std.math.IntFittingRange(0, unit.perDay()),
+
+        const Self = @This();
+
+        /// the number of hours past the start of the day (0 to 23)
+        pub fn hour(self: Self) u5 {
+            return @as(u5, @intCast(@divTrunc(self.value, unit.perHour())));
+        }
+        /// the number of minutes past the hour (0 to 59)
+        pub fn minute(self: Self) u6 {
+            return @as(u6, @intCast(@divTrunc(std.math.comptimeMod(self.value, unit.perHour()), 60)));
+        }
+        /// the number of seconds past the start of the minute (0 to 59)
+        pub fn second(self: Self) u6 {
+            return @as(u6, @intCast(@divTrunc(std.math.comptimeMod(self.value, unit.perMinute()), unit.perSecond())));
+        }
+    };
+}
+
+pub const DayOfMonth = struct {
+    month: Month,
+    day_index: u5, // days into the month (0 to 30)
+};
+
+pub fn DayOfYear(comptime Year: type) type {
+    return struct {
+        year: Year,
+        /// The number of days into the year (0 to 365)
+        day_index: u9,
+
+        const Self = @This();
+
+        pub fn dayOfMonth(self: Self) DayOfMonth {
+            return if (isLeapYear(self.year)) switch (self.day_index) {
+                0...30 => .{ .month = .jan, .day_index = @intCast(self.day_index) },
+                31...59 => .{ .month = .feb, .day_index = @intCast(self.day_index - 31) },
+                60...90 => .{ .month = .mar, .day_index = @intCast(self.day_index - 60) },
+                91...120 => .{ .month = .apr, .day_index = @intCast(self.day_index - 91) },
+                121...151 => .{ .month = .may, .day_index = @intCast(self.day_index - 121) },
+                152...181 => .{ .month = .jun, .day_index = @intCast(self.day_index - 152) },
+                182...212 => .{ .month = .jul, .day_index = @intCast(self.day_index - 182) },
+                213...243 => .{ .month = .aug, .day_index = @intCast(self.day_index - 213) },
+                244...273 => .{ .month = .sep, .day_index = @intCast(self.day_index - 244) },
+                274...304 => .{ .month = .oct, .day_index = @intCast(self.day_index - 274) },
+                305...334 => .{ .month = .nov, .day_index = @intCast(self.day_index - 305) },
+                335...365 => .{ .month = .dec, .day_index = @intCast(self.day_index - 335) },
+                else => unreachable,
+            } else switch (self.day_index) {
+                0...30 => .{ .month = .jan, .day_index = @intCast(self.day_index) },
+                31...58 => .{ .month = .feb, .day_index = @intCast(self.day_index - 31) },
+                59...89 => .{ .month = .mar, .day_index = @intCast(self.day_index - 59) },
+                90...119 => .{ .month = .apr, .day_index = @intCast(self.day_index - 90) },
+                120...150 => .{ .month = .may, .day_index = @intCast(self.day_index - 120) },
+                151...180 => .{ .month = .jun, .day_index = @intCast(self.day_index - 151) },
+                181...211 => .{ .month = .jul, .day_index = @intCast(self.day_index - 181) },
+                212...242 => .{ .month = .aug, .day_index = @intCast(self.day_index - 212) },
+                243...272 => .{ .month = .sep, .day_index = @intCast(self.day_index - 243) },
+                273...303 => .{ .month = .oct, .day_index = @intCast(self.day_index - 273) },
+                304...333 => .{ .month = .nov, .day_index = @intCast(self.day_index - 304) },
+                334...364 => .{ .month = .dec, .day_index = @intCast(self.day_index - 334) },
+                else => unreachable,
+            };
+        }
+    };
+}
+
+pub const Unit = enum {
+    secs,
+    millis,
+    micros,
+    /// 100 nanoseconds
+    hectonanos,
+    nanos,
+
+    pub fn perDay(comptime unit: Unit) comptime_int {
+        return unit.perHour() * 24;
+    }
+    pub fn perHour(comptime unit: Unit) comptime_int {
+        return unit.perMinute() * 60;
+    }
+    pub fn perMinute(comptime unit: Unit) comptime_int {
+        return unit.perSecond() * 60;
+    }
+    pub fn perSecond(comptime unit: Unit) comptime_int {
+        return switch (unit) {
+            .secs => 1,
+            .millis => 1000,
+            .micros => 1000000,
+            .hectonanos => 10000000,
+            .nanos => 1000000000,
+        };
+    }
+
+    pub fn scaleTo(comptime unit: Unit, comptime target: Unit) Scale {
+        return switch (unit) {
+            .secs => switch (target) {
+                inline else => .{ .multiply = target.perSecond() },
+            },
+            .millis => switch (target) {
+                .secs => .{ .divide = 1000 },
+                .millis => .{ .multiply = 1 },
+                .micros => .{ .multiply = 1000 },
+                .hectonanos => .{ .multiply = 10000 },
+                .nanos => .{ .multiply = 1000000 },
+            },
+            .micros => switch (target) {
+                .secs => .{ .divide = 1000000 },
+                .millis => .{ .divide = 1000 },
+                .micros => .{ .multiply = 1 },
+                .hectonanos => .{ .multiply = 10 },
+                .nanos => .{ .multiply = 1000 },
+            },
+            .hectonanos => switch (target) {
+                .secs => .{ .divide = 10000000 },
+                .millis => .{ .divide = 10000 },
+                .micros => .{ .divide = 10 },
+                .hectonanos => .{ .multiply = 1 },
+                .nanos => .{ .multiply = 100 },
+            },
+            .nanos => switch (target) {
+                .secs => .{ .divide = 1000000000 },
+                .millis => .{ .divide = 1000000 },
+                .micros => .{ .divide = 1000 },
+                .hectonanos => .{ .divide = 100 },
+                .nanos => .{ .multiply = 1 },
+            },
+        };
+    }
+};
+
+pub const Leapness = enum {
+    no_leap,
+    leap,
+
+    pub fn fromYear(year: anytype) Leapness {
+        return if (isLeapYear(year)) .leap else .no_leap;
+    }
+};
+
+pub fn isLeapYear(year: anytype) bool {
+    if (@mod(year, 4) != 0)
+        return false;
+    if (@mod(year, 100) != 0)
+        return true;
+    return (0 == @mod(year, 400));
+}
+
+pub fn daysInYear(leapness: Leapness) u9 {
+    return if (leapness == .leap) 366 else 365;
+}
+
+pub const Month = enum(u4) {
+    jan = 1,
+    feb,
+    mar,
+    apr,
+    may,
+    jun,
+    jul,
+    aug,
+    sep,
+    oct,
+    nov,
+    dec,
+
+    /// Create month from numeric calendar value (1 through 12)
+    pub fn fromNumeric(numeric_value: u4) Month {
+        return @enumFromInt(numeric_value);
+    }
+
+    /// return the numeric calendar value for the given month
+    /// i.e. jan=1, feb=2, etc
+    pub fn numeric(self: Month) u4 {
+        return @intFromEnum(self);
+    }
+
+    /// return the month as an index, 0 through 11
+    pub fn index(self: Month) u4 {
+        return self.numeric() - 1;
+    }
+
+    pub fn dayCount(self: Month, leapness: Leapness) u5 {
+        return switch (self) {
+            .jan => 31,
+            .feb => if (leapness == .leap) 29 else 28,
+            .mar => 31,
+            .apr => 30,
+            .may => 31,
+            .jun => 30,
+            .jul => 31,
+            .aug => 31,
+            .sep => 30,
+            .oct => 31,
+            .nov => 30,
+            .dec => 31,
+        };
+    }
+};
+
+pub const ComptimeRange = struct {
+    min: comptime_int,
+    max: comptime_int,
+
+    pub fn fromInt(comptime IntArg: type) ComptimeRange {
+        return .{ .min = std.math.minInt(IntArg), .max = std.math.maxInt(IntArg) };
+    }
+
+    pub fn Int(comptime range: ComptimeRange) type {
+        return std.math.IntFittingRange(range.min, range.max);
+    }
+
+    pub fn clamp(comptime range: ComptimeRange, value: range.Int()) range.Int() {
+        return std.math.clamp(value, range.min, range.max);
+    }
+
+    pub fn scale(comptime range: ComptimeRange, scale_value: Scale) ComptimeRange {
+        return switch (scale_value) {
+            .multiply => |m| .{ .min = range.min * m, .max = range.max * m },
+            .divide => |d| .{ .min = range.min / d, .max = range.max / d },
+        };
+    }
+};
+
+pub const Scale = union(enum) {
+    multiply: comptime_int,
+    divide: comptime_int,
+};
+
+fn yearLowerBound(comptime epoch: Epoch, comptime DayInteger: type) comptime_int {
+    const min_offset = std.math.minInt(DayInteger);
+    return epoch.year + @divFloor(min_offset - 366, 366);
+}
+fn yearUpperBound(comptime epoch: Epoch, comptime DayInteger: type) comptime_int {
+    const max_offset = std.math.maxInt(DayInteger);
+    return epoch.year + @divFloor(max_offset, 365) + 1;
+}
 
 /// An Instant represents a timestamp with respect to the currently
 /// executing program that ticks during suspend and can be used to
@@ -286,5 +684,5 @@ test Timer {
 }
 
 test {
-    _ = epoch;
+    _ = Epoch;
 }

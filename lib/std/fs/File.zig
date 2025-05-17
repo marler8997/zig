@@ -369,6 +369,13 @@ pub fn mode(self: File) ModeError!Mode {
     return (try self.stat()).mode;
 }
 
+const PosixNsec = @TypeOf(@as(std.posix.timespec, undefined).nsec);
+
+pub const Time = switch (builtin.os.tag) {
+    .windows => std.time.Moment(.windows, .hectonanos, .fromInt(i64)),
+    else => std.time.Moment(.posix, .nanos, .fromInt(PosixNsec)),
+};
+
 pub const Stat = struct {
     /// A number that the system uses to point to the file metadata. This
     /// number is not guaranteed to be unique across time, as some file
@@ -387,12 +394,12 @@ pub const Stat = struct {
     mode: Mode,
     kind: Kind,
 
-    /// Last access time in nanoseconds, relative to UTC 1970-01-01.
-    atime: i128,
-    /// Last modification time in nanoseconds, relative to UTC 1970-01-01.
-    mtime: i128,
-    /// Last status/metadata change time in nanoseconds, relative to UTC 1970-01-01.
-    ctime: i128,
+    /// Last access time
+    atime: Time,
+    /// Last modification time
+    mtime: Time,
+    /// Last status/metadata change time
+    ctime: Time,
 
     pub fn fromPosix(st: posix.Stat) Stat {
         const atime = st.atime();
@@ -422,9 +429,9 @@ pub const Stat = struct {
 
                 break :k .unknown;
             },
-            .atime = @as(i128, atime.sec) * std.time.ns_per_s + atime.nsec,
-            .mtime = @as(i128, mtime.sec) * std.time.ns_per_s + mtime.nsec,
-            .ctime = @as(i128, ctime.sec) * std.time.ns_per_s + ctime.nsec,
+            .atime = .{ .offset = @as(Time.range.Int(), atime.sec) * std.time.ns_per_s + atime.nsec },
+            .mtime = .{ .offset = @as(Time.range.Int(), mtime.sec) * std.time.ns_per_s + mtime.nsec },
+            .ctime = .{ .offset = @as(Time.range.Int(), ctime.sec) * std.time.ns_per_s + ctime.nsec },
         };
     }
 
@@ -447,9 +454,9 @@ pub const Stat = struct {
                 linux.S.IFSOCK => .unix_domain_socket,
                 else => .unknown,
             },
-            .atime = @as(i128, atime.sec) * std.time.ns_per_s + atime.nsec,
-            .mtime = @as(i128, mtime.sec) * std.time.ns_per_s + mtime.nsec,
-            .ctime = @as(i128, ctime.sec) * std.time.ns_per_s + ctime.nsec,
+            .atime = .{ .offset = @as(i128, atime.sec) * std.time.ns_per_s + atime.nsec },
+            .mtime = .{ .offset = @as(i128, mtime.sec) * std.time.ns_per_s + mtime.nsec },
+            .ctime = .{ .offset = @as(i128, ctime.sec) * std.time.ns_per_s + ctime.nsec },
         };
     }
 
@@ -467,9 +474,9 @@ pub const Stat = struct {
                 .SOCKET_STREAM, .SOCKET_DGRAM => .unix_domain_socket,
                 else => .unknown,
             },
-            .atime = st.atim,
-            .mtime = st.mtim,
-            .ctime = st.ctim,
+            .atime = .{ .offset = st.atim },
+            .mtime = .{ .offset = st.mtim },
+            .ctime = .{ .offset = st.ctim },
         };
     }
 };
@@ -1107,10 +1114,10 @@ pub const UpdateTimesError = posix.FutimensError || windows.SetFileTimeError;
 /// TODO: integrate with async I/O
 pub fn updateTimes(
     self: File,
-    /// access timestamp in nanoseconds
-    atime: i128,
-    /// last modification timestamp in nanoseconds
-    mtime: i128,
+    /// access timestamp
+    atime: Time,
+    /// last modification timestamp
+    mtime: Time,
 ) UpdateTimesError!void {
     if (builtin.os.tag == .windows) {
         const atime_ft = windows.nanoSecondsToFileTime(atime);
@@ -1119,12 +1126,12 @@ pub fn updateTimes(
     }
     const times = [2]posix.timespec{
         posix.timespec{
-            .sec = math.cast(isize, @divFloor(atime, std.time.ns_per_s)) orelse maxInt(isize),
-            .nsec = math.cast(isize, @mod(atime, std.time.ns_per_s)) orelse maxInt(isize),
+            .sec = math.cast(isize, @divFloor(atime.offset, std.time.ns_per_s)) orelse maxInt(isize),
+            .nsec = math.cast(isize, @mod(atime.offset, std.time.ns_per_s)) orelse maxInt(isize),
         },
         posix.timespec{
-            .sec = math.cast(isize, @divFloor(mtime, std.time.ns_per_s)) orelse maxInt(isize),
-            .nsec = math.cast(isize, @mod(mtime, std.time.ns_per_s)) orelse maxInt(isize),
+            .sec = math.cast(isize, @divFloor(mtime.offset, std.time.ns_per_s)) orelse maxInt(isize),
+            .nsec = math.cast(isize, @mod(mtime.offset, std.time.ns_per_s)) orelse maxInt(isize),
         },
     };
     try posix.futimens(self.handle, &times);

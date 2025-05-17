@@ -67,7 +67,7 @@ pub fn start(
         .coverage_mutex = .{},
         .coverage_condition = .{},
 
-        .base_timestamp = std.time.nanoTimestamp(),
+        .base_timestamp = std.time.now(),
     };
 
     // For accepting HTTP connections.

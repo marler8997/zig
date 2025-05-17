@@ -41,7 +41,7 @@ pub fn rescanMac(cb: *Bundle, gpa: Allocator) RescanMacError!void {
             table_list[table_idx] = try reader.readInt(u32, .big);
         }
 
-        const now_sec = std.time.timestamp();
+        const now = std.time.timestamp();
 
         for (table_list) |table_offset| {
             try stream.seekTo(db_header.schema_offset + table_offset);
@@ -75,7 +75,7 @@ pub fn rescanMac(cb: *Bundle, gpa: Allocator) RescanMacError!void {
                 const dest_buf = try cb.bytes.addManyAsSlice(gpa, cert_header.cert_size);
                 try reader.readNoEof(dest_buf);
 
-                try cb.parseCert(gpa, cert_start, now_sec);
+                try cb.parseCert(gpa, cert_start, now);
             }
         }
     }
